@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=elizk
-Group=elizk
+User=jarvis
+Group=bots
 WorkingDirectory=/opt/jarvis/discord-bot
 Environment=PATH=/opt/jarvis/discord-bot/venv/bin
 ExecStart=/opt/jarvis/start.sh
