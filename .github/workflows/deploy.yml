@@ -21,8 +21,8 @@ jobs:
 
     - name: Deploy code to droplet
       run: |
-        rsync -avz --delete ./ root@159.203.182.242:/opt/jarvis
-        rsync -avz --delete ./discord-bot.service root@159.203.182.242:/etc/systemd/system
+        rsync -avz ./ root@159.203.182.242:/opt/jarvis
+        rsync -avz ./discord-bot.service root@159.203.182.242:/etc/systemd/system
 
     - name: Set executable permissions
       run: |
