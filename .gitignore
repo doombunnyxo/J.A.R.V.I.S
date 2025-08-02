@@ -9,9 +9,9 @@
 .env.staging
 *.env
 
-# Bot Data Files (may contain user data)
-data/
-data/*
+# Bot Data Files (may contain user data) - exclude only root data directory
+/data/
+/data/*
 *.json
 !requirements.txt
 
