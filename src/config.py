@@ -25,7 +25,7 @@ class Config:
     HISTORY_FILE: str = 'data/conversation_history.json'
     
     # AI Configuration  
-    AI_MODEL: str = "llama3-8b-8192"  # Groq model for main processing
+    AI_MODEL: str = "llama-3.1-8b-instant"  # Groq model for main processing
     AI_MAX_TOKENS: int = 1000
     AI_TEMPERATURE: float = 0.7
     
