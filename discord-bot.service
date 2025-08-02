@@ -1,0 +1,35 @@
+[Unit]
+Description=Discord Bot - Hybrid AI System
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=elizk
+Group=elizk
+WorkingDirectory=/home/elizk/discord-bot
+Environment=PATH=/home/elizk/discord-bot/venv/bin
+ExecStart=/home/elizk/discord-bot/venv/bin/python /home/elizk/discord-bot/main.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=discord-bot
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/elizk/discord-bot/data
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# Resource limits
+LimitNOFILE=1024
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target
