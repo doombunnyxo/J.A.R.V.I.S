@@ -28,10 +28,9 @@ jobs:
       run: |
         ssh root@159.203.182.242 "
           chmod +x /opt/jarvis/start.sh &&
-          chmod +x /opt/jarvis/discord-bot/main.py &&
-          chmod +x /opt/jarvis/discord-bot/start.sh &&
-          chown -R jarvis:bots /opt/jarvis/discord-bot &&
-          chmod -R 755 /opt/jarvis/discord-bot
+          chmod +x /opt/jarvis/main.py &&
+          chown -R jarvis:bots /opt/jarvis &&
+          chmod -R 755 /opt/jarvis
         "
 
     - name: Restart systemd service
