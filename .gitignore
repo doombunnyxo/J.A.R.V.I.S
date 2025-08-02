@@ -1,0 +1,169 @@
+# Discord Bot - Sensitive Information Protection
+
+# Environment Variables (API Keys, Tokens, etc.)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.staging
+*.env
+
+# Bot Data Files (may contain user data)
+data/
+data/*
+*.json
+!requirements.txt
+
+# API Keys and Configuration Files
+config.ini
+config.yaml
+config.yml
+secrets.json
+credentials.json
+auth.json
+
+# Bot Logs
+*.log
+logs/
+log/
+
+# Python Build & Distribution
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Additional Build Files
+*.whl
+*.tar.gz
+*.zip
+target/
+out/
+output/
+*.spec
+*.manifest
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDE/Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Temporary Files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Database Files (if any)
+*.db
+*.sqlite
+*.sqlite3
+
+# Discord Bot Specific
+token.txt
+bot_token.txt
+api_keys.txt
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# Jupyter Notebooks (if any)
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# Security/Backup Files
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# Custom sensitive files
+secrets/
+private/
+sensitive/
+local_config/
