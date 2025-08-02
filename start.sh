@@ -118,5 +118,8 @@ chmod 755 data
 print_success "Setup completed successfully!"
 print_status "Starting Discord Bot..."
 
+# Set PYTHONPATH to include current directory for proper module imports
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+
 # Start the bot
 exec python main.py

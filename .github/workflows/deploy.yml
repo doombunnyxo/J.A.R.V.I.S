@@ -24,6 +24,10 @@ jobs:
         rsync -avz --delete ./ root@159.203.182.242:/opt/jarvis
         rsync -avz --delete ./discord-bot.service root@159.203.182.242:/etc/systemd/system
 
+    - name: Set executable permissions
+      run: |
+        ssh root@159.203.182.242 "chmod +x /opt/jarvis/start.sh"
+
     - name: Restart systemd service
       run: |
         ssh root@159.203.182.242 "sudo systemctl restart discord-bot.service"
