@@ -9,7 +9,7 @@ User=elizk
 Group=elizk
 WorkingDirectory=/opt/jarvis/discord-bot
 Environment=PATH=/opt/jarvis/discord-bot/venv/bin
-ExecStart=/opt/jarvis/discord-bot/start.sh
+ExecStart=/opt/jarvis/start.sh
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=10
