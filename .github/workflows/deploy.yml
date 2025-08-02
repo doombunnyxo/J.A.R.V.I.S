@@ -1,0 +1,28 @@
+name: Deploy to Droplet
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up SSH key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        ssh-keyscan -H 159.203.182.242 >> ~/.ssh/known_hosts
+
+    - name: Deploy code to droplet
+      run: |
+        rsync -avz --delete ./ root@159.203.182.242:/opt/jarvis
+
+    - name: Restart systemd service
+      run: |
+        ssh root@159.203.182.242 "sudo systemctl restart discord-bot.service"
