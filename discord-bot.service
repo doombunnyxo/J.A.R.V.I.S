@@ -7,8 +7,8 @@ Wants=network-online.target
 Type=simple
 User=jarvis
 Group=bots
-WorkingDirectory=/opt/jarvis/discord-bot
-Environment=PATH=/opt/jarvis/discord-bot/venv/bin
+WorkingDirectory=/opt/jarvis
+Environment=PATH=/opt/jarvis/venv/bin
 ExecStart=/opt/jarvis/start.sh
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
