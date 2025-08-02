@@ -1,5 +1,5 @@
 # Core Discord Bot Dependencies
-discord.py==2.3.2
+discord.py==2.5.2
 python-dotenv==1.0.0
 
 # AI Integration

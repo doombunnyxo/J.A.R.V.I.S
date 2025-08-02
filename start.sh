@@ -28,7 +28,7 @@ print_success() {
 }
 
 print_warning() {
-    echo -e "${YELLOW}[$(date)]${NC}    $1"
+    echo -e "${YELLOW}[$(date)]${NC} ï¿½  $1"
 }
 
 print_error() {
@@ -66,7 +66,7 @@ fi
 
 # Activate virtual environment
 print_status "Activating virtual environment..."
-source venv/bin/activate
+source ./venv/bin/activate
 
 if [ $? -eq 0 ]; then
     print_success "Virtual environment activated"
