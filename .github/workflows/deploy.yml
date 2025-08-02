@@ -22,7 +22,7 @@ jobs:
     - name: Deploy code to droplet
       run: |
         rsync -avz --delete ./ root@159.203.182.242:/opt/jarvis
-	rsync -avz --delete ./discord-bot.service root@159.203.182.242:/etc/systemd/user
+        rsync -avz --delete ./discord-bot.service root@159.203.182.242:/etc/systemd/user
 
     - name: Restart systemd service
       run: |
