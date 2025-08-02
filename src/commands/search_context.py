@@ -48,54 +48,54 @@ class SearchContextCommands(commands.Cog):
         try:
             # Get Perplexity context info
             perplexity_info = perplexity_search.get_context_info(ctx.author.id, ctx.channel.id)
-        
-        # Get unified context info
-        ai_handler = self.bot._ai_handler
-        conversation_key = f"{ctx.author.id}_{ctx.channel.id}"
-        unified_context = None
-        unified_last_activity = None
-        
-        if ai_handler:
-            unified_context = ai_handler.unified_conversation_contexts.get(conversation_key)
-            unified_last_activity = ai_handler.unified_last_activity.get(conversation_key)
-            current_provider = ai_handler.conversation_providers.get(conversation_key)
-        
-        embed = discord.Embed(title="🤖 Cross-AI Conversation Context", color=0x5865f2)
-        
-        # Current AI provider
-        if ai_handler and conversation_key in ai_handler.conversation_providers:
-            provider = ai_handler.conversation_providers[conversation_key]
-            provider_name = "🌐 Perplexity (Web Search)" if provider == "perplexity" else "⚡ Groq (Chat/Admin)"
-            embed.add_field(name="Last Used AI", value=provider_name, inline=False)
-        
-        # Unified context (shared between both AIs)
-        if unified_context and unified_last_activity:
-            unified_expires = unified_last_activity + timedelta(minutes=30)
-            if datetime.now() < unified_expires:
-                expires_str = unified_expires.strftime("%H:%M:%S")
-                embed.add_field(
-                    name="🔄 Unified Context", 
-                    value=f"**{len(unified_context)}** messages\nExpires: {expires_str}\nShared between both AIs",
-                    inline=False
-                )
-                has_context = True
+            
+            # Get unified context info
+            ai_handler = self.bot._ai_handler
+            conversation_key = f"{ctx.author.id}_{ctx.channel.id}"
+            unified_context = None
+            unified_last_activity = None
+            
+            if ai_handler:
+                unified_context = ai_handler.unified_conversation_contexts.get(conversation_key)
+                unified_last_activity = ai_handler.unified_last_activity.get(conversation_key)
+                current_provider = ai_handler.conversation_providers.get(conversation_key)
+            
+            embed = discord.Embed(title="🤖 Cross-AI Conversation Context", color=0x5865f2)
+            
+            # Current AI provider
+            if ai_handler and conversation_key in ai_handler.conversation_providers:
+                provider = ai_handler.conversation_providers[conversation_key]
+                provider_name = "🌐 Perplexity (Web Search)" if provider == "perplexity" else "⚡ Groq (Chat/Admin)"
+                embed.add_field(name="Last Used AI", value=provider_name, inline=False)
+            
+            # Unified context (shared between both AIs)
+            if unified_context and unified_last_activity:
+                unified_expires = unified_last_activity + timedelta(minutes=30)
+                if datetime.now() < unified_expires:
+                    expires_str = unified_expires.strftime("%H:%M:%S")
+                    embed.add_field(
+                        name="🔄 Unified Context", 
+                        value=f"**{len(unified_context)}** messages\nExpires: {expires_str}\nShared between both AIs",
+                        inline=False
+                    )
+                    has_context = True
+                else:
+                    embed.add_field(name="🔄 Unified Context", value="No active context", inline=False)
+                    has_context = False
             else:
                 embed.add_field(name="🔄 Unified Context", value="No active context", inline=False)
                 has_context = False
-        else:
-            embed.add_field(name="🔄 Unified Context", value="No active context", inline=False)
-            has_context = False
-        
-        # Legacy Perplexity context (for backwards compatibility)
-        if perplexity_info["has_context"]:
-            expires_str = perplexity_info["expires_at"].strftime("%H:%M:%S") if perplexity_info["expires_at"] else "Unknown"
-            embed.add_field(
-                name="🌐 Legacy Perplexity Context", 
-                value=f"**{perplexity_info['message_count']}** messages\nExpires: {expires_str}",
-                inline=True
-            )
-            has_context = True
-        
+            
+            # Legacy Perplexity context (for backwards compatibility)
+            if perplexity_info["has_context"]:
+                expires_str = perplexity_info["expires_at"].strftime("%H:%M:%S") if perplexity_info["expires_at"] else "Unknown"
+                embed.add_field(
+                    name="🌐 Legacy Perplexity Context", 
+                    value=f"**{perplexity_info['message_count']}** messages\nExpires: {expires_str}",
+                    inline=True
+                )
+                has_context = True
+            
             if not has_context:
                 embed.description = "No active conversation context. Your next message will start a new conversation that can switch between AIs while maintaining context."
             else:
