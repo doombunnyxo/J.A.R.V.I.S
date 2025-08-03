@@ -15,7 +15,7 @@ import discord
 from discord.ext import commands
 from src.config import config
 from src.data.persistence import data_manager
-from src.ai.handler import AIHandler
+from src.ai.handler_refactored import AIHandler
 
 async def setup_bot():
     """Setup and configure the bot"""
