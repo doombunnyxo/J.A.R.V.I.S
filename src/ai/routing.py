@@ -3,6 +3,8 @@ AI routing logic for determining which provider to use
 Separates routing concerns from the main AI handler
 """
 
+import re
+
 # Search routing keywords - triggers Claude web search
 SEARCH_INDICATORS = [
     'current', 'latest', 'recent', 'today', 'now', 'this year', '2024', '2025',
@@ -156,23 +158,27 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
         tuple: (provider, cleaned_query) - provider is 'groq', 'claude', or None
     """
     query_lower = query.lower().strip()
+    print(f"DEBUG: extract_forced_provider checking query: '{query_lower}'")
     
     # Check for force patterns
     force_patterns = [
+        # Craft commands first to avoid conflicts
+        (r'^craft:\s*(.+)', 'crafting'),
+        (r'^c:\s*(.+)', 'crafting'),
+        # Other providers
         (r'^groq:\s*(.+)', 'groq'),
         (r'^g:\s*(.+)', 'groq'),
         (r'^claude:\s*(.+)', 'claude'),
         (r'^perplexity:\s*(.+)', 'claude'),  # Backward compatibility
         (r'^p:\s*(.+)', 'claude'),
         (r'^search:\s*(.+)', 'claude'),
-        (r'^craft:\s*(.+)', 'crafting'),
-        (r'^c:\s*(.+)', 'crafting'),
     ]
     
     for pattern, provider in force_patterns:
         match = re.match(pattern, query_lower)
         if match:
             cleaned_query = match.group(1).strip()
+            print(f"DEBUG: Pattern '{pattern}' matched provider '{provider}' with query '{cleaned_query}'")
             return provider, cleaned_query
     
     return None, query

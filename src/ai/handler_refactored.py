@@ -331,6 +331,7 @@ class AIHandler:
     
     async def _handle_with_crafting(self, message, query: str) -> str:
         """Handle query with crafting system"""
+        print(f"DEBUG: _handle_with_crafting called with query: '{query}'")
         try:
             # Use the existing crafting handler to process the query
             result = await self.crafting_handler._interpret_recipe_request(query)
