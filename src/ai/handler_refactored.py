@@ -613,14 +613,12 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
             return f"❌ Error creating admin confirmation: {str(e)}"
     
     async def _handle_standard_admin_command(self, message, query: str) -> str:
-        """Handle non-search admin commands through admin parser"""
+        """Handle non-search admin commands through admin parser with confirmation"""
         try:
             # Use admin parser to interpret command and extract parameters
             from ..admin.parser import AdminIntentParser
-            from ..admin.actions import AdminActionHandler
             
             parser = AdminIntentParser(self.bot)
-            executor = AdminActionHandler(self.bot)
             
             # Parse the admin command
             action_type, parameters = await parser.parse_admin_intent(
@@ -628,14 +626,91 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
             )
             
             if action_type:
-                # Execute the admin action directly (no confirmation for simple actions)
-                result = await executor.execute_admin_action(message, action_type, parameters)
-                return f"✅ **Action completed:** {result}"
+                # Create confirmation message for admin action
+                return await self._create_standard_admin_confirmation(message, query, action_type, parameters)
             else:
                 return "❌ **Command not recognized as admin action**"
                 
         except Exception as e:
             return f"❌ Error with standard admin command: {str(e)}"
+    
+    async def _create_standard_admin_confirmation(self, message, original_query: str, action_type: str, parameters: dict) -> str:
+        """Create confirmation message for standard admin actions"""
+        try:
+            import uuid
+            import time
+            
+            # Generate unique action ID
+            action_id = str(uuid.uuid4())[:8]
+            
+            # Build confirmation message based on action type
+            confirmation_text = f"⚠️ **ADMIN ACTION: {action_type.replace('_', ' ').title()}**\n\n"
+            confirmation_text += f"**Command**: {original_query}\n"
+            confirmation_text += f"**Action**: {self._describe_admin_action(action_type, parameters)}\n\n"
+            confirmation_text += "⚠️ **WARNING**: This action cannot be undone!\n\n"
+            confirmation_text += "React with ✅ to confirm or ❌ to cancel this action.\n"
+            confirmation_text += f"*Action ID: {action_id}*"
+            
+            # Store action data for reaction handling
+            self.admin_actions[action_id] = {
+                'action_type': 'standard_admin',
+                'intent': {
+                    'action_type': action_type,
+                    'parameters': parameters
+                },
+                'message': message,
+                'timestamp': time.time(),
+                'original_query': original_query
+            }
+            
+            # Send confirmation message
+            confirmation_msg = await message.channel.send(confirmation_text)
+            await confirmation_msg.add_reaction("✅")
+            await confirmation_msg.add_reaction("❌")
+            
+            return ""  # No additional response needed
+            
+        except Exception as e:
+            return f"❌ Error creating admin confirmation: {str(e)}"
+    
+    def _describe_admin_action(self, action_type: str, parameters: dict) -> str:
+        """Generate human-readable description of admin action"""
+        if action_type == "kick_user":
+            user = parameters.get('user')
+            return f"Kick {user.display_name if user else 'user'} from the server"
+        elif action_type == "ban_user":
+            user = parameters.get('user')
+            return f"Ban {user.display_name if user else 'user'} from the server"
+        elif action_type == "timeout_user":
+            user = parameters.get('user')
+            duration = parameters.get('duration', 60)
+            return f"Timeout {user.display_name if user else 'user'} for {duration} minutes"
+        elif action_type == "bulk_delete":
+            limit = parameters.get('limit', 1)
+            user_filter = parameters.get('user_filter')
+            channel = parameters.get('channel')
+            desc = f"Delete {limit} messages"
+            if user_filter:
+                desc += f" from {user_filter.display_name}"
+            if channel:
+                desc += f" in #{channel.name}"
+            else:
+                desc += " in this channel"
+            return desc
+        elif action_type == "add_role":
+            user = parameters.get('user')
+            role = parameters.get('role')
+            return f"Add role '{role.name if role else 'unknown'}' to {user.display_name if user else 'user'}"
+        elif action_type == "remove_role":
+            user = parameters.get('user')
+            role = parameters.get('role')
+            return f"Remove role '{role.name if role else 'unknown'}' from {user.display_name if user else 'user'}"
+        elif action_type == "rename_role":
+            role = parameters.get('role')
+            new_name = parameters.get('new_name')
+            return f"Rename role '{role.name if role else 'unknown'}' to '{new_name}'"
+        else:
+            return f"Execute {action_type.replace('_', ' ')}"
     
     def _detect_research_needed(self, query: str) -> bool:
         """Detect if an admin command needs research before execution"""
@@ -1468,6 +1543,7 @@ Be concise and clear about what the action will do."""
     
     async def handle_admin_reaction(self, reaction, user):
         """Handle admin action confirmation reactions"""
+        # Check that the person reacting is an admin
         if not is_admin(user.id):
             return
         
@@ -1483,6 +1559,13 @@ Be concise and clear about what the action will do."""
             return
         
         action_data = self.admin_actions[action_id]
+        original_requester = action_data['message'].author
+        
+        # Check that the original requester was also an admin
+        if not is_admin(original_requester.id):
+            await reaction.message.channel.send("❌ **Security Error:** Original command was not from an admin user.")
+            return
+        
         executor = action_data.get('executor')
         intent = action_data.get('intent')  # Optional for new Perplexity flow
         
@@ -1538,11 +1621,11 @@ Be concise and clear about what the action will do."""
                             await reaction.message.channel.send(f"❌ **Command not recognized:** {claude_command}")
                     else:
                         await reaction.message.channel.send(f"❌ **Command generation failed:** {claude_command}")
-                else:
-                    # Standard admin action (non-research) - needs executor
-                    if not executor:
-                        from ..admin.actions import AdminActionHandler
-                        executor = AdminActionHandler(self.bot)
+                
+                # Handle standard admin actions (delete, kick, ban, timeout, etc.)
+                elif action_data.get('action_type') == 'standard_admin' and intent:
+                    from ..admin.actions import AdminActionHandler
+                    executor = AdminActionHandler(self.bot)
                     
                     result = await executor.execute_admin_action(
                         action_data['message'], 
@@ -1550,6 +1633,22 @@ Be concise and clear about what the action will do."""
                         intent['parameters']
                     )
                     await reaction.message.channel.send(f"✅ **Action completed:** {result}")
+                
+                else:
+                    # Fallback for other admin action types
+                    if not executor:
+                        from ..admin.actions import AdminActionHandler
+                        executor = AdminActionHandler(self.bot)
+                    
+                    if intent:
+                        result = await executor.execute_admin_action(
+                            action_data['message'], 
+                            intent['action_type'], 
+                            intent['parameters']
+                        )
+                        await reaction.message.channel.send(f"✅ **Action completed:** {result}")
+                    else:
+                        await reaction.message.channel.send("❌ **Error:** No action intent found")
             except Exception as e:
                 await reaction.message.channel.send(f"❌ **Action failed:** {str(e)}")
         elif str(reaction.emoji) == "❌":
