@@ -52,6 +52,18 @@ class CraftingHandler(commands.Cog):
 RESPONSE FORMATS:
 1. Single item: "exact_key|quantity"
 2. Vehicle assembly: "VEHICLE_ASSEMBLY|vehicle_type|tier|modules|quantity"
+3. Vehicle parts: "VEHICLE_PARTS|vehicle_type|parts_list|quantity"
+
+SPECIAL MODIFIERS (add to end of any format above):
+- If user mentions "by parts", "each part", "part breakdown", "per part", "part by part", "individual parts", "materials by part": add "|BY_PARTS"
+- If user mentions "full breakdown", "complete breakdown", "detailed breakdown", "raw materials", "all materials", "break down", "breakdown": add "|FULL_BREAKDOWN"
+- Both can be combined: "|BY_PARTS|FULL_BREAKDOWN"
+
+EXAMPLES WITH MODIFIERS:
+- "assault ornithopter mk6 by parts" -> "VEHICLE_ASSEMBLY|assault_ornithopter|mk6|none|1|BY_PARTS"
+- "assault ornithopter mk6 full breakdown" -> "VEHICLE_ASSEMBLY|assault_ornithopter|mk6|none|1|FULL_BREAKDOWN"  
+- "assault ornithopter mk6 by parts raw materials" -> "VEHICLE_ASSEMBLY|assault_ornithopter|mk6|none|1|BY_PARTS|FULL_BREAKDOWN"
+- "karpov 38 by parts" -> "karpov_38|1|BY_PARTS"
 
 VEHICLE ASSEMBLY FORMAT:
 - For complete vehicles, return: "VEHICLE_PARTS|vehicle_type|parts_list|quantity"
@@ -172,6 +184,12 @@ Match this request to an exact database key:"""
             if '|' in result:
                 parts = result.split('|')
                 
+                # Extract modifiers from the end
+                modifiers = []
+                while len(parts) > 0 and parts[-1].strip() in ['BY_PARTS', 'FULL_BREAKDOWN']:
+                    modifiers.append(parts[-1].strip())
+                    parts = parts[:-1]
+                
                 # Check if this is a flexible vehicle parts request
                 if parts[0].strip() == 'VEHICLE_PARTS' and len(parts) >= 4:
                     vehicle_type = parts[1].strip()
@@ -181,8 +199,12 @@ Match this request to an exact database key:"""
                     except (ValueError, IndexError):
                         quantity = 1
                     
-                    # Return special format for flexible vehicle assembly
-                    return f"VEHICLE_PARTS|{vehicle_type}|{parts_list}", quantity
+                    # Add modifiers to the return format
+                    base_format = f"VEHICLE_PARTS|{vehicle_type}|{parts_list}"
+                    if modifiers:
+                        base_format += "|" + "|".join(modifiers)
+                    
+                    return base_format, quantity
                 
                 # Check if this is a legacy vehicle assembly request
                 elif parts[0].strip() == 'VEHICLE_ASSEMBLY' and len(parts) >= 5:
@@ -194,24 +216,37 @@ Match this request to an exact database key:"""
                     except (ValueError, IndexError):
                         quantity = 1
                     
-                    # Return special format for vehicle assembly
-                    return f"VEHICLE_ASSEMBLY|{vehicle_type}|{tier}|{modules}", quantity
+                    # Add modifiers to the return format
+                    base_format = f"VEHICLE_ASSEMBLY|{vehicle_type}|{tier}|{modules}"
+                    if modifiers:
+                        base_format += "|" + "|".join(modifiers)
+                    
+                    return base_format, quantity
                 
                 # Regular single item format
                 else:
-                    item_name, quantity_str = parts[0], parts[1] if len(parts) > 1 else '1'
-                    try:
-                        quantity = int(quantity_str)
-                    except ValueError:
-                        quantity = 1
+                    item_name = parts[0].strip().lower()
                     
-                    item_name = item_name.strip().lower()
+                    # Try to parse quantity from remaining parts (skip modifiers)
+                    quantity = 1
+                    for part in parts[1:]:
+                        if part.strip() not in ['BY_PARTS', 'FULL_BREAKDOWN']:
+                            try:
+                                quantity = int(part.strip())
+                                break
+                            except ValueError:
+                                continue
                     
-                    # Validate that the item exists
-                    if item_name in available_items:
+                    # Add modifiers to single items
+                    if modifiers:
+                        item_name += "|" + "|".join(modifiers)
+                    
+                    # Validate that the base item exists (without modifiers)
+                    base_item = item_name.split('|')[0]
+                    if base_item in available_items:
                         return item_name, quantity
                     else:
-                        print(f"DEBUG: Claude suggested non-existent item: {item_name}")
+                        print(f"DEBUG: Claude suggested non-existent item: {base_item}")
                         return self._smart_fallback_match(user_query, available_items)
             else:
                 return self._smart_fallback_match(user_query, available_items)
@@ -333,6 +368,31 @@ Match this request to an exact database key:"""
             if item_name == "no_match":
                 await self._handle_no_match(message, craft_query)
                 return
+            
+            # Check if AI detected modifiers and override local detection
+            ai_full_breakdown = 'FULL_BREAKDOWN' in item_name
+            ai_by_parts = 'BY_PARTS' in item_name
+            
+            if ai_full_breakdown:
+                full_breakdown = True
+                print(f"DEBUG: AI detected FULL_BREAKDOWN modifier")
+            if ai_by_parts:
+                by_parts = True
+                print(f"DEBUG: AI detected BY_PARTS modifier")
+            
+            # Clean the item_name of modifiers for further processing
+            # Preserve vehicle assembly formats but remove modifiers
+            if item_name.startswith('VEHICLE_PARTS|') or item_name.startswith('VEHICLE_ASSEMBLY|'):
+                # Split and rebuild without modifier parts
+                parts = item_name.split('|')
+                clean_parts = []
+                for part in parts:
+                    if part not in ['BY_PARTS', 'FULL_BREAKDOWN']:
+                        clean_parts.append(part)
+                item_name = '|'.join(clean_parts)
+            else:
+                # For single items, just take the first part
+                item_name = item_name.split('|')[0]
             
             # Check if this is a flexible vehicle parts request
             if item_name.startswith('VEHICLE_PARTS|'):
@@ -460,7 +520,11 @@ Match this request to an exact database key:"""
                     part_content += format_materials_tree(part_key, 1)
                 else:
                     # Mode 3: By parts only (direct materials for each part)
-                    part_materials, _ = calculate_direct_materials(part_key, quantity)
+                    part_materials, _ = calculate_direct_materials(part_key, 1)
+                    # Multiply by vehicle quantity if needed
+                    if quantity > 1 and part_materials:
+                        part_materials = {mat: qty * quantity for mat, qty in part_materials.items()}
+                    
                     part_content = f"\n**{part_display}:**\n"
                     if part_materials:
                         part_content += format_materials_list(part_materials)
@@ -483,15 +547,33 @@ Match this request to an exact database key:"""
             # Add the final message
             messages_to_send.append(current_message)
         elif full_breakdown:
-            # Mode 2: Full breakdown (summary + complete crafting tree for total materials)
-            messages_to_send = [response]
-            if quantity > 1:
-                messages_to_send[0] += f"\n💡 Building {quantity} complete vehicles requires {len(part_details)} different crafting operations per vehicle."
+            # Mode 2: Full breakdown (summary + complete crafting tree for each part)
+            messages_to_send = []
+            current_message = response
+            current_message += f"\n\n**🔧 Complete Crafting Trees:**\n"
             
-            # Add complete crafting tree for total materials
-            messages_to_send[0] += f"\n\n**🔧 Complete Materials Breakdown:**\n"
-            # This would show the full tree for the combined materials - for now, just indicate it's available
-            messages_to_send[0] += "_(Full material breakdown with sub-components)_"
+            for part_key, recipe in part_details:
+                part_display = part_key.replace('_', ' ').title()
+                
+                # Build the complete part tree using raw materials
+                part_content = f"\n**{part_display}:**\n"
+                part_content += format_materials_tree(part_key, 1)
+                
+                # Check if adding this part would exceed message limit
+                if len(current_message + part_content) > 1900:  # Small buffer for Discord's 2000 char limit
+                    # Send current message and start a new one
+                    messages_to_send.append(current_message)
+                    current_message = f"**🔧 Complete Crafting Trees (continued):**\n" + part_content
+                else:
+                    # Add to current message
+                    current_message += part_content
+            
+            # Add final notes to the last message
+            if quantity > 1:
+                current_message += f"\n💡 Building {quantity} complete vehicles requires {len(part_details)} different crafting operations per vehicle."
+            
+            # Add the final message
+            messages_to_send.append(current_message)
         else:
             # Mode 1: Default (parts list + total materials summary only)
             messages_to_send = [response]
@@ -643,7 +725,11 @@ Match this request to an exact database key:"""
                         part_content += format_materials_tree(part_key, 1 if part_multiplier == 1 else part_multiplier)
                     else:
                         # Mode 3: By parts only (direct materials for each part)
-                        part_materials, _ = calculate_direct_materials(part_key, quantity)
+                        part_materials, _ = calculate_direct_materials(part_key, 1)
+                        # Multiply by vehicle quantity if needed
+                        if quantity > 1 and part_materials:
+                            part_materials = {mat: qty * quantity for mat, qty in part_materials.items()}
+                        
                         if part_multiplier > 1:
                             part_content = f"\n**{part_display} (x{part_multiplier}):**\n"
                         else:
@@ -670,15 +756,37 @@ Match this request to an exact database key:"""
                 # Add the final message
                 messages_to_send.append(current_message)
             elif full_breakdown:
-                # Mode 2: Full breakdown (summary + complete crafting tree for total materials)
-                messages_to_send = [response]
-                if quantity > 1:
-                    messages_to_send[0] += f"\n💡 **Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
-                messages_to_send[0] += f"\n✨ **Flexibility:** You can mix and match any tier parts within the same vehicle type!"
+                # Mode 2: Full breakdown (summary + complete crafting tree for each part)
+                messages_to_send = []
+                current_message = response
+                current_message += f"\n\n**🔧 Complete Crafting Trees:**\n"
                 
-                # Add complete crafting tree for total materials
-                messages_to_send[0] += f"\n\n**🔧 Complete Materials Breakdown:**\n"
-                messages_to_send[0] += "_(Full material breakdown with sub-components)_"
+                for i, (part_key, recipe, part_multiplier) in enumerate(part_details):
+                    part_display = part_key.replace(f"{vehicle_type}_", "").replace("_", " ").title()
+                    
+                    # Build the complete part tree using raw materials
+                    if part_multiplier > 1:
+                        part_content = f"\n**{part_display} (x{part_multiplier}):**\n"
+                    else:
+                        part_content = f"\n**{part_display}:**\n"
+                    part_content += format_materials_tree(part_key, 1 if part_multiplier == 1 else part_multiplier)
+                    
+                    # Check if adding this part would exceed message limit
+                    if len(current_message + part_content) > 1900:  # Small buffer for Discord's 2000 char limit
+                        # Send current message and start a new one
+                        messages_to_send.append(current_message)
+                        current_message = f"**🔧 Complete Crafting Trees (continued):**\n" + part_content
+                    else:
+                        # Add to current message
+                        current_message += part_content
+                
+                # Add final notes to the last message
+                if quantity > 1:
+                    current_message += f"\n💡 **Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
+                current_message += f"\n✨ **Flexibility:** You can mix and match any tier parts within the same vehicle type!"
+                
+                # Add the final message
+                messages_to_send.append(current_message)
             else:
                 # Mode 1: Default (parts list + total materials summary only)
                 messages_to_send = [response]
@@ -842,7 +950,10 @@ Determine the exact parts needed and return as pipe-separated list:"""
                         part_content += format_materials_tree(part_key, 1)
                     else:
                         # Mode 3: By parts only (direct materials for each part)
-                        part_materials, _ = calculate_direct_materials(part_key, quantity)
+                        part_materials, _ = calculate_direct_materials(part_key, 1)
+                        # Multiply by vehicle quantity if needed
+                        if quantity > 1 and part_materials:
+                            part_materials = {mat: qty * quantity for mat, qty in part_materials.items()}
                         part_content = f"\\n**{part_display}:**\\n"
                         if part_materials:
                             part_content += format_materials_list(part_materials)
@@ -867,16 +978,35 @@ Determine the exact parts needed and return as pipe-separated list:"""
                 # Add the final message
                 messages_to_send.append(current_message)
             elif full_breakdown:
-                # Mode 2: Full breakdown (summary + complete crafting tree for total materials)
-                messages_to_send = [response]
-                if missing_parts:
-                    messages_to_send[0] += f"\\n**Note:** Some parts not found in database: {', '.join(missing_parts)}"
-                if quantity > 1:
-                    messages_to_send[0] += f"\\n**Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
+                # Mode 2: Full breakdown (summary + complete crafting tree for each part)
+                messages_to_send = []
+                current_message = response
+                current_message += f"\\n\\n**🔧 Complete Crafting Trees:**\\n"
                 
-                # Add complete crafting tree for total materials
-                messages_to_send[0] += f"\\n\\n**🔧 Complete Materials Breakdown:**\\n"
-                messages_to_send[0] += "_(Full material breakdown with sub-components)_"
+                for part_key, recipe in part_details:
+                    part_display = part_key.replace('_', ' ').title()
+                    
+                    # Build the complete part tree using raw materials
+                    part_content = f"\\n**{part_display}:**\\n"
+                    part_content += format_materials_tree(part_key, 1)
+                    
+                    # Check if adding this part would exceed message limit
+                    if len(current_message + part_content) > 1900:  # Small buffer for Discord's 2000 char limit
+                        # Send current message and start a new one
+                        messages_to_send.append(current_message)
+                        current_message = f"**🔧 Complete Crafting Trees (continued):**\\n" + part_content
+                    else:
+                        # Add to current message
+                        current_message += part_content
+                
+                # Add final notes to the last message
+                if missing_parts:
+                    current_message += f"\\n**Note:** Some parts not found in database: {', '.join(missing_parts)}"
+                if quantity > 1:
+                    current_message += f"\\n**Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
+                
+                # Add the final message
+                messages_to_send.append(current_message)
             else:
                 # Mode 1: Default (parts list + total materials summary only)
                 messages_to_send = [response]
@@ -1002,7 +1132,10 @@ Determine the exact parts needed and return as pipe-separated list:"""
                         part_content += format_materials_tree(part_key, 1)
                     else:
                         # Mode 3: By parts only (direct materials for each part)
-                        part_materials, _ = calculate_direct_materials(part_key, quantity)
+                        part_materials, _ = calculate_direct_materials(part_key, 1)
+                        # Multiply by vehicle quantity if needed
+                        if quantity > 1 and part_materials:
+                            part_materials = {mat: qty * quantity for mat, qty in part_materials.items()}
                         part_content = f"\\n**{part_display}:**\\n"
                         if part_materials:
                             part_content += format_materials_list(part_materials)
@@ -1027,16 +1160,35 @@ Determine the exact parts needed and return as pipe-separated list:"""
                 # Add the final message
                 messages_to_send.append(current_message)
             elif full_breakdown:
-                # Mode 2: Full breakdown (summary + complete crafting tree for total materials)
-                messages_to_send = [response]
-                if missing_parts:
-                    messages_to_send[0] += f"\\n**Missing recipes:** {', '.join(missing_parts)}"
-                if quantity > 1:
-                    messages_to_send[0] += f"\\n**Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
+                # Mode 2: Full breakdown (summary + complete crafting tree for each part)
+                messages_to_send = []
+                current_message = response
+                current_message += f"\\n\\n**🔧 Complete Crafting Trees:**\\n"
                 
-                # Add complete crafting tree for total materials
-                messages_to_send[0] += f"\\n\\n**🔧 Complete Materials Breakdown:**\\n"
-                messages_to_send[0] += "_(Full material breakdown with sub-components)_"
+                for part_key, recipe, part_type in part_details:
+                    part_display = part_key.replace('_', ' ').title()
+                    
+                    # Build the complete part tree using raw materials
+                    part_content = f"\\n**{part_display}:**\\n"
+                    part_content += format_materials_tree(part_key, 1)
+                    
+                    # Check if adding this part would exceed message limit
+                    if len(current_message + part_content) > 1900:  # Small buffer for Discord's 2000 char limit
+                        # Send current message and start a new one
+                        messages_to_send.append(current_message)
+                        current_message = f"**🔧 Complete Crafting Trees (continued):**\\n" + part_content
+                    else:
+                        # Add to current message
+                        current_message += part_content
+                
+                # Add final notes to the last message
+                if missing_parts:
+                    current_message += f"\\n**Missing recipes:** {', '.join(missing_parts)}"
+                if quantity > 1:
+                    current_message += f"\\n**Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
+                
+                # Add the final message
+                messages_to_send.append(current_message)
             else:
                 # Mode 1: Default (parts list + total materials summary only)
                 messages_to_send = [response]
