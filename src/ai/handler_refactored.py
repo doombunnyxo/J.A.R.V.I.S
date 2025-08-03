@@ -172,7 +172,7 @@ class AIHandler:
                 )
             
             # Send response if not already sent (admin actions send their own)
-            if response:
+            if response and response.strip():
                 await self._send_response(message, response)
         
         except Exception as e:
@@ -234,8 +234,7 @@ class AIHandler:
             is_admin_command = any(keyword in query_lower for keyword in ADMIN_KEYWORDS)
             
             if is_admin_command:
-                # Admin command path - temporarily send confirmation message
-                await message.channel.send(f"🔧 **Admin Command Detected**: Routing to admin handler for: {query[:50]}...")
+                # Admin command path - route to Perplexity-based admin handler
                 return await self._handle_admin_with_claude(message, query)
             else:
                 # Search command path  
