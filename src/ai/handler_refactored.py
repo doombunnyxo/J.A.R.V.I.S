@@ -453,13 +453,19 @@ Your task is to analyze the research context and generate a specific admin comma
 INSTRUCTIONS:
 1. Analyze the research context to understand the hierarchy and terminology
 2. Generate a single, specific admin command that captures the user's intent
-3. Use the format: "reorganize roles based on [specific description from research]"
-4. Include key terminology and hierarchy information from the research
-5. Make the command actionable and specific
+3. ALWAYS start with exactly "reorganize roles" 
+4. Include a brief description that incorporates the research findings
+5. Keep it concise but informative
+
+COMMAND FORMAT: "reorganize roles [brief description based on research]"
 
 EXAMPLES:
-- If research shows Star Wars hierarchy: "reorganize roles based on Star Wars Imperial hierarchy with Emperor, Vader, Imperial Officers, Storm Troopers, and Rebel Alliance ranks"
-- If research shows Dune factions: "reorganize roles based on Dune universe factions including House Atreides, House Harkonnen, Fremen, Spacing Guild, and Bene Gesserit hierarchy"
+- "reorganize roles Star Wars Imperial hierarchy"
+- "reorganize roles Dune universe factions"  
+- "reorganize roles medieval guild structure"
+- "reorganize roles corporate hierarchy"
+
+IMPORTANT: Start with exactly "reorganize roles" followed by a space, then the theme description.
 
 Respond with ONLY the specific admin command, nothing else."""
             
@@ -537,16 +543,23 @@ USER CONTEXT:
 Your task is to interpret the user's admin request and convert it to a clear, specific command that can be executed.
 
 INSTRUCTIONS:
-1. Understand what admin action the user wants to perform
-2. Convert vague requests into specific, actionable commands
-3. Preserve the user's intent while making it clear and executable
-4. Use consistent command formats
+1. Identify the admin action type from the user's request
+2. Convert to a simple, direct command using exact parser keywords
+3. Keep commands short and use the exact trigger phrases
+
+COMMAND PATTERNS (use these exactly):
+- "kick [target]" for removing users
+- "ban [target]" for banning users  
+- "timeout [target]" for muting users
+- "delete messages" for message cleanup
+- "rename role [old] to [new]" for single role renames
+- "reorganize roles [theme]" for bulk role reorganization
 
 EXAMPLES:
-- "kick that spammer" → "kick @username"
+- "kick that spammer" → "kick spammer"
 - "delete John's messages" → "delete messages from John"
-- "rename the moderator role to super mod" → "rename role Moderator to Super Mod"
-- "timeout user123 for being rude" → "timeout @user123 for 60 minutes for being rude"
+- "rename moderator role to super mod" → "rename role Moderator to Super Mod"
+- "reorganize all roles for Star Wars" → "reorganize roles Star Wars theme"
 
 Respond with ONLY the specific admin command, nothing else."""
             
@@ -613,8 +626,12 @@ Respond with ONLY the specific admin command, nothing else."""
             print(f"DEBUG: Groq admin response: {response}")
             
             # Handle admin actions using the existing Groq system (which works)
+            print(f"DEBUG: About to call _handle_admin_actions with command: '{admin_command}'")
             if await self._handle_admin_actions(message, admin_command, response, research_context):
+                print(f"DEBUG: Admin action WAS detected and handled")
                 return ""  # Admin action handled, no additional response needed
+            else:
+                print(f"DEBUG: Admin action was NOT detected - returning response to user")
             
             return response
             
