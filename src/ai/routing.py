@@ -165,6 +165,8 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
         (r'^perplexity:\s*(.+)', 'claude'),  # Backward compatibility
         (r'^p:\s*(.+)', 'claude'),
         (r'^search:\s*(.+)', 'claude'),
+        (r'^craft:\s*(.+)', 'crafting'),
+        (r'^c:\s*(.+)', 'crafting'),
     ]
     
     for pattern, provider in force_patterns:

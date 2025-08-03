@@ -19,6 +19,7 @@ from ..search.google import perform_google_search
 from ..utils.message_utils import smart_split_message
 from .routing import should_use_claude_for_search, extract_forced_provider, extract_claude_model
 from .context_manager import ContextManager
+from ..crafting.handler import CraftingHandler
 
 
 class RateLimiter:
@@ -81,6 +82,9 @@ class AIHandler:
         
         # Context management
         self.context_manager = ContextManager(self.groq_client)
+        
+        # Crafting system
+        self.crafting_handler = CraftingHandler(bot)
         
         # Provider tracking
         self.conversation_providers = {}  # Track which AI was used per conversation
@@ -150,14 +154,16 @@ class AIHandler:
                 await self._handle_rate_limit(message)
                 return
             
-            # Determine routing
-            provider = await self._determine_provider(message, ai_query, force_provider)
+            # Determine routing and get cleaned query
+            provider, cleaned_query = await self._determine_provider_and_query(message, ai_query, force_provider)
             
-            # Route to appropriate AI
+            # Route to appropriate handler
             if provider == "claude":
-                response = await self._handle_with_claude(message, ai_query)
+                response = await self._handle_with_claude(message, cleaned_query)
+            elif provider == "crafting":
+                response = await self._handle_with_crafting(message, cleaned_query)
             else:  # groq
-                response = await self._handle_with_groq(message, ai_query)
+                response = await self._handle_with_groq(message, cleaned_query)
             
             # Store conversation context
             if response and not response.startswith("Error"):
@@ -172,11 +178,39 @@ class AIHandler:
         except Exception as e:
             await message.channel.send(f'AI request failed: {str(e)}')
     
+    async def _determine_provider_and_query(self, message, query: str, force_provider: str) -> tuple[str, str]:
+        """Determine which provider to use and return cleaned query"""
+        # Check for forced provider
+        if force_provider:
+            if force_provider in ["claude", "perplexity"]:
+                provider = "claude"
+            elif force_provider == "crafting":
+                provider = "crafting"
+            else:
+                provider = "groq"
+            print(f"DEBUG: Forced to use {provider}")
+            return provider, query
+        
+        # Check for provider syntax in query
+        forced_provider, cleaned_query = extract_forced_provider(query)
+        if forced_provider:
+            print(f"DEBUG: Extracted forced provider: {forced_provider}")
+            return forced_provider, cleaned_query
+        
+        # Use original logic for automatic routing
+        provider = await self._determine_provider(message, query, None)
+        return provider, query
+    
     async def _determine_provider(self, message, query: str, force_provider: str) -> str:
         """Determine which AI provider to use"""
         # Check for forced provider
         if force_provider:
-            provider = "claude" if force_provider in ["claude", "perplexity"] else "groq"
+            if force_provider in ["claude", "perplexity"]:
+                provider = "claude"
+            elif force_provider == "crafting":
+                provider = "crafting"
+            else:
+                provider = "groq"
             print(f"DEBUG: Forced to use {provider}")
             return provider
         
@@ -294,6 +328,66 @@ class AIHandler:
         
         except Exception as e:
             return f"Error processing with Groq: {str(e)}"
+    
+    async def _handle_with_crafting(self, message, query: str) -> str:
+        """Handle query with crafting system"""
+        try:
+            # Use the existing crafting handler to process the query
+            result = await self.crafting_handler._interpret_recipe_request(query)
+            
+            if isinstance(result, tuple) and len(result) == 2:
+                item_name, quantity = result
+                
+                # Import crafting functions
+                from dune_crafting import calculate_materials, get_recipe_info, format_materials_list
+                
+                try:
+                    # Get the recipe information
+                    recipe_info = get_recipe_info(item_name)
+                    if not recipe_info:
+                        return f"❌ **Recipe not found for:** {item_name}\n\nUse `@bot craft: list` to see available items."
+                    
+                    # Calculate total materials needed
+                    total_materials = calculate_materials(item_name, quantity)
+                    
+                    # Format the response
+                    response = f"🔧 **Crafting Recipe: {item_name}**\n\n"
+                    
+                    if quantity > 1:
+                        response += f"**Quantity:** {quantity}\n\n"
+                    
+                    # Add recipe details
+                    response += f"**Direct Recipe:**\n"
+                    response += f"• **Station:** {recipe_info.get('station', 'Unknown')}\n"
+                    
+                    if 'intel_requirement' in recipe_info:
+                        intel = recipe_info['intel_requirement']
+                        response += f"• **Intel:** {intel.get('points', 0)} points"
+                        if intel.get('total_spent', 0) > 0:
+                            response += f" ({intel['total_spent']} total required)\n"
+                        else:
+                            response += "\n"
+                    
+                    if recipe_info.get('ingredients'):
+                        response += f"• **Ingredients:** {', '.join([f'{qty}x {item}' for item, qty in recipe_info['ingredients'].items()])}\n\n"
+                    
+                    # Add total materials breakdown
+                    response += f"**Total Materials Needed:**\n"
+                    response += format_materials_list(total_materials)
+                    
+                    if 'description' in recipe_info:
+                        response += f"\n**Description:** {recipe_info['description']}"
+                    
+                    return response
+                    
+                except Exception as crafting_error:
+                    return f"❌ **Crafting Error:** {str(crafting_error)}"
+            
+            else:
+                return f"❌ **Could not parse crafting request:** {query}\n\nExample: `@bot craft: sandbike mk3 with boost`"
+            
+        except Exception as e:
+            return f"Error processing crafting request: {str(e)}"
     
     async def _build_groq_context(self, message, query: str) -> str:
         """Build context for Groq queries"""
