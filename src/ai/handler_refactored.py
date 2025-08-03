@@ -242,7 +242,7 @@ class AIHandler:
             return f"❌ Error with Claude processing: {str(e)}"
     
     async def _handle_admin_with_claude(self, message, query: str) -> str:
-        """Handle admin commands using Claude for natural language processing"""
+        """Handle admin commands - Claude interprets, Groq executes"""
         try:
             if not config.has_anthropic_api():
                 return "❌ Claude API not configured. Please contact an administrator."
@@ -251,9 +251,11 @@ class AIHandler:
             needs_research = self._detect_research_needed(query)
             
             if needs_research:
+                # Multi-step: Research + Claude interpretation + Groq execution
                 return await self._handle_multi_step_admin_action(message, query)
             else:
-                return await self._handle_single_step_admin_action(message, query)
+                # Single-step: Claude interpretation + Groq execution
+                return await self._handle_single_step_admin_action_with_groq(message, query)
                 
         except Exception as e:
             print(f"DEBUG: Claude admin processing failed: {e}")
@@ -398,18 +400,37 @@ The goal is to find authentic terminology and structure that can be adapted for 
             return f"Error researching {research_query}: {str(e)}"
     
     async def _execute_admin_with_research(self, message, original_query: str, research_context: str) -> str:
-        """Execute the admin command with research context included"""
+        """Execute the admin command with research context - Claude plans, Groq executes"""
         try:
-            # Build the enhanced context that includes research
+            print(f"DEBUG: Using Claude+Groq hybrid approach for research-enhanced admin action")
+            
+            # Step 1: Use Claude to analyze research and generate specific admin commands
+            admin_commands = await self._claude_generate_admin_commands(message, original_query, research_context)
+            
+            if not admin_commands or admin_commands.startswith("❌"):
+                return admin_commands or "❌ Failed to generate admin commands from research"
+            
+            print(f"DEBUG: Claude generated admin commands: {admin_commands}")
+            
+            # Step 2: Use Groq to execute the specific admin commands
+            return await self._groq_execute_admin_command(message, admin_commands, research_context)
+            
+        except Exception as e:
+            print(f"DEBUG: Hybrid admin execution failed: {e}")
+            return f"❌ Error with hybrid admin processing: {str(e)}"
+    
+    async def _claude_generate_admin_commands(self, message, original_query: str, research_context: str) -> str:
+        """Use Claude to analyze research and generate specific admin commands for Groq"""
+        try:
+            if not config.has_anthropic_api():
+                return "❌ Claude API not configured"
+            
+            # Build context for Claude's command generation
             user_context = await self.context_manager.build_full_context(
                 original_query, message.author.id, message.channel.id,
                 message.author.display_name, message
             )
             
-            # Combine user context with research
-            enhanced_context = f"{user_context}\n\nRESEARCH CONTEXT:\n{research_context}"
-            
-            # Use Claude for admin command processing with research context
             import aiohttp
             
             headers = {
@@ -418,14 +439,36 @@ The goal is to find authentic terminology and structure that can be adapted for 
                 "anthropic-version": "2023-06-01"
             }
             
-            system_message = self._build_claude_admin_system_message(enhanced_context, message.author.id)
+            # Specialized system message for command generation
+            system_message = f"""You are Claude, an AI assistant that analyzes research and generates specific Discord admin commands.
+
+USER CONTEXT:
+{user_context}
+
+RESEARCH CONTEXT:
+{research_context}
+
+Your task is to analyze the research context and generate a specific admin command that Groq can execute. Based on the user's request and the research provided, create a clear reorganize_roles command.
+
+INSTRUCTIONS:
+1. Analyze the research context to understand the hierarchy and terminology
+2. Generate a single, specific admin command that captures the user's intent
+3. Use the format: "reorganize roles based on [specific description from research]"
+4. Include key terminology and hierarchy information from the research
+5. Make the command actionable and specific
+
+EXAMPLES:
+- If research shows Star Wars hierarchy: "reorganize roles based on Star Wars Imperial hierarchy with Emperor, Vader, Imperial Officers, Storm Troopers, and Rebel Alliance ranks"
+- If research shows Dune factions: "reorganize roles based on Dune universe factions including House Atreides, House Harkonnen, Fremen, Spacing Guild, and Bene Gesserit hierarchy"
+
+Respond with ONLY the specific admin command, nothing else."""
             
             payload = {
                 "model": "claude-3-5-haiku-20241022",
-                "max_tokens": 1000,
-                "temperature": 0.2,
+                "max_tokens": 200,
+                "temperature": 0.1,
                 "messages": [
-                    {"role": "user", "content": f"{system_message}\n\nUser request: {original_query}\n\nBased on the research context provided above, please process this admin request. You have the necessary permissions to perform this action - respond with your understanding of what action will be taken."}
+                    {"role": "user", "content": f"User request: {original_query}\n\nGenerate a specific admin command based on the research context provided above."}
                 ]
             }
             
@@ -435,68 +478,149 @@ The goal is to find authentic terminology and structure that can be adapted for 
                                        headers=headers, json=payload) as response:
                     if response.status == 200:
                         result = await response.json()
-                        claude_response = result["content"][0]["text"].strip()
+                        command = result["content"][0]["text"].strip()
+                        return command
                     else:
                         raise Exception(f"Claude API error {response.status}: {await response.text()}")
-            
-            # Handle admin actions if detected
-            if await self._handle_admin_actions(message, original_query, claude_response, research_context):
-                return ""  # Admin action handled, no additional response needed
-            
-            return claude_response
-            
+                        
         except Exception as e:
-            print(f"DEBUG: Admin execution with research failed: {e}")
-            return f"❌ Error executing admin command with research: {str(e)}"
+            print(f"DEBUG: Claude command generation failed: {e}")
+            return f"❌ Error generating admin commands: {str(e)}"
     
-    async def _handle_single_step_admin_action(self, message, query: str) -> str:
-        """Handle regular single-step admin actions"""
+    
+    async def _handle_single_step_admin_action_with_groq(self, message, query: str) -> str:
+        """Handle single-step admin actions - Claude interprets, Groq executes"""
         try:
-            # Build context for admin processing
-            context = await self.context_manager.build_full_context(
-                query, message.author.id, message.channel.id,
-                message.author.display_name, message
-            )
+            print(f"DEBUG: Single-step admin action - Claude interprets, Groq executes")
             
-            # Use Claude Haiku for admin command processing
-            import aiohttp
+            # Step 1: Use Claude to interpret and generate specific admin command
+            admin_command = await self._claude_interpret_admin_request(message, query)
             
-            headers = {
-                "x-api-key": config.ANTHROPIC_API_KEY,
-                "Content-Type": "application/json",
-                "anthropic-version": "2023-06-01"
-            }
+            if not admin_command or admin_command.startswith("❌"):
+                return admin_command or "❌ Failed to interpret admin request"
             
-            system_message = self._build_claude_admin_system_message(context, message.author.id)
+            print(f"DEBUG: Claude interpreted command: {admin_command}")
             
-            payload = {
-                "model": "claude-3-5-haiku-20241022",
-                "max_tokens": 1000,
-                "temperature": 0.2,
-                "messages": [
-                    {"role": "user", "content": f"{system_message}\n\nUser request: {query}"}
-                ]
-            }
-            
-            timeout = aiohttp.ClientTimeout(total=15)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post("https://api.anthropic.com/v1/messages", 
-                                       headers=headers, json=payload) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        claude_response = result["content"][0]["text"].strip()
-                    else:
-                        raise Exception(f"Claude API error {response.status}: {await response.text()}")
-            
-            # Handle admin actions if detected
-            if await self._handle_admin_actions(message, query, claude_response):
-                return ""  # Admin action handled, no additional response needed
-            
-            return claude_response
+            # Step 2: Use Groq to execute the admin command
+            return await self._groq_execute_admin_command(message, admin_command)
             
         except Exception as e:
             print(f"DEBUG: Single-step admin processing failed: {e}")
             return f"❌ Error with single-step admin processing: {str(e)}"
+    
+    async def _claude_interpret_admin_request(self, message, query: str) -> str:
+        """Use Claude to interpret admin requests and convert to specific commands"""
+        try:
+            if not config.has_anthropic_api():
+                return "❌ Claude API not configured"
+            
+            # Build context for Claude's interpretation
+            user_context = await self.context_manager.build_full_context(
+                query, message.author.id, message.channel.id,
+                message.author.display_name, message
+            )
+            
+            import aiohttp
+            
+            headers = {
+                "x-api-key": config.ANTHROPIC_API_KEY,
+                "Content-Type": "application/json",
+                "anthropic-version": "2023-06-01"
+            }
+            
+            # System message for interpreting admin requests
+            system_message = f"""You are Claude, an AI assistant that interprets Discord admin requests and converts them to specific commands.
+
+USER CONTEXT:
+{user_context}
+
+Your task is to interpret the user's admin request and convert it to a clear, specific command that can be executed.
+
+INSTRUCTIONS:
+1. Understand what admin action the user wants to perform
+2. Convert vague requests into specific, actionable commands
+3. Preserve the user's intent while making it clear and executable
+4. Use consistent command formats
+
+EXAMPLES:
+- "kick that spammer" → "kick @username"
+- "delete John's messages" → "delete messages from John"
+- "rename the moderator role to super mod" → "rename role Moderator to Super Mod"
+- "timeout user123 for being rude" → "timeout @user123 for 60 minutes for being rude"
+
+Respond with ONLY the specific admin command, nothing else."""
+            
+            payload = {
+                "model": "claude-3-5-haiku-20241022",
+                "max_tokens": 150,
+                "temperature": 0.1,
+                "messages": [
+                    {"role": "user", "content": f"Admin request to interpret: {query}"}
+                ]
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=15)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post("https://api.anthropic.com/v1/messages", 
+                                       headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        command = result["content"][0]["text"].strip()
+                        return command
+                    else:
+                        raise Exception(f"Claude API error {response.status}: {await response.text()}")
+                        
+        except Exception as e:
+            print(f"DEBUG: Claude admin interpretation failed: {e}")
+            return f"❌ Error interpreting admin request: {str(e)}"
+    
+    async def _groq_execute_admin_command(self, message, admin_command: str, research_context: str = None) -> str:
+        """Use Groq to execute admin commands (single method for both simple and research-enhanced)"""
+        try:
+            if not self.groq_client:
+                return "❌ Groq API not configured"
+            
+            # Build context for Groq
+            user_context = await self.context_manager.build_full_context(
+                admin_command, message.author.id, message.channel.id,
+                message.author.display_name, message
+            )
+            
+            # Add research context if provided
+            if research_context:
+                enhanced_context = f"{user_context}\n\nRESEARCH CONTEXT FOR ROLE REORGANIZATION:\n{research_context}"
+                print(f"DEBUG: Using enhanced context with research for Groq")
+            else:
+                enhanced_context = user_context
+                print(f"DEBUG: Using standard context for Groq")
+            
+            # Build system message for Groq admin execution
+            system_message = self._build_groq_system_message(enhanced_context, message.author.id)
+            
+            # Get response from Groq
+            completion = self.groq_client.chat.completions.create(
+                model=config.AI_MODEL,
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": admin_command}
+                ],
+                max_tokens=1000,
+                temperature=0.7
+            )
+            
+            response = completion.choices[0].message.content.strip()
+            
+            print(f"DEBUG: Groq admin response: {response}")
+            
+            # Handle admin actions using the existing Groq system (which works)
+            if await self._handle_admin_actions(message, admin_command, response, research_context):
+                return ""  # Admin action handled, no additional response needed
+            
+            return response
+            
+        except Exception as e:
+            print(f"DEBUG: Groq admin execution failed: {e}")
+            return f"❌ Error executing admin command with Groq: {str(e)}"
     
     async def _handle_search_with_claude(self, message, query: str) -> str:
         """Handle search queries using the existing hybrid search pipeline"""
