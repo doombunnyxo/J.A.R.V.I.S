@@ -1624,23 +1624,31 @@ Be concise and clear about what the action will do."""
     
     async def handle_admin_reaction(self, reaction, user):
         """Handle admin action confirmation reactions"""
+        await reaction.message.channel.send(f"🔧 **DEBUG**: Admin reaction received from user {user.id}")
+        
         if not is_admin(user.id):
+            await reaction.message.channel.send(f"🔧 **DEBUG**: User {user.id} is not admin, ignoring reaction")
             return
         
         # Extract action ID from message
         message_content = reaction.message.content
+        await reaction.message.channel.send(f"🔧 **DEBUG**: Looking for Action ID in message content")
+        
         if "*Action ID:" not in message_content:
+            await reaction.message.channel.send(f"🔧 **DEBUG**: No Action ID found in message")
             return
         
         action_id = message_content.split("*Action ID: ")[1].split("*")[0].strip()
+        await reaction.message.channel.send(f"🔧 **DEBUG**: Extracted Action ID: {action_id}")
         
         if action_id not in self.admin_actions:
             await reaction.message.channel.send("❌ **Admin action expired or not found.**")
             return
         
         action_data = self.admin_actions[action_id]
+        await reaction.message.channel.send(f"🔧 **DEBUG**: Found action data: {action_data.get('action_type')}")
         executor = action_data.get('executor')
-        intent = action_data['intent']
+        intent = action_data.get('intent')  # Optional for new Perplexity flow
         
         if str(reaction.emoji) == "✅":
             # Execute the admin action
