@@ -59,7 +59,7 @@ async def claude_optimize_search_query(user_query: str, filtered_context: str = 
         claude = AnthropicAPI(config.ANTHROPIC_API_KEY)
         
         # Build system message for search query optimization
-        system_message = """You are a search query optimizer. Your job is to transform user questions into optimized Google search queries that will return the most relevant and current results.
+        system_message = """You are a search query optimizer. Your job is to transform user questions into optimized Google search queries that will return the most relevant and current results. The results will be processed and formatted for Discord chat.
 
 INSTRUCTIONS:
 1. Convert conversational questions into effective search terms
@@ -69,6 +69,7 @@ INSTRUCTIONS:
 5. Keep queries concise but comprehensive
 6. Use current year (2025) for time-sensitive queries
 7. Return ONLY the optimized search query, nothing else
+8. Prioritize sources that provide clear, factual information suitable for Discord formatting
 
 EXAMPLES:
 - "What's the weather like today?" → "weather today [current location]"
@@ -120,7 +121,7 @@ async def claude_search_analysis(user_query: str, search_results: str, filtered_
         claude = AnthropicAPI(config.ANTHROPIC_API_KEY)
         
         # Build system message for search result analysis
-        system_message = """You are an AI assistant that analyzes web search results to provide comprehensive, accurate answers to user questions.
+        system_message = """You are an AI assistant that analyzes web search results to provide comprehensive, accurate answers to user questions. You are responding in a Discord chat environment.
 
 INSTRUCTIONS:
 1. **Analyze the provided search results** thoroughly
@@ -132,9 +133,19 @@ INSTRUCTIONS:
 7. **If search results are insufficient**, acknowledge limitations
 8. **Use user context** to personalize the response when relevant
 
+DISCORD FORMATTING GUIDELINES:
+- Use **bold** for emphasis (not numbered lists)
+- Use simple bullet points with • instead of 1., 2., 3.
+- Keep paragraphs short (2-3 sentences max)
+- Use line breaks between different topics
+- Avoid complex nested lists or numbering
+- Use Discord markdown: **bold**, *italic*, `code`, ```code blocks```
+- When listing items, use • or - for bullets, never numbers
+
 RESPONSE FORMAT:
 - Lead with a direct answer to the user's question
 - Support with relevant details from search results
+- Use Discord-friendly formatting (bullets, bold, line breaks)
 - End with source attribution when applicable
 - Keep tone conversational and helpful
 

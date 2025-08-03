@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:game8.co)",
+      "WebFetch(domain:duneawakening.wiki.fextralife.com)",
+      "WebFetch(domain:duneawakening.wiki.fextralife.com)"
+    ],
+    "deny": []
+  }
+}

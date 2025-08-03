@@ -70,7 +70,7 @@ class GoogleSearch(commands.Cog):
         except Exception as e:
             await message.channel.send(f'Search failed: {str(e)}')
     
-    async def search_for_ai(self, query: str, num_results: int = 3) -> str:
+    async def search_for_ai(self, query: str, num_results: int = 10) -> str:
         """Perform search and return results as text for AI processing"""
         try:
             if not config.has_google_search():
@@ -82,21 +82,59 @@ class GoogleSearch(commands.Cog):
             if 'items' not in result:
                 return f"No search results found for: {query}"
             
-            search_results = f"Search results for '{query}':\n\n"
+            search_results = f"Current web search results for '{query}':\n\n"
             
             for i, item in enumerate(result['items'][:num_results], 1):
                 title = item['title']
                 link = item['link']
                 snippet = item.get('snippet', 'No description available')
                 
+                # Limit snippet length for better processing
+                if len(snippet) > 400:
+                    snippet = snippet[:400] + "..."
+                
                 search_results += f"{i}. **{title}**\n"
-                search_results += f"   {snippet[:300]}...\n"
+                search_results += f"   {snippet}\n"
                 search_results += f"   Source: <{link}>\n\n"
             
             return search_results
             
         except Exception as e:
             return f"Search failed: {str(e)}"
+
+
+async def perform_google_search(query: str) -> str:
+    """
+    Standalone function to perform Google search for AI processing
+    Used by the refactored AI handler
+    """
+    try:
+        if not config.has_google_search():
+            return "Google search is not configured. Please set GOOGLE_API_KEY and GOOGLE_SEARCH_ENGINE_ID."
+        
+        service = build("customsearch", "v1", developerKey=config.GOOGLE_API_KEY)
+        result = service.cse().list(q=query, cx=config.GOOGLE_SEARCH_ENGINE_ID, num=10).execute()
+        
+        if 'items' not in result:
+            return f"No search results found for: {query}"
+        
+        search_results = f"Current web search results for '{query}':\n\n"
+        
+        for i, item in enumerate(result['items'][:10], 1):
+            title = item['title']
+            link = item['link']
+            snippet = item.get('snippet', 'No description available')
+            
+            if len(snippet) > 400:
+                snippet = snippet[:400] + "..."
+
+            search_results += f"{i}. **{title}**\n"
+            search_results += f"   {snippet}\n"
+            search_results += f"   Source: <{link}>\n\n"
+
+        return search_results
+    except Exception as e:
+        return f"Search failed: {str(e)}"
 
 async def setup(bot):
     await bot.add_cog(GoogleSearch(bot))

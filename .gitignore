@@ -9,11 +9,13 @@
 .env.staging
 *.env
 
-# Bot Data Files (may contain user data) - exclude only root data directory
-/data/
-/data/*
-*.json
-!requirements.txt
+# Bot Data Files (may contain user data) - exclude user data but allow static data
+/data/conversation_history.json
+/data/permanent_context.json
+/data/unfiltered_permanent_context.json
+/data/user_settings.json
+# Allow static game data files
+!data/dune_recipes.json
 
 # API Keys and Configuration Files
 config.ini
