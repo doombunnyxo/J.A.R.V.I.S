@@ -47,6 +47,66 @@ class AnthropicAPI:
                     error_text = await response.text()
                     raise Exception(f"Claude API error {response.status}: {error_text}")
 
+async def claude_optimize_search_query(user_query: str, filtered_context: str = "") -> str:
+    """
+    Use Claude 3.5 Haiku to optimize a search query for better Google Search results
+    """
+    if not config.has_anthropic_api():
+        return user_query  # Fallback to original query
+    
+    try:
+        # Create Claude client
+        claude = AnthropicAPI(config.ANTHROPIC_API_KEY)
+        
+        # Build system message for search query optimization
+        system_message = """You are a search query optimizer. Your job is to transform user questions into optimized Google search queries that will return the most relevant and current results.
+
+INSTRUCTIONS:
+1. Convert conversational questions into effective search terms
+2. Remove unnecessary words like "can you", "please", "I want to know"
+3. Focus on the core information being sought
+4. Add relevant keywords that would improve search results
+5. Keep queries concise but comprehensive
+6. Use current year (2025) for time-sensitive queries
+7. Return ONLY the optimized search query, nothing else
+
+EXAMPLES:
+- "What's the weather like today?" → "weather today [current location]"
+- "Can you tell me about the latest iPhone?" → "iPhone 2025 latest model specs features"
+- "I want to know how to cook pasta" → "how to cook pasta recipe instructions"
+- "What are the best laptops for gaming?" → "best gaming laptops 2025 reviews comparison"
+
+USER CONTEXT (if provided):
+Use this context to make the search query more specific and personalized."""
+
+        # Add user context if provided
+        context_info = ""
+        if filtered_context and filtered_context.strip():
+            context_info = f"\n\nUSER CONTEXT:\n{filtered_context.strip()}\n\nUse this context to make the search query more specific and personalized."
+        
+        # Build user message
+        user_message = f"""Optimize this search query: {user_query}{context_info}"""
+        
+        # Call Claude API with lower token limit for optimization
+        response = await claude.create_message(
+            system_message=system_message,
+            user_message=user_message,
+            max_tokens=100
+        )
+        
+        # Clean up the response
+        optimized_query = response.strip().strip('"\'')
+        
+        print(f"DEBUG: Claude query optimization:")
+        print(f"DEBUG: Original: '{user_query}'")
+        print(f"DEBUG: Optimized: '{optimized_query}'")
+        
+        return optimized_query
+        
+    except Exception as e:
+        print(f"DEBUG: Claude search query optimization failed: {e}")
+        return user_query  # Fallback to original query
+
 async def claude_search_analysis(user_query: str, search_results: str, filtered_context: str = "") -> str:
     """
     Use Claude 3.5 Haiku to analyze search results and provide a comprehensive answer

@@ -11,7 +11,7 @@ from ..data.persistence import data_manager
 from ..admin.permissions import is_admin
 from ..admin.actions import AdminActionHandler
 from ..admin.parser import AdminIntentParser
-from ..search.claude import claude_search_analysis
+from ..search.claude import claude_search_analysis, claude_optimize_search_query
 from ..utils.message_utils import smart_split_message
 
 # Constants
@@ -229,56 +229,9 @@ class AIHandler:
     
     
     async def _optimize_search_query(self, user_query: str, filtered_context: str = "") -> str:
-        """Use Groq to create an optimized search query for better Google Search results"""
-        if not self.groq_client or not config.has_groq_api():
-            # Fallback: return the original query
-            return user_query
-        
+        """Use Claude to create an optimized search query for better Google Search results"""
         try:
-            system_prompt = """You are a search query optimizer. Your job is to transform user questions into optimized Google search queries that will return the most relevant and current results.
-
-INSTRUCTIONS:
-1. Convert conversational questions into effective search terms
-2. Remove unnecessary words like "can you", "please", "I want to know"
-3. Focus on the core information being sought
-4. Add relevant keywords that would improve search results
-5. Keep queries concise but comprehensive
-6. Use current year (2025) for time-sensitive queries
-7. Return ONLY the optimized search query, nothing else
-
-EXAMPLES:
-- "What's the weather like today?" → "weather today [current location]"
-- "Can you tell me about the latest iPhone?" → "iPhone 2025 latest model specs features"
-- "I want to know how to cook pasta" → "how to cook pasta recipe instructions"
-- "What are the best laptops for gaming?" → "best gaming laptops 2025 reviews comparison"
-"""
-
-            context_info = ""
-            if filtered_context:
-                context_info = f"\n\nRELEVANT USER CONTEXT:\n{filtered_context}\n\nUse this context to make the search query more specific and personalized."
-
-            messages = [
-                {
-                    "role": "system", 
-                    "content": system_prompt + context_info
-                },
-                {
-                    "role": "user",
-                    "content": f"Optimize this search query: {user_query}"
-                }
-            ]
-            
-            completion = self.groq_client.chat.completions.create(
-                messages=messages,
-                model=config.AI_MODEL,
-                max_tokens=100,
-                temperature=0.1  # Low temperature for consistent optimization
-            )
-            
-            optimized_query = completion.choices[0].message.content.strip()
-            
-            # Remove quotes if they were added
-            optimized_query = optimized_query.strip('"\'')
+            optimized_query = await claude_optimize_search_query(user_query, filtered_context)
             
             print(f"DEBUG: [AIHandler-{self.instance_id}] Search query optimized:")
             print(f"DEBUG: Original: '{user_query}'")
