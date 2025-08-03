@@ -34,7 +34,7 @@ class EventHandlers(commands.Cog):
             return
         
         if self.ai_handler:
-            await self.ai_handler.handle_admin_confirmation(reaction, user)
+            await self.ai_handler.handle_admin_reaction(reaction, user)
     
     @commands.Cog.listener()
     async def on_message(self, message):
