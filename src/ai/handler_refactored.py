@@ -425,7 +425,7 @@ The goal is to find authentic terminology and structure that can be adapted for 
                 "max_tokens": 1000,
                 "temperature": 0.2,
                 "messages": [
-                    {"role": "user", "content": f"{system_message}\n\nUser request: {original_query}\n\nBased on the research context provided above, please process this admin request."}
+                    {"role": "user", "content": f"{system_message}\n\nUser request: {original_query}\n\nBased on the research context provided above, please process this admin request. You have the necessary permissions to perform this action - respond with your understanding of what action will be taken."}
                 ]
             }
             
@@ -733,7 +733,9 @@ Your capabilities include:
 
 2. **Discord Server Management** (Admin only): Help with server administration including user moderation, role management, channel management, and message cleanup.
 
-The relevant context section above contains only information pertinent to the current query. Use this context to provide more personalized and informed responses."""
+The relevant context section above contains information pertinent to the current query, including any research results that should inform your admin actions. Use this context to provide more personalized and informed responses.
+
+IMPORTANT: If the context includes research results about themes, organizations, or hierarchies, use that information to better understand and process admin requests that reference those topics."""
 
         parts.append(core_instructions)
         
@@ -746,6 +748,7 @@ The relevant context section above contains only information pertinent to the cu
 - Channel management (create/delete channels)
 - Message cleanup (bulk delete messages, including from specific users)
 - Nickname changes
+- Intelligent role reorganization using research context when provided
 
 When you detect an administrative request, respond by clearly stating what action you understood. DO NOT ask for text-based confirmation. The system will automatically handle confirmation.
 
@@ -756,6 +759,9 @@ Examples:
 - "kick that spammer" → I understand you want to kick [user]. They will be removed from the server.
 - "delete John's messages" → I understand you want to delete messages from John. I'll remove their recent messages.
 - "rename role Moderator to Super Mod" → I understand you want to rename the Moderator role to Super Mod.
+- "rename all roles to match Dune factions" → I understand you want to reorganize all server roles to match Dune universe factions. I'll rename roles using appropriate faction names and hierarchy.
+
+RESEARCH-ENHANCED ACTIONS: When context includes research about themes, organizations, or hierarchies, use that information to understand and confirm thematic role reorganization requests. Always acknowledge that you can perform the action based on the research provided.
 
 Be concise and clear about what the action will do."""
 
