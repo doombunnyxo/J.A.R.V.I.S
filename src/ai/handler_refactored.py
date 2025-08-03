@@ -247,6 +247,211 @@ class AIHandler:
             if not config.has_anthropic_api():
                 return "❌ Claude API not configured. Please contact an administrator."
             
+            # Check if this admin command requires research/multi-step processing
+            needs_research = self._detect_research_needed(query)
+            
+            if needs_research:
+                return await self._handle_multi_step_admin_action(message, query)
+            else:
+                return await self._handle_single_step_admin_action(message, query)
+                
+        except Exception as e:
+            print(f"DEBUG: Claude admin processing failed: {e}")
+            return f"❌ Error with Claude admin processing: {str(e)}"
+    
+    def _detect_research_needed(self, query: str) -> bool:
+        """Detect if an admin command needs research before execution"""
+        query_lower = query.lower()
+        
+        # Keywords that indicate research is needed
+        research_indicators = [
+            # Theme-based reorganization
+            'fit a theme', 'based on theme', 'themed', 'theme of', 'style of',
+            'like star wars', 'like harry potter', 'like marvel', 'like disney',
+            'like lotr', 'like lord of the rings', 'like game of thrones',
+            'like minecraft', 'like pokemon', 'like anime', 'like fantasy',
+            'medieval style', 'sci-fi style', 'cyberpunk style', 'steampunk style',
+            'military style', 'corporate style', 'academic style', 'gaming style',
+            # Context-based commands that need research
+            'organize roles based on', 'rename roles to match', 'make roles fit',
+            'structure roles like', 'model roles after', 'base roles on',
+            'appropriate for a', 'suitable for a', 'fitting for a',
+            # Commands that reference external knowledge
+            'research and', 'find out about', 'look up information',
+            'based on what you find', 'according to', 'using information about'
+        ]
+        
+        # Role reorganization with thematic context
+        role_reorganize_themes = [
+            'reorganize roles', 'fix role names', 'improve role names',
+            'rename all roles', 'update all roles', 'change all roles'
+        ]
+        
+        # Check if it's a role reorganization command with thematic elements
+        has_role_command = any(keyword in query_lower for keyword in role_reorganize_themes)
+        has_research_indicator = any(indicator in query_lower for indicator in research_indicators)
+        
+        # Also check for specific franchise/theme mentions
+        theme_keywords = [
+            'star wars', 'harry potter', 'marvel', 'dc comics', 'disney',
+            'lord of the rings', 'lotr', 'hobbit', 'game of thrones', 'got',
+            'minecraft', 'pokemon', 'anime', 'fantasy', 'sci-fi', 'cyberpunk',
+            'steampunk', 'medieval', 'military', 'corporate', 'academic',
+            'gaming', 'esports', 'twitch', 'youtube', 'streaming'
+        ]
+        
+        has_theme_mention = any(theme in query_lower for theme in theme_keywords)
+        
+        needs_research = (has_role_command and (has_research_indicator or has_theme_mention))
+        
+        print(f"DEBUG: Research detection - has_role_command: {has_role_command}, has_research_indicator: {has_research_indicator}, has_theme_mention: {has_theme_mention}, needs_research: {needs_research}")
+        
+        return needs_research
+    
+    async def _handle_multi_step_admin_action(self, message, query: str) -> str:
+        """Handle multi-step admin actions that require research"""
+        try:
+            print(f"DEBUG: Handling multi-step admin action: {query}")
+            
+            # Step 1: Extract the theme/context that needs research
+            research_query = self._extract_research_query(query)
+            print(f"DEBUG: Extracted research query: {research_query}")
+            
+            # Step 2: Use the search pipeline to gather information
+            research_context = await self._perform_research(message, research_query)
+            print(f"DEBUG: Research context length: {len(research_context) if research_context else 0}")
+            
+            # Step 3: Process the original admin command with the research context
+            return await self._execute_admin_with_research(message, query, research_context)
+            
+        except Exception as e:
+            print(f"DEBUG: Multi-step admin action failed: {e}")
+            return f"❌ Error with multi-step admin processing: {str(e)}"
+    
+    def _extract_research_query(self, query: str) -> str:
+        """Extract what needs to be researched from the admin query"""
+        query_lower = query.lower()
+        
+        # Look for specific themes/topics mentioned
+        theme_patterns = [
+            r'(?:like|based on|fit(?:ting)? (?:a |the )?|themed (?:around |after )?|style of |model(?:ed)? after )([^,.!?]+)',
+            r'(?:star wars|harry potter|marvel|dc comics|disney|lord of the rings|lotr|hobbit|game of thrones|got|minecraft|pokemon|anime|fantasy|sci-fi|cyberpunk|steampunk|medieval|military|corporate|academic|gaming|esports)',
+            r'(?:organize|structure|model) roles (?:like|after|based on) ([^,.!?]+)',
+            r'(?:appropriate|suitable|fitting) for (?:a |an )?([^,.!?]+) (?:server|community|guild)'
+        ]
+        
+        import re
+        for pattern in theme_patterns:
+            match = re.search(pattern, query_lower)
+            if match:
+                if len(match.groups()) > 0:
+                    theme = match.group(1).strip()
+                else:
+                    theme = match.group(0).strip()
+                
+                # Clean up the extracted theme
+                theme = re.sub(r'\b(?:the|a|an|for|like|based|on|fit|fitting|style|of|model|after)\b', '', theme).strip()
+                theme = re.sub(r'\s+', ' ', theme).strip()
+                
+                if len(theme) > 3:  # Valid theme found
+                    if 'role' in theme:
+                        # If "role" appears in theme, it's likely the full context
+                        return f"{theme} hierarchy and terminology"
+                    else:
+                        return f"{theme} hierarchy roles and organizational structure"
+        
+        # Fallback: look for quoted content or key terms
+        quoted_matches = re.findall(r'["\']([^"\']+)["\']', query)
+        for quoted in quoted_matches:
+            if len(quoted) > 5 and 'role' not in quoted.lower():
+                return f"{quoted} hierarchy and organizational structure"
+        
+        # Default fallback
+        return "organizational hierarchy and role structure for community management"
+    
+    async def _perform_research(self, message, research_query: str) -> str:
+        """Use the existing hybrid search pipeline to research the topic for admin purposes"""
+        try:
+            from ..search.search_pipeline import SearchPipeline
+            from ..search.hybrid_search_provider import HybridSearchProvider
+            
+            print(f"DEBUG: Performing admin research using hybrid search for: {research_query}")
+            
+            # Build admin-specific research context (simpler than user context)
+            admin_research_context = f"""ADMIN RESEARCH CONTEXT:
+This search is being performed to gather information for Discord server role reorganization.
+Focus on organizational hierarchy, ranks, titles, and terminology that would be appropriate for Discord server roles.
+The goal is to find authentic terminology and structure that can be adapted for server administration."""
+            
+            # Create hybrid provider for research
+            hybrid_provider = HybridSearchProvider()
+            pipeline = SearchPipeline(hybrid_provider)
+            
+            # Execute search using the existing hybrid pipeline
+            research_results = await pipeline.search_and_respond(research_query, admin_research_context)
+            
+            print(f"DEBUG: Admin research completed using hybrid search, results length: {len(research_results) if research_results else 0}")
+            return research_results
+            
+        except Exception as e:
+            print(f"DEBUG: Admin research via hybrid search failed: {e}")
+            return f"Error researching {research_query}: {str(e)}"
+    
+    async def _execute_admin_with_research(self, message, original_query: str, research_context: str) -> str:
+        """Execute the admin command with research context included"""
+        try:
+            # Build the enhanced context that includes research
+            user_context = await self.context_manager.build_full_context(
+                original_query, message.author.id, message.channel.id,
+                message.author.display_name, message
+            )
+            
+            # Combine user context with research
+            enhanced_context = f"{user_context}\n\nRESEARCH CONTEXT:\n{research_context}"
+            
+            # Use Claude for admin command processing with research context
+            import aiohttp
+            
+            headers = {
+                "x-api-key": config.ANTHROPIC_API_KEY,
+                "Content-Type": "application/json",
+                "anthropic-version": "2023-06-01"
+            }
+            
+            system_message = self._build_claude_admin_system_message(enhanced_context, message.author.id)
+            
+            payload = {
+                "model": "claude-3-5-haiku-20241022",
+                "max_tokens": 1000,
+                "temperature": 0.2,
+                "messages": [
+                    {"role": "user", "content": f"{system_message}\n\nUser request: {original_query}\n\nBased on the research context provided above, please process this admin request."}
+                ]
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=15)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post("https://api.anthropic.com/v1/messages", 
+                                       headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        claude_response = result["content"][0]["text"].strip()
+                    else:
+                        raise Exception(f"Claude API error {response.status}: {await response.text()}")
+            
+            # Handle admin actions if detected
+            if await self._handle_admin_actions(message, original_query, claude_response, research_context):
+                return ""  # Admin action handled, no additional response needed
+            
+            return claude_response
+            
+        except Exception as e:
+            print(f"DEBUG: Admin execution with research failed: {e}")
+            return f"❌ Error executing admin command with research: {str(e)}"
+    
+    async def _handle_single_step_admin_action(self, message, query: str) -> str:
+        """Handle regular single-step admin actions"""
+        try:
             # Build context for admin processing
             context = await self.context_manager.build_full_context(
                 query, message.author.id, message.channel.id,
@@ -290,11 +495,11 @@ class AIHandler:
             return claude_response
             
         except Exception as e:
-            print(f"DEBUG: Claude admin processing failed: {e}")
-            return f"❌ Error with Claude admin processing: {str(e)}"
+            print(f"DEBUG: Single-step admin processing failed: {e}")
+            return f"❌ Error with single-step admin processing: {str(e)}"
     
     async def _handle_search_with_claude(self, message, query: str) -> str:
-        """Handle search queries using hybrid search (Claude optimization + Perplexity analysis)"""
+        """Handle search queries using the existing hybrid search pipeline"""
         try:
             from ..search.search_pipeline import SearchPipeline
             from ..search.hybrid_search_provider import HybridSearchProvider
@@ -305,11 +510,11 @@ class AIHandler:
                 message.author.display_name, message
             )
             
-            # Create hybrid provider (Claude optimization + Perplexity analysis)
+            # Use the existing hybrid provider (Claude optimization + Perplexity analysis)
             hybrid_provider = HybridSearchProvider()
             pipeline = SearchPipeline(hybrid_provider)
             
-            # Execute the unified search pipeline with hybrid approach
+            # Execute the existing unified search pipeline
             response = await pipeline.search_and_respond(query, context)
             
             return response
@@ -558,7 +763,7 @@ Be concise and clear about what the action will do."""
         
         return "\n\n".join(parts)
     
-    async def _handle_admin_actions(self, message, query: str, response: str) -> bool:
+    async def _handle_admin_actions(self, message, query: str, response: str, research_context: str = None) -> bool:
         """Handle admin action detection and confirmation"""
         if not is_admin(message.author.id) or not message.guild:
             return False
@@ -574,9 +779,12 @@ Be concise and clear about what the action will do."""
         action_type, parameters = await parser.parse_admin_intent(query, message.guild, message.author)
         
         if not action_type:
-            # Send a message to help debug - this will show if admin detection is working
-            await message.channel.send("🔍 **Debug**: Admin command detected but no action parsed. This usually means the command wasn't recognized by the parser.")
             return False
+        
+        # Add research context to parameters if available (for multi-step actions)
+        if research_context and action_type == "reorganize_roles":
+            parameters["research_context"] = research_context
+            print(f"DEBUG: Added research context to reorganize_roles parameters")
         
         admin_intent = {
             "action_type": action_type,

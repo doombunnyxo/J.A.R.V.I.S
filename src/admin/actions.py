@@ -289,8 +289,10 @@ class AdminActionHandler:
         """Handle intelligent role reorganization with custom context"""
         guild = parameters.get("guild")
         context_description = parameters.get("context", "general community server")
+        research_context = parameters.get("research_context")  # New: research context from multi-step actions
         
         print(f"DEBUG: Role reorganization - guild: {guild}, context: '{context_description}'")
+        print(f"DEBUG: Research context available: {bool(research_context)}")
         
         if not guild:
             return "❌ **Error**: Guild not specified for role reorganization."
@@ -319,8 +321,37 @@ class AdminActionHandler:
             role_list = [f"- {role.name}" for role in roles_to_analyze]
             role_text = "\n".join(role_list)
             
-            # Create a flexible prompt that works with any context description
-            prompt = f"""You are renaming Discord server roles based on the following context and requirements.
+            # Build enhanced prompt with research context if available
+            if research_context:
+                prompt = f"""You are renaming Discord server roles based on comprehensive research and context.
+
+SERVER CONTEXT/DESCRIPTION:
+{context_description}
+
+RESEARCH CONTEXT:
+{research_context}
+
+CURRENT ROLES TO ANALYZE:
+{role_text}
+
+INSTRUCTIONS:
+1. Use the research context above to understand the specific terminology, hierarchy, and organizational structure appropriate for this theme/context
+2. Create role names that authentically fit the researched theme while maintaining Discord server functionality
+3. Maintain existing hierarchy levels (admin > moderator > member, etc.) but use theme-appropriate terminology
+4. Draw specific role names, ranks, and terminology from the research context provided
+5. Ensure names are recognizable to fans/members of this community while being clear and professional
+6. Only suggest renames for roles that would benefit from thematic change
+7. Use the most authentic and recognizable terminology from the research context
+
+OUTPUT FORMAT - RESPOND WITH ONLY THIS:
+For each role that needs renaming, write exactly:
+OLD_NAME → NEW_NAME
+
+For roles that are already appropriate for the context, don't include them.
+Do not include any other text, explanations, or formatting beyond the rename pairs."""
+            else:
+                # Original prompt for cases without research
+                prompt = f"""You are renaming Discord server roles based on the following context and requirements.
 
 SERVER CONTEXT/DESCRIPTION:
 {context_description}

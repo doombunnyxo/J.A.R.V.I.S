@@ -12,17 +12,17 @@ class AdminIntentParser:
         content = message_content.lower()
         print(f"DEBUG: Parsing admin intent for: '{message_content}'")
         
-        # Try each action type parser
+        # Try each action type parser (order matters - more specific parsers first)
         parsers = [
             self._parse_kick_action,
             self._parse_ban_action,
             self._parse_unban_action,
             self._parse_timeout_action,
             self._parse_remove_timeout_action,
-            self._parse_role_actions,
+            self._parse_role_actions,  # Role actions before nickname to prevent conflicts
             self._parse_bulk_delete_action,
             self._parse_channel_actions,
-            self._parse_nickname_action,
+            self._parse_nickname_action,  # Nickname last to avoid catching role "rename" commands
         ]
         
         for parser in parsers:
@@ -296,7 +296,11 @@ class AdminIntentParser:
         if any(keyword in content for keyword in reorganize_keywords):
             # Extract custom context/description from user input
             context_description = self._extract_role_context_description(content, original_content)
-            return "reorganize_roles", {"context": context_description, "guild": guild}
+            parameters = {"context": context_description, "guild": guild}
+            
+            # Check if this might be a multi-step action that will provide research context
+            # The AI handler will determine if research is needed and add research_context later
+            return "reorganize_roles", parameters
         
         return None, None
     
@@ -406,7 +410,16 @@ class AdminIntentParser:
     
     async def _parse_nickname_action(self, content: str, original_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict]]:
         """Parse nickname change action"""
-        if any(phrase in content for phrase in ['change nickname', 'set nickname', 'rename']):
+        # Exclude role-related commands to prevent conflicts
+        if any(role_word in content for role_word in ['role', 'roles']):
+            return None, None
+            
+        # Be more specific to avoid conflicts with role renaming
+        nickname_patterns = [
+            'change nickname', 'set nickname', 'nickname to',
+            'rename user', 'rename member', 'change name of'
+        ]
+        if any(phrase in content for phrase in nickname_patterns):
             user = await self._find_user(content, guild, message_author)
             if user:
                 nick_match = re.search(r'["\']([^"\']+)["\']', content)
