@@ -182,9 +182,11 @@ class AIHandler:
     
     async def _determine_provider_and_query(self, message, query: str, force_provider: str) -> tuple[str, str]:
         """Determine which provider to use and clean the query"""
+        await message.channel.send(f"🔧 **DEBUG**: ENTERING _determine_provider_and_query with query: '{query}', force_provider: {force_provider}")
+        
         # If provider is forced, return as-is
         if force_provider:
-            print(f"DEBUG: Force provider: {force_provider}")
+            await message.channel.send(f"🔧 **DEBUG**: Force provider: {force_provider}")
             return force_provider, query
         
         # Use routing logic to determine provider
@@ -193,17 +195,19 @@ class AIHandler:
         # Check for forced provider first
         extracted_provider, cleaned_query = extract_forced_provider(query)
         if extracted_provider:
-            print(f"DEBUG: Extracted provider: {extracted_provider}")
+            await message.channel.send(f"🔧 **DEBUG**: Extracted provider: {extracted_provider}")
             return extracted_provider, cleaned_query
         
         # Check if query should use Claude for search
         should_use_claude = should_use_claude_for_search(query)
-        print(f"DEBUG: Query: '{query[:50]}...' -> should_use_claude: {should_use_claude}")
+        await message.channel.send(f"🔧 **DEBUG**: Query: '{query[:50]}...' -> should_use_claude: {should_use_claude}")
         
         if should_use_claude:
+            await message.channel.send(f"🔧 **DEBUG**: Routing to Claude")
             return "claude", query
         
         # Default to Groq
+        await message.channel.send(f"🔧 **DEBUG**: Routing to Groq (default)")
         return "groq", query
     
     async def _determine_provider(self, message, query: str, force_provider: str) -> str:
@@ -228,12 +232,18 @@ class AIHandler:
     async def _handle_with_claude(self, message, query: str) -> str:
         """Handle query using Claude - either admin actions or hybrid search"""
         try:
+            await message.channel.send(f"🔧 **DEBUG**: ENTERING _handle_with_claude with query: '{query}'")
+            
             # Check if this is an admin command
             from .routing import ADMIN_KEYWORDS
             query_lower = query.lower()
             is_admin_command = any(keyword in query_lower for keyword in ADMIN_KEYWORDS)
             
+            await message.channel.send(f"🔧 **DEBUG**: Admin keywords check - query_lower: '{query_lower}'")
+            await message.channel.send(f"🔧 **DEBUG**: is_admin_command: {is_admin_command}")
+            
             if is_admin_command:
+                await message.channel.send(f"🔧 **DEBUG**: Taking admin command path")
                 # Admin command path - route to Perplexity-based admin handler
                 return await self._handle_admin_with_claude(message, query)
             else:
@@ -257,7 +267,10 @@ class AIHandler:
     async def _handle_admin_with_perplexity(self, message, query: str) -> str:
         """Handle admin commands using Perplexity for analysis and execution"""
         try:
+            await message.channel.send(f"🔧 **DEBUG**: ENTERING _handle_admin_with_perplexity with query: '{query}'")
+            
             if not config.has_perplexity_api():
+                await message.channel.send(f"🔧 **DEBUG**: Perplexity API not configured")
                 return "❌ Perplexity API not configured for admin commands."
             
             # Step 1: Use Perplexity to analyze the admin command and detect if it needs research
@@ -450,8 +463,10 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
             
             # Send confirmation message
             confirmation_msg = await message.channel.send(confirmation_text)
+            print(f"DEBUG: Step 1 - Sent confirmation message with role list (ID: {action_id})")
             await confirmation_msg.add_reaction("✅")
             await confirmation_msg.add_reaction("❌")
+            print(f"DEBUG: Step 2 - Added ✅/❌ reactions to confirmation message")
             
             return ""  # No additional response needed
             
@@ -1469,9 +1484,11 @@ Be concise and clear about what the action will do."""
                     guild = action_data['message'].guild
                     
                     if role_list and guild:
+                        print(f"DEBUG: Step 3 - User reacted ✅, starting role reorganization with {len(role_list)} roles")
                         await self._execute_role_list_reorganization(reaction.message, guild, role_list, action_data.get('theme', 'Custom Theme'))
                     else:
                         await reaction.message.channel.send("❌ **Error:** No role list or guild found")
+                        print(f"DEBUG: Step 3 ERROR - No role list or guild found")
                     return
                 
                 # Check if this is a research-enhanced action that needs final command generation
@@ -1528,6 +1545,7 @@ Be concise and clear about what the action will do."""
                 await reaction.message.channel.send(f"❌ **Action failed:** {str(e)}")
         elif str(reaction.emoji) == "❌":
             await reaction.message.channel.send("❌ **Admin action cancelled.**")
+            print(f"DEBUG: Step 3 ALT - User reacted ❌, admin action cancelled")
         
         # Clean up
         del self.admin_actions[action_id]
@@ -1567,6 +1585,7 @@ Be concise and clear about what the action will do."""
             # Start the renaming process
             progress_msg = await message.channel.send(f"🔄 **Starting role reorganization for {theme}**\n"
                                                     f"Renaming {min(len(server_roles), len(cleaned_roles))} roles...")
+            print(f"DEBUG: Step 4 - Sent progress start message, beginning to rename {min(len(server_roles), len(cleaned_roles))} roles")
             
             renamed_count = 0
             errors = []
@@ -1588,6 +1607,7 @@ Be concise and clear about what the action will do."""
                         await progress_msg.edit(content=f"🔄 **Role Reorganization Progress**\n"
                                               f"Renamed {renamed_count}/{min(len(server_roles), len(cleaned_roles))} roles\n"
                                               f"Latest: `{old_name}` → `{new_name}`")
+                        print(f"DEBUG: Step 5 - Updated progress message: {renamed_count}/{min(len(server_roles), len(cleaned_roles))} roles renamed")
                     
                     # Brief delay to avoid rate limits
                     await asyncio.sleep(0.5)
@@ -1611,9 +1631,11 @@ Be concise and clear about what the action will do."""
                         status_msg += f"\n• ... and {len(errors) - 3} more"
                 
                 await progress_msg.edit(content=status_msg)
+                print(f"DEBUG: Step 6 - Sent final completion message: {renamed_count} roles successfully renamed")
             else:
                 await progress_msg.edit(content=f"❌ **Role reorganization failed**: No roles could be renamed\n"
                                               f"**Errors**: {len(errors)}")
+                print(f"DEBUG: Step 6 ERROR - Sent failure message: No roles could be renamed, {len(errors)} errors")
                 
         except Exception as e:
             await message.channel.send(f"❌ **Role reorganization failed**: {str(e)}")
