@@ -278,6 +278,17 @@ class AIHandler:
             admin_analysis = await self._perplexity_analyze_admin_command(message, query)
             await message.channel.send(f"🔧 **DEBUG**: Step 1 Complete - Admin analysis result: {admin_analysis}")
             
+            # Program-level fallback: Force search for role reorganization patterns
+            force_search = self._should_force_search_for_roles(query)
+            if force_search:
+                await message.channel.send(f"🔧 **DEBUG**: Step 1 OVERRIDE - Program detected role reorganization pattern, forcing search")
+                admin_analysis = {
+                    "needs_search": True,
+                    "theme": self._extract_theme_from_query(query),
+                    "search_query": f"{self._extract_theme_from_query(query)} hierarchy factions groups roles characters"
+                }
+                await message.channel.send(f"🔧 **DEBUG**: Step 1 OVERRIDE Complete - Forced analysis: {admin_analysis}")
+            
             if admin_analysis.get('needs_search'):
                 await message.channel.send(f"🔧 **DEBUG**: Step 2 - Command needs search, getting Google results")
                 # Step 2: If it needs research, get search results
@@ -304,6 +315,63 @@ class AIHandler:
         except Exception as e:
             print(f"DEBUG: Perplexity admin processing failed: {e}")
             return f"❌ Error with Perplexity admin processing: {str(e)}"
+    
+    def _should_force_search_for_roles(self, query: str) -> bool:
+        """Program-level detection of role reorganization patterns that need search"""
+        query_lower = query.lower()
+        
+        # Patterns that definitely need search
+        role_reorganization_patterns = [
+            'rename roles to match',
+            'rename all roles to',
+            'rename server roles to',
+            'reorganize roles based on',
+            'make roles fit',
+            'roles like',
+            'rename roles to',
+            'update roles to match',
+            'change roles to match',
+            'set roles to match'
+        ]
+        
+        # Theme indicators
+        theme_indicators = [
+            'factions from',
+            'characters from', 
+            'based on',
+            'to match',
+            'from the',
+            'like in',
+            'similar to'
+        ]
+        
+        has_role_pattern = any(pattern in query_lower for pattern in role_reorganization_patterns)
+        has_theme_indicator = any(indicator in query_lower for indicator in theme_indicators)
+        
+        return has_role_pattern or (has_theme_indicator and 'role' in query_lower)
+    
+    def _extract_theme_from_query(self, query: str) -> str:
+        """Extract theme name from role reorganization query"""
+        query_lower = query.lower()
+        
+        # Look for common patterns
+        import re
+        
+        # Pattern: "match factions from the [THEME]"
+        match = re.search(r'(?:from|based on|like|match|to)\s+(?:the\s+)?([^,.!?]+?)(?:\s|$)', query_lower)
+        if match:
+            theme = match.group(1).strip()
+            # Clean up common words
+            theme = re.sub(r'\b(?:factions|characters|hierarchy|roles|groups)\b', '', theme).strip()
+            if theme:
+                return theme.title()
+        
+        # Fallback: look for quoted content
+        quoted_matches = re.findall(r'["\']([^"\']+)["\']', query)
+        if quoted_matches:
+            return quoted_matches[0].title()
+        
+        return "Custom Theme"
     
     async def _perplexity_analyze_admin_command(self, message, query: str) -> dict:
         """Use Perplexity to analyze admin command and detect if it needs internet search"""
