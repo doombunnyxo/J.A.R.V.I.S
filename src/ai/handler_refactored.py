@@ -545,19 +545,22 @@ Respond with ONLY the JSON, no other text."""
             await confirmation_msg.add_reaction("✅")
             await confirmation_msg.add_reaction("❌")
             
+            # Also send a visible confirmation that the system is working
+            await message.channel.send("✅ **Admin confirmation sent above** - react to proceed or cancel.")
+            
             return ""  # No additional response needed
             
         except Exception as e:
             print(f"DEBUG: Direct confirmation sending failed: {e}")
             return f"❌ Error sending confirmation: {str(e)}"
     
-    async def _claude_generate_final_admin_commands(self, message, original_query: str, research_context: str) -> str:
-        """Use Claude to generate final admin commands after user confirms research-based action"""
+    async def _claude_generate_specific_admin_command(self, message, original_query: str, research_context: str) -> str:
+        """Use Claude to generate a specific admin command text that the parser can interpret"""
         try:
             if not config.has_anthropic_api():
                 return "❌ Claude API not configured"
             
-            # This method is called AFTER user clicks ✅, so we generate the detailed context for execution
+            # This method is called AFTER user clicks ✅, so we generate a specific command
             user_context = await self.context_manager.build_full_context(
                 original_query, message.author.id, message.channel.id,
                 message.author.display_name, message
@@ -571,8 +574,8 @@ Respond with ONLY the JSON, no other text."""
                 "anthropic-version": "2023-06-01"
             }
             
-            # System message for final command generation with research
-            system_message = f"""You are Claude, generating the final execution context for a confirmed Discord admin action.
+            # System message for generating specific admin commands
+            system_message = f"""You are Claude, generating a specific admin command that the program can parse and execute.
 
 USER CONTEXT:
 {user_context}
@@ -580,27 +583,28 @@ USER CONTEXT:
 RESEARCH CONTEXT:
 {research_context}
 
-The user has CONFIRMED they want to proceed with this admin action. Your task is to provide the detailed context description that will be used for role reorganization.
+The user has CONFIRMED they want to proceed with this admin action. Your task is to generate a specific command text that the admin parser can interpret.
 
-Based on the research context, create a comprehensive description that includes:
-1. The theme/universe name
-2. Key hierarchy levels and role names from the research
-3. Specific terminology that should be used
+Based on the original request and research context, generate a command that follows this pattern:
+"reorganize roles [description based on research]"
 
-This description will be passed to the role reorganization system to create authentic role names.
+The description should incorporate key findings from the research context to guide the role reorganization.
 
-FORMAT: Provide a detailed description in plain text that captures the essence of the research findings.
+EXAMPLES:
+- "reorganize roles Dune universe factions"
+- "reorganize roles Star Wars Imperial hierarchy" 
+- "reorganize roles medieval guild structure"
 
-EXAMPLE: "Dune universe factions with House Atreides as noble leadership, House Harkonnen as rival political power, Fremen as desert warriors, Spacing Guild as transport monopoly, Bene Gesserit as religious sisterhood, with appropriate hierarchy levels for each faction"
+The parser will detect "reorganize roles" and use the description to understand the context.
 
-Respond with ONLY the detailed description, no other text."""
+Respond with ONLY the specific command, no other text."""
             
             payload = {
                 "model": "claude-3-5-haiku-20241022",
-                "max_tokens": 200,
+                "max_tokens": 100,
                 "temperature": 0.1,
                 "messages": [
-                    {"role": "user", "content": f"User confirmed request: {original_query}\n\nGenerate detailed context for role reorganization based on research."}
+                    {"role": "user", "content": f"User confirmed request: {original_query}\n\nGenerate specific admin command based on research."}
                 ]
             }
             
@@ -610,14 +614,14 @@ Respond with ONLY the detailed description, no other text."""
                                        headers=headers, json=payload) as response:
                     if response.status == 200:
                         result = await response.json()
-                        detailed_context = result["content"][0]["text"].strip()
-                        return detailed_context
+                        command = result["content"][0]["text"].strip()
+                        return command
                     else:
                         raise Exception(f"Claude API error {response.status}: {await response.text()}")
                         
         except Exception as e:
-            print(f"DEBUG: Claude final command generation failed: {e}")
-            return f"❌ Error generating final commands: {str(e)}"
+            print(f"DEBUG: Claude command generation failed: {e}")
+            return f"❌ Error generating command: {str(e)}"
     
     async def _claude_generate_admin_commands(self, message, original_query: str, research_context: str) -> str:
         """Use Claude to analyze research and generate specific admin commands for Groq"""
@@ -1258,31 +1262,42 @@ Be concise and clear about what the action will do."""
             try:
                 # Check if this is a research-enhanced action that needs final command generation
                 if action_data.get('research_context') and action_data.get('original_query'):
-                    # Use Claude to generate final admin commands based on research
-                    final_commands = await self._claude_generate_final_admin_commands(
+                    # Step 1: Use Claude to generate specific admin command text
+                    claude_command = await self._claude_generate_specific_admin_command(
                         action_data['message'], 
                         action_data['original_query'], 
                         action_data['research_context']
                     )
                     
-                    if final_commands and not final_commands.startswith("❌"):
-                        # Execute the commands directly through admin actions with enhanced context
+                    if claude_command and not claude_command.startswith("❌"):
+                        # Step 2: Pass Claude's command through the admin parser (same as if Groq generated it)
+                        from ..admin.parser import AdminIntentParser
                         from ..admin.actions import AdminActionHandler
+                        
+                        parser = AdminIntentParser(self.bot)
                         executor = AdminActionHandler(self.bot)
                         
-                        # Update parameters with the detailed context from Claude
-                        enhanced_parameters = intent['parameters'].copy()
-                        enhanced_parameters['context'] = final_commands
-                        enhanced_parameters['research_context'] = action_data['research_context']
-                        
-                        result = await executor.execute_admin_action(
-                            action_data['message'], 
-                            intent['action_type'], 
-                            enhanced_parameters
+                        # Parse the command that Claude generated
+                        parsed_action_type, parsed_parameters = await parser.parse_admin_intent(
+                            claude_command, action_data['message'].guild, action_data['message'].author
                         )
-                        await reaction.message.channel.send(f"✅ **Action completed:** {result}")
+                        
+                        if parsed_action_type:
+                            # Step 3: Add research context to parsed parameters
+                            if parsed_parameters:
+                                parsed_parameters['research_context'] = action_data['research_context']
+                            
+                            # Step 4: Execute through normal admin action flow
+                            result = await executor.execute_admin_action(
+                                action_data['message'], 
+                                parsed_action_type, 
+                                parsed_parameters
+                            )
+                            await reaction.message.channel.send(f"✅ **Action completed:** {result}")
+                        else:
+                            await reaction.message.channel.send(f"❌ **Command not recognized:** {claude_command}")
                     else:
-                        await reaction.message.channel.send(f"❌ **Action failed:** {final_commands}")
+                        await reaction.message.channel.send(f"❌ **Command generation failed:** {claude_command}")
                 else:
                     # Standard admin action (non-research) - needs executor
                     if not executor:
