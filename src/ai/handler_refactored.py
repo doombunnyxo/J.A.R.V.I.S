@@ -510,7 +510,7 @@ Be concise and clear about what the action will do."""
 
             parts.append(admin_instructions)
         
-        return "\\n\\n".join(parts)
+        return "\n\n".join(parts)
     
     def _build_claude_admin_system_message(self, context: str, user_id: int) -> str:
         """Build system message for Claude admin processing"""
@@ -556,7 +556,7 @@ Be concise and clear about what the action will do."""
 
             parts.append(admin_instructions)
         
-        return "\\n\\n".join(parts)
+        return "\n\n".join(parts)
     
     async def _handle_admin_actions(self, message, query: str, response: str) -> bool:
         """Handle admin action detection and confirmation"""
@@ -574,6 +574,8 @@ Be concise and clear about what the action will do."""
         action_type, parameters = await parser.parse_admin_intent(query, message.guild, message.author)
         
         if not action_type:
+            # Send a message to help debug - this will show if admin detection is working
+            await message.channel.send("🔍 **Debug**: Admin command detected but no action parsed. This usually means the command wasn't recognized by the parser.")
             return False
         
         admin_intent = {
@@ -581,7 +583,6 @@ Be concise and clear about what the action will do."""
             "parameters": parameters
         }
         
-        print(f"DEBUG: Admin intent detected: {admin_intent}")
         
         # Generate unique action ID
         action_id = str(uuid.uuid4())[:8]
@@ -595,9 +596,9 @@ Be concise and clear about what the action will do."""
         }
         
         # Send confirmation message with reactions
-        confirmation_text = f"🔧 **Admin Action Detected**\\n\\n{response}\\n\\n"
+        confirmation_text = f"🔧 **Admin Action Detected**\n\n{response}\n\n"
         confirmation_text += "React with ✅ to confirm or ❌ to cancel this action."
-        confirmation_text += f"\\n\\n*Action ID: {action_id}*"
+        confirmation_text += f"\n\n*Action ID: {action_id}*"
         
         confirmation_msg = await message.channel.send(confirmation_text)
         await confirmation_msg.add_reaction("✅")
@@ -665,7 +666,7 @@ Be concise and clear about what the action will do."""
         reset_time = self.rate_limiter.get_reset_time(message.author.id)
         if reset_time:
             reset_str = reset_time.strftime("%H:%M:%S")
-            rate_msg = f"⏰ **Rate limit exceeded!** You can make {config.AI_RATE_LIMIT_REQUESTS} requests per {config.AI_RATE_LIMIT_WINDOW} seconds.\\n\\nTry again after {reset_str}."
+            rate_msg = f"⏰ **Rate limit exceeded!** You can make {config.AI_RATE_LIMIT_REQUESTS} requests per {config.AI_RATE_LIMIT_WINDOW} seconds.\n\nTry again after {reset_str}."
         else:
             rate_msg = f"⏰ **Rate limit exceeded!** You can make {config.AI_RATE_LIMIT_REQUESTS} requests per {config.AI_RATE_LIMIT_WINDOW} seconds."
         
