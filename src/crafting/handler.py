@@ -2,117 +2,199 @@ import discord
 from discord.ext import commands
 from dune_crafting import calculate_materials, get_recipe_info, list_craftable_items, format_materials_list, get_items_by_category, get_categories
 from ..config import config
-from groq import Groq
+from ..search.claude import AnthropicAPI
 
 class CraftingHandler(commands.Cog):
     """Dune Awakening crafting calculator"""
     
     def __init__(self, bot):
         self.bot = bot
-        self.groq_client = None
-        self._initialize_groq()
-    
-    def _initialize_groq(self):
-        """Initialize Groq client for recipe interpretation"""
-        try:
-            if config.has_groq_api():
-                self.groq_client = Groq(api_key=config.GROQ_API_KEY)
-                print("DEBUG: Groq client initialized for crafting system")
-            else:
-                print("Warning: Groq API not available for intelligent recipe parsing")
-        except Exception as e:
-            print(f"Failed to initialize Groq for crafting: {e}")
-            self.groq_client = None
     
     async def _interpret_recipe_request(self, user_query: str) -> tuple[str, int]:
-        """Use Groq to interpret natural language recipe requests"""
-        if not self.groq_client:
-            # Fallback to simple parsing if Groq not available
-            parts = user_query.split()
-            item_name = parts[0].lower() if parts else ""
-            quantity = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 1
-            return item_name, quantity
-        
+        """Use Claude Haiku to interpret natural language recipe requests and match to JSON structure"""
         try:
-            # Get available recipes for context
-            available_items = list_craftable_items()
-            items_list = ", ".join([item.replace('_', ' ').title() for item in available_items])
+            if not config.has_anthropic_api():
+                return self._fallback_parse(user_query)
             
-            system_prompt = f"""You are a Dune Awakening crafting assistant. Your job is to interpret user requests for crafting recipes and return the exact item name and quantity.
+            # Create Claude client
+            claude = AnthropicAPI(config.ANTHROPIC_API_KEY)
+            
+            # Get all available items for accurate matching
+            available_items = list_craftable_items()
+            
+            # Create strategic samples to show Claude the naming patterns
+            pattern_samples = {
+                "weapons": [item for item in available_items if any(w in item for w in ['karpov_38', 'maula_pistol', 'drillshot', 'sword']) and not any(part in item for part in ['engine', 'chassis', 'hull'])],
+                "vehicles": [item for item in available_items if any(v in item for v in ['sandbike_', 'buggy_', 'ornithopter_']) and any(part in item for part in ['engine', 'chassis', 'hull', 'wing', 'tread'])],
+                "tools": [item for item in available_items if any(t in item for t in ['cutteray', 'construction', 'survey', 'binoculars'])],
+                "consumables": [item for item in available_items if any(c in item for c in ['healkit', 'pill', 'beer', 'coffee'])]
+            }
+            
+            # Build focused sample based on query type
+            samples = []
+            query_lower = user_query.lower()
+            
+            if any(weapon in query_lower for weapon in ['karpov', 'maula', 'sword', 'rifle', 'pistol', 'blade']):
+                samples.extend(pattern_samples["weapons"][:15])
+            elif any(vehicle in query_lower for vehicle in ['sandbike', 'buggy', 'ornithopter', 'vehicle']):
+                samples.extend(pattern_samples["vehicles"][:20])
+            elif any(tool in query_lower for tool in ['tool', 'cutteray', 'survey', 'binoculars']):
+                samples.extend(pattern_samples["tools"][:8])
+            else:
+                # General sample from all categories
+                for category_items in pattern_samples.values():
+                    samples.extend(category_items[:5])
+            
+            sample_text = "\n".join([f"- {item}" for item in samples[:25]])
+            
+            system_message = """You are a Dune Awakening crafting interpreter. Parse complex user requests and determine what they want to craft.
 
-AVAILABLE CRAFTABLE ITEMS:
-{items_list}
+RESPONSE FORMATS:
+1. Single item: "exact_key|quantity"
+2. Vehicle assembly: "VEHICLE_ASSEMBLY|vehicle_type|tier|modules|quantity"
 
-INSTRUCTIONS:
-1. Parse the user's request to identify what item they want to craft
-2. Determine the quantity they want (default to 1 if not specified)
-3. Match their request to the closest available item from the list above
-4. Return ONLY in this exact format: "item_name|quantity"
-5. Use the exact item_name format (lowercase with underscores, e.g., "healkit_mk2")
-6. If no close match is found, return "unknown|1"
+VEHICLE ASSEMBLY FORMAT:
+- vehicle_type: "sandbike", "buggy", "scout_ornithopter", "assault_ornithopter", "carrier_ornithopter", "sandcrawler"
+- tier: "mk1", "mk2", "mk3", "mk4", "mk5", "mk6"
+- modules: comma-separated list or "none" or "all_optional"
+- Examples: "VEHICLE_ASSEMBLY|assault_ornithopter|mk6|none|1"
+- Examples: "VEHICLE_ASSEMBLY|sandbike|mk3|boost,storage|1"
+
+KEY PATTERNS:
+- Weapons: "karpov_38", "maula_pistol", "sword" (add material tier if specified)
+- Individual Parts: "sandbike_engine_mk3", "buggy_chassis_mk5"
+- Consumables: "healkit_mk2", "iodine_pill"
+- Tools: "cutteray_mk6", "construction_tool"
+
+VEHICLE MODULES:
+- Sandbike: "backseat" (mk1 only), "boost", "storage"
+- Scout Ornithopter: "storage", "rocket_launcher", "scan" (scan is standalone)
+- Assault Ornithopter: "storage", "rocket_launcher" (competing), "thruster" (standalone)
+- Carrier Ornithopter: "thruster"
+- Buggy: "rear"/"utility_rear", "boost", "cutteray", "storage"
+
+INTERPRETATION RULES:
+1. "complete vehicle" or "full vehicle" = all required parts + all optional modules
+2. "without modules" or "no modules" = only required parts
+3. "with X module" = required parts + specified modules
+4. Individual part requests = single item format
+5. Extract quantity (default: 1)
 
 EXAMPLES:
-- "I need 5 healing kits" → "healkit|5"
-- "craft me a mark 2 heal kit" → "healkit_mk2|1"
-- "spice beer please" → "melange_spiced_beer|1"
-- "make 3 stillsuits" → "saturnine_stillsuit_garment|3"
-- "foundation blocks" → "foundation_structure|1"
-- "walls for my base" → "wall|1"
-- "some aluminum ingots" → "aluminum_ingot|1"
-- "glasser weapon" → "glasser|1"
-- "piter's disruptor" → "piters_disruptor|1"
-- "house vulcan weapon" → "house_vulcan_gau_92|1"
-- "the tapper rifle" → "the_tapper|1"
-- "eviscerator shotgun" → "eviscerator|1"
-- "karpov rifle" → "karpov_38|1"
-- "standard karpov" → "standard_karpov_38|1"
-- "basic knife" → "scrap_metal_knife|1"
-- "standard sword" → "standard_sword|1"
-- "house sword" → "house_sword|1"
-- "way of the desert" → "way_of_the_desert|1"
-- "cope pistol" → "cope|1"
-- "scrubber rifle" → "scrubber|1"
-- "assassin's rifle" → "assassins_rifle|1"
-- "shock sword" → "shock_sword|1"
-- "steel ingots" → "steel_ingot|1"
-- "gun parts" → "gun_parts|1"
-- "blade parts" → "blade_parts|1"
+- "karpov 38 plastanium" -> "karpov_38_plastanium|1"
+- "mk6 assault ornithopter without modules" -> "VEHICLE_ASSEMBLY|assault_ornithopter|mk6|none|1"
+- "sandbike mk3 with boost" -> "VEHICLE_ASSEMBLY|sandbike|mk3|boost|1"
+- "scout ornithopter mk5 with storage and scan" -> "VEHICLE_ASSEMBLY|scout_ornithopter|mk5|storage,scan|1"
+- "sandbike engine mk3" -> "sandbike_engine_mk3|1"
 
-Be flexible with variations like "mk2/mark 2", "heal kit/healkit", "spice beer/melange beer", etc."""
-
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Parse this crafting request: {user_query}"}
-            ]
+Return ONLY the specified format with NO explanations."""
             
-            completion = self.groq_client.chat.completions.create(
-                messages=messages,
-                model=config.AI_MODEL,
-                max_tokens=50,
-                temperature=0.1  # Low temperature for consistent parsing
+            user_message = f"""User request: "{user_query}"
+
+Available items (sample):
+{sample_text}
+
+Match this request to an exact database key:"""
+            
+            response = await claude.create_message(
+                system_message=system_message,
+                user_message=user_message,
+                max_tokens=50
             )
             
-            response = completion.choices[0].message.content.strip()
-            print(f"DEBUG: Groq recipe interpretation - '{user_query}' → '{response}'")
+            result = response.strip()
+            print(f"DEBUG: Claude recipe interpretation - '{user_query}' -> '{result}'")
             
-            # Parse the response
-            if '|' in response:
-                item_name, quantity_str = response.split('|', 1)
-                try:
-                    quantity = int(quantity_str)
-                except ValueError:
-                    quantity = 1
-                return item_name.strip().lower(), quantity
+            # Parse Claude's response
+            if '|' in result:
+                parts = result.split('|')
+                
+                # Check if this is a vehicle assembly request
+                if parts[0].strip() == 'VEHICLE_ASSEMBLY' and len(parts) >= 5:
+                    vehicle_type = parts[1].strip()
+                    tier = parts[2].strip()
+                    modules = parts[3].strip()
+                    try:
+                        quantity = int(parts[4].strip())
+                    except (ValueError, IndexError):
+                        quantity = 1
+                    
+                    # Return special format for vehicle assembly
+                    return f"VEHICLE_ASSEMBLY|{vehicle_type}|{tier}|{modules}", quantity
+                
+                # Regular single item format
+                else:
+                    item_name, quantity_str = parts[0], parts[1] if len(parts) > 1 else '1'
+                    try:
+                        quantity = int(quantity_str)
+                    except ValueError:
+                        quantity = 1
+                    
+                    item_name = item_name.strip().lower()
+                    
+                    # Validate that the item exists
+                    if item_name in available_items:
+                        return item_name, quantity
+                    else:
+                        print(f"DEBUG: Claude suggested non-existent item: {item_name}")
+                        return self._smart_fallback_match(user_query, available_items)
             else:
-                return "unknown", 1
+                return self._smart_fallback_match(user_query, available_items)
                 
         except Exception as e:
-            print(f"DEBUG: Recipe interpretation failed: {e}")
-            # Fallback to simple parsing
-            parts = user_query.split()
-            item_name = parts[0].lower() if parts else ""
-            quantity = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 1
-            return item_name, quantity
+            print(f"DEBUG: Claude recipe interpretation failed: {e}")
+            return self._fallback_parse(user_query)
+    
+    def _fallback_parse(self, query: str) -> tuple[str, int]:
+        """Simple fallback parsing when Claude is unavailable"""
+        parts = query.split()
+        item_name = parts[0].lower() if parts else ""
+        quantity = 1
+        
+        # Try to extract quantity from anywhere in the query
+        for part in parts:
+            if part.isdigit():
+                quantity = int(part)
+                break
+        
+        return item_name, quantity
+    
+    def _smart_fallback_match(self, query: str, available_items: list) -> tuple[str, int]:
+        """Intelligent fallback matching using string similarity"""
+        query_lower = query.lower()
+        quantity = 1
+        
+        # Extract quantity if present
+        import re
+        quantity_match = re.search(r'\b(\d+)\b', query)
+        if quantity_match:
+            quantity = int(quantity_match.group(1))
+        
+        # Try exact substring matching first
+        best_matches = []
+        
+        for item in available_items:
+            # Score based on how many words match
+            score = 0
+            item_words = item.replace('_', ' ').split()
+            query_words = query_lower.replace('mk', 'mk').split()
+            
+            for query_word in query_words:
+                if query_word.isdigit():
+                    continue
+                for item_word in item_words:
+                    if query_word in item_word or item_word in query_word:
+                        score += 1
+            
+            if score > 0:
+                best_matches.append((item, score))
+        
+        if best_matches:
+            # Sort by score and return best match
+            best_matches.sort(key=lambda x: x[1], reverse=True)
+            return best_matches[0][0], quantity
+        
+        return "no_match", quantity
     
     async def handle_craft_command(self, message, craft_query: str):
         """Handle crafting command when mentioned with 'craft:' prefix"""
@@ -155,26 +237,26 @@ Be flexible with variations like "mk2/mark 2", "heal kit/healkit", "spice beer/m
                 await message.channel.send(response)
                 return
             
-            # Use intelligent interpretation
+            # Use intelligent interpretation with Claude Haiku
             print(f"DEBUG: Interpreting craft query: '{craft_query}'")
             item_name, quantity = await self._interpret_recipe_request(craft_query)
             
-            if item_name == "unknown":
-                await message.channel.send(f"❌ I couldn't understand what you want to craft from: '{craft_query}'\n\nTry being more specific, or use `@bot craft: list` to see available recipes.")
+            if item_name == "no_match":
+                await self._handle_no_match(message, craft_query)
                 return
             
-            # Get recipe info
+            # Check if this is a vehicle assembly request
+            if item_name.startswith('VEHICLE_ASSEMBLY|'):
+                await self._handle_vehicle_assembly_with_modules(message, item_name, quantity)
+                return
+            elif await self._is_vehicle_assembly_request(craft_query, item_name):
+                await self._handle_vehicle_assembly(message, craft_query, item_name, quantity)
+                return
+            
+            # Get recipe info for individual item
             recipe = get_recipe_info(item_name)
             if not recipe:
-                # Try to suggest similar items
-                available_items = list_craftable_items()
-                suggestions = [item for item in available_items if item_name.lower() in item.lower() or item.lower() in item_name.lower()]
-                
-                suggestion_text = ""
-                if suggestions:
-                    suggestion_text = f"\n\n**Did you mean one of these?**\n" + ", ".join([item.replace('_', ' ').title() for item in suggestions[:5]])
-                
-                await message.channel.send(f"❌ Recipe for '{item_name.replace('_', ' ').title()}' not found.{suggestion_text}\n\nUse `@bot craft: list` to see all available recipes.")
+                await self._handle_recipe_not_found(message, item_name, craft_query)
                 return
             
             # Calculate materials needed
@@ -183,25 +265,425 @@ Be flexible with variations like "mk2/mark 2", "heal kit/healkit", "spice beer/m
                 await message.channel.send(f"❌ {error}")
                 return
             
-            # Format response with improved styling
-            station = recipe.get('station', 'Unknown')
-            item_display = item_name.replace('_', ' ').title()
+            # Format and send response
+            response = await self._format_crafting_response(item_name, quantity, recipe, materials)
+            await message.channel.send(response)
             
-            response = f"🏗️ **Dune Awakening - Crafting Calculator**\n"
-            response += f"**Item:** {item_display}\n"
-            response += f"**Quantity:** {quantity:,}\n"
-            response += f"**Crafting Station:** {station}\n\n"
-            response += "**📦 Raw Materials Needed:**\n"
-            response += format_materials_list(materials)
+        except Exception as e:
+            print(f"DEBUG: Crafting handler error: {e}")
+            await message.channel.send(f'❌ Crafting calculation failed: {str(e)}')
+    
+    async def _is_vehicle_assembly_request(self, query: str, matched_item: str) -> bool:
+        """Check if user wants complete vehicle assembly vs individual part"""
+        query_lower = query.lower()
+        
+        # Keywords that indicate complete vehicle assembly
+        assembly_keywords = ['complete', 'full', 'entire', 'whole', 'build', 'assemble']
+        if any(keyword in query_lower for keyword in assembly_keywords):
+            return True
             
-            # Add helpful tip for large quantities
-            if quantity > 10:
-                response += f"\n💡 **Tip:** Crafting {quantity:,} {item_display} will require significant resources. Consider setting up automated production lines!"
+        # If query mentions vehicle type without specific part, assume assembly
+        vehicle_types = ['sandbike', 'buggy', 'ornithopter', 'sandcrawler']
+        part_types = ['engine', 'chassis', 'hull', 'wing', 'tread', 'cabin', 'cockpit']
+        
+        has_vehicle = any(vehicle in query_lower for vehicle in vehicle_types)
+        has_specific_part = any(part in query_lower for part in part_types)
+        
+        return has_vehicle and not has_specific_part
+    
+    async def _handle_vehicle_assembly(self, message, query: str, base_item: str, quantity: int):
+        """Handle complete vehicle assembly requests"""
+        # Extract vehicle type and tier from query
+        query_lower = query.lower()
+        
+        # Determine vehicle type and tier
+        vehicle_info = self._extract_vehicle_info(query_lower)
+        if not vehicle_info:
+            await message.channel.send(f"❌ Could not determine vehicle type and tier from: '{query}'")
+            return
+        
+        vehicle_type, tier = vehicle_info
+        
+        # Get all parts needed for this vehicle
+        parts_needed = self._get_vehicle_parts(vehicle_type, tier)
+        if not parts_needed:
+            await message.channel.send(f"❌ No vehicle assembly data for {vehicle_type} {tier}")
+            return
+        
+        # Calculate total materials for all parts
+        total_materials = {}
+        part_details = []
+        
+        for part_key in parts_needed:
+            recipe = get_recipe_info(part_key)
+            if recipe:
+                materials, _ = calculate_materials(part_key, quantity)
+                if materials:
+                    for mat, qty in materials.items():
+                        total_materials[mat] = total_materials.get(mat, 0) + qty
+                    part_details.append((part_key, recipe))
+        
+        if not total_materials:
+            await message.channel.send(f"❌ Could not calculate materials for {vehicle_type} {tier}")
+            return
+        
+        # Format vehicle assembly response
+        response = f"🚗 **Complete {vehicle_type.title()} {tier.upper()} Assembly**\n\n"
+        response += f"**Quantity:** {quantity}\n\n"
+        
+        response += f"**Required Parts ({len(part_details)}):**\n"
+        for part_key, recipe in part_details:
+            part_name = part_key.replace('_', ' ').title()
+            response += f"- {part_name} (Station: {recipe.get('station', 'Unknown')})\n"
+        
+        response += f"\n**📦 Total Raw Materials:**\n"
+        response += format_materials_list(total_materials)
+        
+        if quantity > 1:
+            response += f"\n💡 Building {quantity} complete vehicles requires {len(part_details)} different crafting operations per vehicle."
+        
+        await message.channel.send(response)
+    
+    async def _handle_vehicle_assembly_with_modules(self, message, assembly_data: str, quantity: int):
+        """Handle vehicle assembly requests with specific module requirements from Claude"""
+        try:
+            # Parse the assembly data: VEHICLE_ASSEMBLY|vehicle_type|tier|modules
+            parts = assembly_data.split('|')
+            if len(parts) < 4:
+                await message.channel.send("Error: Invalid vehicle assembly format from AI")
+                return
+            
+            vehicle_type = parts[1]
+            tier = parts[2] 
+            modules_str = parts[3]
+            
+            print(f"DEBUG: Vehicle assembly - {vehicle_type} {tier} with modules: {modules_str}")
+            
+            # Get required parts for this vehicle
+            required_parts = self._get_vehicle_parts(vehicle_type, tier)
+            if not required_parts:
+                await message.channel.send(f"Error: No parts found for {vehicle_type} {tier}")
+                return
+            
+            # Parse module requirements
+            if modules_str.lower() == 'none':
+                optional_parts = []
+            elif modules_str.lower() == 'all_optional':
+                optional_parts = self._get_all_optional_parts(vehicle_type, tier)
+            else:
+                # Parse specific modules
+                module_names = [m.strip() for m in modules_str.split(',') if m.strip()]
+                optional_parts = self._get_specific_optional_parts(vehicle_type, tier, module_names)
+            
+            # Combine all parts needed
+            all_parts = required_parts + optional_parts
+            
+            # Calculate total materials
+            total_materials = {}
+            part_details = []
+            missing_parts = []
+            
+            for part_key in all_parts:
+                recipe = get_recipe_info(part_key)
+                if recipe:
+                    materials, _ = calculate_materials(part_key, quantity)
+                    if materials:
+                        for mat, qty in materials.items():
+                            total_materials[mat] = total_materials.get(mat, 0) + qty
+                        part_details.append((part_key, recipe, 'required' if part_key in required_parts else 'optional'))
+                else:
+                    missing_parts.append(part_key)
+            
+            if not total_materials:
+                await message.channel.send(f"Error: Could not calculate materials for {vehicle_type} {tier}")
+                return
+            
+            # Format response
+            response = f"** {vehicle_type.replace('_', ' ').title()} {tier.upper()} Assembly**\\n\\n"
+            if quantity > 1:
+                response += f"**Quantity:** {quantity}\\n\\n"
+            
+            # Show module configuration
+            if modules_str.lower() == 'none':
+                response += "**Configuration:** Base vehicle (no optional modules)\\n\\n"
+            elif modules_str.lower() == 'all_optional':
+                response += "**Configuration:** Complete vehicle (all optional modules)\\n\\n"
+            else:
+                response += f"**Configuration:** With modules: {modules_str}\\n\\n"
+            
+            # List required parts
+            required_count = len([p for p in part_details if p[2] == 'required'])
+            optional_count = len([p for p in part_details if p[2] == 'optional'])
+            
+            response += f"**Required Parts ({required_count}):**\\n"
+            for part_key, recipe, part_type in part_details:
+                if part_type == 'required':
+                    part_name = part_key.replace('_', ' ').title()
+                    response += f"- {part_name}\\n"
+            
+            if optional_count > 0:
+                response += f"\\n**Optional Parts ({optional_count}):**\\n"
+                for part_key, recipe, part_type in part_details:
+                    if part_type == 'optional':
+                        part_name = part_key.replace('_', ' ').title()
+                        response += f"- {part_name}\\n"
+            
+            response += f"\\n**Total Raw Materials:**\\n"
+            response += format_materials_list(total_materials)
+            
+            if missing_parts:
+                response += f"\\n**Missing recipes:** {', '.join(missing_parts)}"
+            
+            if quantity > 1:
+                response += f"\\n**Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
             
             await message.channel.send(response)
             
         except Exception as e:
-            await message.channel.send(f'❌ Crafting calculation failed: {str(e)}')
+            print(f"DEBUG: Vehicle assembly with modules error: {e}")
+            await message.channel.send(f"Error processing vehicle assembly: {str(e)}")
+    
+    def _get_all_optional_parts(self, vehicle_type: str, tier: str) -> list:
+        """Get all available optional parts for a vehicle type and tier"""
+        available_items = list_craftable_items()
+        optional_parts = []
+        
+        # Define optional parts by vehicle type
+        optional_templates = {
+            'sandbike': {
+                'mk1': ['backseat'],
+                'mk2+': ['booster', 'storage']
+            },
+            'buggy': {
+                'all': ['booster']  # Note: rear variants handled separately
+            },
+            'scout_ornithopter': {
+                'mk4+': ['storage', 'rocket_launcher'],
+                'standalone': ['scan']  # Can always be added
+            },
+            'assault_ornithopter': {
+                'mk5+': ['storage', 'rocket_launcher', 'thruster']
+            },
+            'carrier_ornithopter': {
+                'mk6': ['thruster']
+            }
+        }
+        
+        if vehicle_type in optional_templates:
+            templates = optional_templates[vehicle_type]
+            
+            # Add tier-specific parts
+            for tier_key, parts in templates.items():
+                if tier_key == 'all' or tier_key == f'{tier}' or (tier_key.endswith('+') and self._tier_meets_requirement(tier, tier_key)):
+                    for part in parts:
+                        part_key = f"{vehicle_type}_{part}_{tier}"
+                        if part_key in available_items:
+                            optional_parts.append(part_key)
+            
+            # Add standalone parts
+            if 'standalone' in templates:
+                for part in templates['standalone']:
+                    part_key = f"{vehicle_type}_{part}_{tier}"
+                    if part_key in available_items:
+                        optional_parts.append(part_key)
+        
+        return optional_parts
+    
+    def _get_specific_optional_parts(self, vehicle_type: str, tier: str, module_names: list) -> list:
+        """Get specific optional parts based on module names"""
+        available_items = list_craftable_items()
+        optional_parts = []
+        
+        for module_name in module_names:
+            # Normalize module name
+            module_name = module_name.lower().replace(' ', '_')
+            
+            # Try exact match first
+            part_key = f"{vehicle_type}_{module_name}_{tier}"
+            if part_key in available_items:
+                optional_parts.append(part_key)
+                continue
+            
+            # Try common variations
+            variations = [
+                f"{vehicle_type}_{module_name}_module_{tier}",
+                f"{vehicle_type}_{module_name}s_{tier}",  # plural
+            ]
+            
+            found = False
+            for variation in variations:
+                if variation in available_items:
+                    optional_parts.append(variation)
+                    found = True
+                    break
+            
+            if not found:
+                print(f"DEBUG: Could not find optional part for {vehicle_type} {module_name} {tier}")
+        
+        return optional_parts
+    
+    def _tier_meets_requirement(self, tier: str, requirement: str) -> bool:
+        """Check if tier meets a requirement like 'mk4+' """
+        if not requirement.endswith('+'):
+            return tier == requirement
+        
+        required_num = int(requirement.replace('mk', '').replace('+', ''))
+        tier_num = int(tier.replace('mk', ''))
+        
+        return tier_num >= required_num
+    
+    def _extract_vehicle_info(self, query: str) -> tuple[str, str] or None:
+        """Extract vehicle type and tier from query"""
+        import re
+        
+        # Extract tier (mk1, mk2, etc.)
+        tier_match = re.search(r'mk\s*(\d+)', query)
+        tier = f"mk{tier_match.group(1)}" if tier_match else None
+        
+        # Determine vehicle type
+        if 'sandbike' in query:
+            return ('sandbike', tier or 'mk1')
+        elif 'scout ornithopter' in query or ('scout' in query and 'ornithopter' in query):
+            return ('scout_ornithopter', tier or 'mk4')
+        elif 'assault ornithopter' in query or ('assault' in query and 'ornithopter' in query):
+            return ('assault_ornithopter', tier or 'mk5')
+        elif 'carrier ornithopter' in query or ('carrier' in query and 'ornithopter' in query):
+            return ('carrier_ornithopter', 'mk6')
+        elif 'buggy' in query:
+            return ('buggy', tier or 'mk3')
+        elif 'sandcrawler' in query:
+            return ('sandcrawler', 'mk6')
+        
+        return None
+    
+    def _get_vehicle_parts(self, vehicle_type: str, tier: str) -> list:
+        """Get all required parts for a vehicle type and tier"""
+        available_items = list_craftable_items()
+        
+        # Define required parts by vehicle type
+        part_templates = {
+            'sandbike': ['engine', 'chassis', 'hull', 'psu', 'tread'],
+            'buggy': ['engine', 'chassis', 'psu', 'tread', 'rear'],  # Note: rear has variants
+            'scout_ornithopter': ['engine', 'chassis', 'cockpit', 'generator', 'hull', 'wing'],
+            'assault_ornithopter': ['engine', 'chassis', 'cockpit', 'cabin', 'generator', 'tail', 'wing'],
+            'carrier_ornithopter': ['engine', 'chassis', 'generator', 'wing'],
+            'sandcrawler': ['engine', 'chassis', 'cabin', 'tread', 'vacuum', 'centrifuge', 'psu']
+        }
+        
+        if vehicle_type not in part_templates:
+            return []
+        
+        # Build part keys and verify they exist
+        parts = []
+        for part in part_templates[vehicle_type]:
+            part_key = f"{vehicle_type}_{part}_{tier}"
+            if part_key in available_items:
+                parts.append(part_key)
+        
+        # Handle special cases
+        if vehicle_type == 'sandbike' and tier == 'mk1':
+            # Add backseat for mk1
+            backseat_key = f"sandbike_backseat_{tier}"
+            if backseat_key in available_items:
+                parts.append(backseat_key)
+        
+        return parts
+    
+    async def _handle_no_match(self, message, query: str):
+        """Handle when no recipe match is found"""
+        # Try to find similar items
+        available_items = list_craftable_items()
+        suggestions = self._find_similar_items(query, available_items)
+        
+        response = f"❌ **No exact match found for:** \"{query}\"\n\n"
+        
+        if suggestions:
+            response += "**Similar items:**\n"
+            for item in suggestions[:5]:
+                display_name = item.replace('_', ' ').title()
+                response += f"- {display_name}\n"
+            response += "\n"
+        
+        response += "**💡 Tips:**\n"
+        response += "- Use `craft: list` to see all categories\n"
+        response += "- Try `craft: karpov 38 plastanium` for weapons\n"
+        response += "- Try `craft: sandbike mk3` for vehicles\n"
+        response += "- Include tier level (mk1, mk2, etc.)\n"
+        
+        await message.channel.send(response)
+    
+    def _find_similar_items(self, query: str, available_items: list) -> list:
+        """Find items similar to the query"""
+        query_words = set(query.lower().replace('mk', 'mk').split())
+        
+        scored_items = []
+        for item in available_items:
+            item_words = set(item.replace('_', ' ').split())
+            
+            # Calculate similarity score
+            common_words = query_words.intersection(item_words)
+            if common_words:
+                score = len(common_words) / len(query_words)
+                scored_items.append((item, score))
+        
+        # Sort by score and return top matches
+        scored_items.sort(key=lambda x: x[1], reverse=True)
+        return [item for item, score in scored_items if score > 0.3]
+    
+    async def _handle_recipe_not_found(self, message, item_name: str, original_query: str):
+        """Handle when matched item has no recipe"""
+        suggestions = self._find_similar_items(original_query, list_craftable_items())
+        
+        response = f"❌ **Recipe not found for:** {item_name.replace('_', ' ').title()}\n\n"
+        
+        if suggestions:
+            response += "**Did you mean:**\n"
+            for item in suggestions[:3]:
+                display_name = item.replace('_', ' ').title()
+                response += f"- {display_name}\n"
+        
+        response += f"\n**Debug:** Matched '{original_query}' to '{item_name}' but no recipe exists."
+        await message.channel.send(response)
+    
+    async def _format_crafting_response(self, item_name: str, quantity: int, recipe: dict, materials: dict) -> str:
+        """Format the crafting response with proper styling"""
+        station = recipe.get('station', 'Unknown')
+        item_display = item_name.replace('_', ' ').title()
+        
+        response = f"🔧 **Dune Awakening - Crafting Recipe**\n\n"
+        response += f"**Item:** {item_display}\n"
+        
+        if quantity > 1:
+            response += f"**Quantity:** {quantity:,}\n"
+        
+        response += f"**Station:** {station}\n"
+        
+        # Add intel requirements if present
+        if 'intel_requirement' in recipe:
+            intel = recipe['intel_requirement']
+            response += f"**Intel:** {intel.get('points', 0)} points"
+            if intel.get('total_spent', 0) > 0:
+                response += f" ({intel['total_spent']} total required)"
+            response += "\n"
+        
+        # Add direct ingredients
+        if recipe.get('ingredients'):
+            response += f"\n**Direct Ingredients:**\n"
+            for ingredient, qty in recipe['ingredients'].items():
+                response += f"- {ingredient.replace('_', ' ').title()}: {qty * quantity:,}\n"
+        
+        response += f"\n**📦 Total Raw Materials:**\n"
+        response += format_materials_list(materials)
+        
+        # Add description if available
+        if 'description' in recipe:
+            response += f"\n**Description:** {recipe['description']}"
+        
+        # Add tips for large quantities
+        if quantity > 10:
+            response += f"\n\n💡 **Tip:** Crafting {quantity:,} {item_display} requires significant resources!"
+        
+        return response
 
 async def setup(bot):
     await bot.add_cog(CraftingHandler(bot))

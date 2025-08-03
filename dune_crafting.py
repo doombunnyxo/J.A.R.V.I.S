@@ -145,7 +145,7 @@ def format_materials_list(materials: Dict) -> str:
     
     formatted = []
     for material, quantity in sorted(materials.items()):
-        formatted.append(f"• {material.replace('_', ' ').title()}: {quantity:,}")
+        formatted.append(f"- {material.replace('_', ' ').title()}: {quantity:,}")
     
     return "\n".join(formatted)
 

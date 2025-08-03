@@ -333,6 +333,17 @@ class AIHandler:
         """Handle query with crafting system"""
         print(f"DEBUG: _handle_with_crafting called with query: '{query}'")
         try:
+            # Handle special list commands
+            query_lower = query.lower().strip()
+            if query_lower in ['list', 'categories', 'help']:
+                return await self._handle_crafting_list()
+            elif query_lower in ['weapons', 'list weapons']:
+                return await self._handle_crafting_category_list('weapons')
+            elif query_lower in ['vehicles', 'list vehicles']:
+                return await self._handle_crafting_category_list('vehicles')
+            elif query_lower in ['tools', 'list tools']:
+                return await self._handle_crafting_category_list('tools')
+            
             # Use the existing crafting handler to process the query
             result = await self.crafting_handler._interpret_recipe_request(query)
             
@@ -340,13 +351,13 @@ class AIHandler:
                 item_name, quantity = result
                 
                 # Import crafting functions
-                from dune_crafting import calculate_materials, get_recipe_info, format_materials_list
+                from dune_crafting import calculate_materials, get_recipe_info, format_materials_list, list_craftable_items
                 
                 try:
                     # Get the recipe information
                     recipe_info = get_recipe_info(item_name)
                     if not recipe_info:
-                        return f"❌ **Recipe not found for:** {item_name}\n\nUse `@bot craft: list` to see available items."
+                        return f"❌ **Recipe not found for:** {item_name}\n\nThe LLM should have matched this to a valid recipe. Use `@bot craft: list` to see available categories.\n\n**Debug:** Interpreted query '{query}' as item '{item_name}'"
                     
                     # Calculate total materials needed
                     total_materials = calculate_materials(item_name, quantity)
@@ -389,6 +400,121 @@ class AIHandler:
             
         except Exception as e:
             return f"Error processing crafting request: {str(e)}"
+    
+    async def _handle_crafting_list(self) -> str:
+        """Handle crafting list/categories requests"""
+        try:
+            # Import crafting functions to get categories
+            from dune_crafting import get_categories
+            
+            response = "🔧 **Dune Awakening Crafting Database**\n\n"
+            response += "**📊 Database Stats:**\n"
+            response += "• Total Recipes: 232\n"
+            response += "• Weapons: ~50 (all tiers + unique variants)\n"
+            response += "• Vehicles: ~150 (sandbikes, buggies, ornithopters, sandcrawlers)\n"
+            response += "• Tools: ~7 (construction, gathering, cartography)\n"
+            response += "• Components: ~25 (materials, parts)\n\n"
+            
+            response += "**🏗️ Main Categories:**\n"
+            response += "• **Weapons**: `craft: karpov 38 mk6`, `craft: maula pistol steel`\n"
+            response += "• **Vehicles**: `craft: sandbike mk3`, `craft: scout ornithopter mk5`\n"
+            response += "• **Tools**: `craft: cutteray mk6`, `craft: construction tool`\n\n"
+            
+            response += "**🚗 Vehicle Types:**\n"
+            response += "• **Sandbikes**: Mk1-6 (with boost/storage options)\n"
+            response += "• **Buggies**: Mk3-6 (complex rear/utility systems)\n"
+            response += "• **Scout Ornithopters**: Mk4-6 (4 wings, optional modules)\n"
+            response += "• **Assault Ornithopters**: Mk5-6 (6 wings, competing modules)\n"
+            response += "• **Carrier Ornithopters**: Mk6 only (8 wings, heavy duty)\n"
+            response += "• **Sandcrawlers**: Mk6 only (spice collection, 2 treads)\n\n"
+            
+            response += "**⚔️ Weapon Tiers:**\n"
+            response += "• Salvage, Copper, Iron, Steel, Aluminum, Duraluminum, Plastanium\n\n"
+            
+            response += "**🔍 Example Queries:**\n"
+            response += "• `craft: sandbike mk3 with night rider boost mk6`\n"
+            response += "• `craft: assault ornithopter mk5 with rocket launcher`\n"
+            response += "• `craft: karpov 38 plastanium`\n"
+            response += "• `craft: cutteray mk6`\n\n"
+            
+            response += "**💡 Usage Tips:**\n"
+            response += "• Use `craft:` or `cr:` as shortcuts\n"
+            response += "• Include tier (mk1-mk6) and variant details\n"
+            response += "• Get complete materials list including sub-components\n"
+            response += "• Intel requirements and crafting stations included\n"
+            
+            return response
+            
+        except Exception as e:
+            return f"Error generating crafting list: {str(e)}"
+    
+    async def _handle_crafting_category_list(self, category: str) -> str:
+        """Handle category-specific list requests"""
+        try:
+            if category == 'weapons':
+                response = "⚔️ **Weapon Categories**\n\n"
+                response += "**Rifle Series:**\n"
+                response += "• Karpov 38 (Salvage → Plastanium)\n"
+                response += "• JABAL Spitdart (Salvage → Plastanium)\n\n"
+                
+                response += "**Sidearm Series:**\n"
+                response += "• Maula Pistol (Salvage → Plastanium)\n"
+                response += "• Disruptor M11 (Salvage → Plastanium)\n\n"
+                
+                response += "**Scattergun Series:**\n"
+                response += "• Drillshot FK7 (Salvage → Plastanium)\n"
+                response += "• GRDA 44 (Salvage → Plastanium)\n\n"
+                
+                response += "**Melee Weapons:**\n"
+                response += "• Sword/Rapier (Long Blades)\n"
+                response += "• Dirk/Kindjal (Short Blades)\n\n"
+                
+                response += "**Example:** `craft: karpov 38 plastanium`\n"
+                
+            elif category == 'vehicles':
+                response = "🚗 **Vehicle Categories**\n\n"
+                response += "**Ground Vehicles:**\n"
+                response += "• Sandbike Mk1-6 (3 treads, boost/storage options)\n"
+                response += "• Buggy Mk3-6 (4 treads, rear/utility systems)\n"
+                response += "• Sandcrawler Mk6 (spice collection, 2 treads)\n\n"
+                
+                response += "**Flying Vehicles:**\n"
+                response += "• Scout Ornithopter Mk4-6 (4 wings, optional modules)\n"
+                response += "• Assault Ornithopter Mk5-6 (6 wings, competing modules)\n"
+                response += "• Carrier Ornithopter Mk6 (8 wings, heavy duty)\n\n"
+                
+                response += "**Unique Variants:**\n"
+                response += "• Night Rider Sandbike Boost\n"
+                response += "• Mohandis Sandbike Engine\n"
+                response += "• Walker Sandcrawler Engine\n\n"
+                
+                response += "**Example:** `craft: sandbike mk3 with night rider boost mk6`\n"
+                
+            elif category == 'tools':
+                response = "🔧 **Tool Categories**\n\n"
+                response += "**Construction Tools:**\n"
+                response += "• Construction Tool (20x Salvaged Metal)\n"
+                response += "• Staking Unit (15x Steel Ingot + 15,000 Solari)\n\n"
+                
+                response += "**Gathering Tools:**\n"
+                response += "• Cutteray Mk6 (high-tier mining tool)\n\n"
+                
+                response += "**Cartography Tools:**\n"
+                response += "• Survey Probe (1x Copper Ingot)\n"
+                response += "• Survey Probe Launcher (2x Copper + 1x EMF Generator)\n"
+                response += "• Handheld Resource Scanner (9x Iron + 6x EMF Generator)\n"
+                response += "• Binoculars (15x Salvaged Metal)\n\n"
+                
+                response += "**Example:** `craft: cutteray mk6`\n"
+            
+            else:
+                response = "Unknown category. Available: weapons, vehicles, tools"
+            
+            return response
+            
+        except Exception as e:
+            return f"Error generating category list: {str(e)}"
+    
     
     async def _build_groq_context(self, message, query: str) -> str:
         """Build context for Groq queries"""

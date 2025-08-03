@@ -164,7 +164,7 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
     force_patterns = [
         # Craft commands first to avoid conflicts
         (r'^craft:\s*(.+)', 'crafting'),
-        (r'^c:\s*(.+)', 'crafting'),
+        (r'^cr:\s*(.+)', 'crafting'),
         # Other providers
         (r'^groq:\s*(.+)', 'groq'),
         (r'^g:\s*(.+)', 'groq'),
