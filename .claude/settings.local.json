@@ -6,7 +6,8 @@
       "WebFetch(domain:duneawakening.wiki.fextralife.com)",
       "WebFetch(domain:awakening.wiki)",
       "Bash(python3:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

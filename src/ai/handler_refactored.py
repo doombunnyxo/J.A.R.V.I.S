@@ -170,22 +170,38 @@ class AIHandler:
             return force_provider, query
         
         # Use routing logic to determine provider
-        from .routing import RoutingModule
-        router = RoutingModule()
+        from .routing import should_use_claude_for_search, extract_forced_provider
         
-        provider = await router.determine_provider(message, query, None)
-        cleaned_query = router.clean_query(query)
+        # Check for forced provider first
+        extracted_provider, cleaned_query = extract_forced_provider(query)
+        if extracted_provider:
+            return extracted_provider, cleaned_query
         
-        return provider, cleaned_query
+        # Check if query should use Claude for search
+        if should_use_claude_for_search(query):
+            return "claude", query
+        
+        # Default to Groq
+        return "groq", query
     
     async def _determine_provider(self, message, query: str, force_provider: str) -> str:
         """Determine which AI provider to use for the query"""
         if force_provider:
             return force_provider
         
-        from .routing import RoutingModule
-        router = RoutingModule()
-        return await router.determine_provider(message, query, None)
+        from .routing import should_use_claude_for_search, extract_forced_provider
+        
+        # Check for forced provider first
+        extracted_provider, _ = extract_forced_provider(query)
+        if extracted_provider:
+            return extracted_provider
+        
+        # Check if query should use Claude for search
+        if should_use_claude_for_search(query):
+            return "claude"
+        
+        # Default to Groq
+        return "groq"
     
     async def _handle_with_claude(self, message, query: str) -> str:
         """Handle query with Claude"""
