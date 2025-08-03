@@ -1,6 +1,6 @@
 # Discord Bot - Hybrid AI System
 
-A sophisticated Discord bot with hybrid AI functionality that intelligently routes queries between Groq and Perplexity APIs. Features comprehensive admin tools, crafting systems, conversation management, and advanced security.
+A sophisticated Discord bot with hybrid AI functionality that intelligently routes queries between Groq, Claude, and Perplexity APIs using a unified search pipeline. Features comprehensive admin tools, crafting systems, conversation management, and advanced security.
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -9,10 +9,11 @@ A sophisticated Discord bot with hybrid AI functionality that intelligently rout
 ## ✨ Key Features
 
 ### 🤖 **Hybrid AI System**
-- **Intelligent Routing**: Automatically routes queries between Groq (chat/admin) and Perplexity (search/current events)
-- **Cross-AI Context**: Unified conversation context shared between both AI providers
-- **Force Provider Syntax**: Override routing with `groq:`, `perplexity:`, or `search:` prefixes
-- **Model Switching**: Admin users can switch Perplexity models (sonar, sonar-pro, etc.)
+- **Intelligent Routing**: Automatically routes queries between Groq (chat/admin), Claude (search), and Perplexity (backup search)
+- **Unified Search Pipeline**: Generic search architecture with provider adapters
+- **Cross-AI Context**: Unified conversation context shared between all AI providers
+- **Force Provider Syntax**: Override routing with `groq:`, `claude:`, `perplexity:`, or `search:` prefixes
+- **Model Switching**: Admin users can switch Claude models (haiku, sonnet, opus)
 
 ### 🛡️ **Advanced Admin System**
 - **Natural Language Commands**: "kick that spammer", "rename role Moderator to Super Mod"
@@ -29,8 +30,10 @@ A sophisticated Discord bot with hybrid AI functionality that intelligently rout
 - **Context Filtering**: AI-powered relevance filtering to optimize token usage
 
 ### 🔍 **Search Integration**
+- **Unified Search Pipeline**: Generic search flow that works with any AI provider
+- **Claude Search**: Cost-effective search with Claude 3.5 Haiku (99.96% cheaper than Perplexity)
+- **Perplexity Backup**: Alternative search provider using Sonar model
 - **Google Custom Search**: Optimized query enhancement for better results
-- **Perplexity AI Search**: AI-powered web search with current information
 - **Context-Aware Results**: Search results combined with user context
 
 ### ⚔️ **Dune Awakening Crafting**
@@ -79,8 +82,8 @@ AUTHORIZED_USER_ID=your_discord_user_id
 
 # Optional - AI Features
 GROQ_API_KEY=your_groq_api_key           # For chat and admin commands
-OPENAI_API_KEY=your_openai_api_key       # Alternative AI provider
-PERPLEXITY_API_KEY=your_perplexity_key   # For web search queries
+ANTHROPIC_API_KEY=your_claude_api_key    # For web search (primary)
+PERPLEXITY_API_KEY=your_perplexity_key   # For web search (backup)
 
 # Optional - Search Features  
 GOOGLE_API_KEY=your_google_api_key
@@ -106,7 +109,8 @@ AI_TEMPERATURE=0.7                       # AI creativity (0.0-2.0)
 #### Force Specific Provider
 ```
 @bot groq: Explain quantum computing
-@bot perplexity: What happened in tech news today?
+@bot claude: What happened in tech news today?
+@bot perplexity: Latest crypto trends
 @bot search: best programming tutorials 2025
 ```
 
@@ -170,7 +174,10 @@ discord-bot/
     │   ├── parser.py          # Natural language parsing
     │   └── permissions.py     # Permission checking
     ├── ai/
-    │   └── handler.py         # Hybrid AI routing
+    │   ├── handler_refactored.py  # Main AI handler with unified search
+    │   ├── routing.py         # Query routing logic
+    │   ├── context_manager.py # Context management
+    │   └── crafting_module.py # Crafting system
     ├── commands/              # Discord commands
     │   ├── basic.py           # Basic commands
     │   ├── admin.py           # Admin panel
@@ -182,10 +189,11 @@ discord-bot/
     ├── events/
     │   └── handlers.py        # Discord events
     ├── search/                # Search integrations
-    │   ├── google.py          # Google Custom Search
-    │   └── perplexity.py      # Perplexity API
-    ├── crafting/
-    │   └── handler.py         # Crafting system
+    │   ├── search_pipeline.py # Unified search pipeline
+    │   ├── claude_adapter.py  # Claude search provider
+    │   ├── perplexity_adapter.py # Perplexity search provider
+    │   ├── claude.py          # Claude API functions
+    │   └── google.py          # Google Custom Search
     ├── scraping/
     │   └── web_scraper.py     # Web utilities
     └── utils/
@@ -194,11 +202,18 @@ discord-bot/
 
 ### Key Components
 
-#### AIHandler (`src/ai/handler.py`)
-- Hybrid routing between Groq and Perplexity
+#### AIHandler (`src/ai/handler_refactored.py`)
+- Hybrid routing between Groq, Claude, and Perplexity
+- Unified search pipeline with provider adapters
 - Context management and filtering
 - Rate limiting (10 requests/60 seconds per user)
 - Admin action detection
+
+#### SearchPipeline (`src/search/search_pipeline.py`)
+- Generic search architecture with provider adapters
+- Protocol-based design for extensibility
+- Standard flow: optimize query → Google search → analyze results
+- Works with Claude, Perplexity, or any future providers
 
 #### AdminSystem (`src/admin/`)
 - Natural language admin command parsing
@@ -290,8 +305,7 @@ black src/
 ### Core Dependencies
 - **discord.py** (2.3.2) - Discord API wrapper
 - **groq** (0.30.0) - Groq API client
-- **openai** (1.57.0) - OpenAI API client
-- **aiohttp** (3.9.1) - Async HTTP for Perplexity
+- **aiohttp** (3.9.1) - Async HTTP for Claude and Perplexity
 - **google-api-python-client** (2.108.0) - Google Search
 - **python-dotenv** (1.0.0) - Environment management
 
@@ -357,7 +371,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 ## 🙏 Acknowledgments
 
 - Discord.py community for excellent documentation
-- Groq and Perplexity for AI API access
+- Groq, Anthropic (Claude), and Perplexity for AI API access
 - Google for Custom Search API
 - Dune Awakening community for crafting system requirements
 

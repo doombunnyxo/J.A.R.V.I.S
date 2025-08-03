@@ -30,7 +30,7 @@ This is a Discord bot with hybrid AI functionality that combines Groq and Claude
 
 ### 1. Hybrid AI System (src/ai/)
 
-#### AI Handler (handler.py / handler_refactored.py)
+#### AI Handler (handler_refactored.py)
 **Core functionality**: Hybrid AI routing system with intelligent query distribution
 - **Claude**: Used for web search queries, current events, comparisons, research
 - **Groq**: Used for admin commands, chat processing, personal interactions, explanations
@@ -60,20 +60,31 @@ This is a Discord bot with hybrid AI functionality that combines Groq and Claude
 
 ### 2. Search Integration (src/search/)
 
-#### Claude Integration (claude.py)
-**Core functionality**: Claude 3.5 Haiku for search processing and query optimization
+#### Unified Search Pipeline (search_pipeline.py)
+**Core functionality**: Generic search flow that works with any AI provider
+- **Protocol-Based Design**: Uses SearchProvider protocol for extensibility
+- **Standard Flow**: Optimize query → Google search → analyze results
+- **Provider Agnostic**: Works with Claude, Perplexity, or any future providers
+
+#### Claude Adapter (claude_adapter.py)
+**Core functionality**: Claude integration for the unified search pipeline
 - **Search Query Optimization**: Uses Claude to refine search queries for better results
 - **Search Result Analysis**: Processes Google search results with user context
-- **Discord Formatting**: Optimized responses for Discord markdown
 - **Model Support**: Haiku (default), Sonnet, Opus for admin users
 - **Cost Effective**: ~99.96% cheaper than Perplexity (~$0.002 vs $5 per request)
+
+#### Perplexity Adapter (perplexity_adapter.py)
+**Core functionality**: Perplexity integration for the unified search pipeline
+- **Sonar Model**: Uses Perplexity's Sonar model for optimization and analysis
+- **Alternative Provider**: Backup option when Claude is unavailable
+- **Force Provider Support**: Accessible via `p:` and `perplexity:` prefixes
 
 #### Google Search (google.py)
 **Core functionality**: Google Custom Search Engine integration
 - **Web Search**: Retrieves current information from the web
-- **Result Formatting**: Formats results for Claude processing
+- **Result Formatting**: Formats results for AI provider processing
 - **Cog Commands**: Direct `!search` command for users
-- **AI Integration**: Provides search data for Claude analysis
+- **Pipeline Integration**: Provides search data for unified pipeline
 
 ### 3. Data Persistence (src/data/persistence.py)
 **Core functionality**: Manages persistent data storage across bot restarts
@@ -138,10 +149,10 @@ discord-bot/
     │   ├── parser.py         # Intent parsing
     │   └── permissions.py    # Permission checking
     ├── ai/                   # AI routing and processing
-    │   ├── handler.py        # Main AI handler (original)
-    │   ├── handler_refactored.py  # Refactored version (cleaner)
-    │   ├── routing.py        # Query routing logic (NEW)
-    │   └── context_manager.py    # Context management (NEW)
+    │   ├── handler_refactored.py  # Main AI handler with unified search pipeline
+    │   ├── routing.py        # Query routing logic 
+    │   ├── context_manager.py    # Context management
+    │   └── crafting_module.py    # Crafting system (extracted)
     ├── commands/             # Discord commands
     │   ├── basic.py          # Basic commands
     │   ├── admin.py          # Admin commands
@@ -153,10 +164,11 @@ discord-bot/
     ├── events/
     │   └── handlers.py       # Discord event handlers
     ├── search/               # Search integrations
-    │   ├── claude.py         # Claude 3.5 Haiku integration (UPDATED)
-    │   └── google.py         # Google Custom Search (UPDATED)
-    ├── crafting/
-    │   └── handler.py        # Crafting system
+    │   ├── search_pipeline.py    # Unified search pipeline
+    │   ├── claude_adapter.py     # Claude search provider adapter
+    │   ├── perplexity_adapter.py # Perplexity search provider adapter
+    │   ├── claude.py         # Claude API functions
+    │   └── google.py         # Google Custom Search
     ├── scraping/
     │   └── web_scraper.py    # Web scraping utilities
     └── utils/
@@ -256,28 +268,29 @@ discord-bot/
 
 ## Development Notes
 
-### Key Classes (Refactored)
-- **AIHandler**: Main AI processing and routing logic
+### Key Classes
+- **AIHandler**: Main AI processing and routing logic (handler_refactored.py)
+- **SearchPipeline**: Generic search flow with provider adapters
 - **ContextManager**: Unified context management across AIs
-- **RoutingModule**: Query analysis and provider selection
+- **CraftingProcessor**: Dedicated crafting system with 4-mode support
 - **DataManager**: Persistent data management
-- **AdminActionHandler**: Discord admin action execution
 
 ### Design Patterns
-- **Hybrid AI Routing**: Intelligent selection between Groq and Claude
-- **Unified Context System**: Shared conversation context across AI providers
-- **Modular Architecture**: Clean separation of routing, context, and processing
+- **Unified Search Pipeline**: Generic search architecture with provider adapters
+- **Protocol-Based Design**: SearchProvider protocol for extensibility
+- **Hybrid AI Routing**: Intelligent selection between Groq, Claude, and Perplexity
+- **Modular Architecture**: Clean separation of routing, context, search, and crafting
 - **Rate Limiting**: Per-user request throttling with reset timers
 - **Confirmation System**: Reaction-based admin action approval
 - **Discord Optimization**: Responses formatted for Discord markdown
 
 ### Recent Major Updates
-1. **Claude Migration**: Replaced Perplexity with Claude 3.5 Haiku (99.96% cost reduction)
-2. **Help System Overhaul**: Completely rewritten help commands with accurate information
-3. **Context System Enhancement**: Added unfiltered permanent context
-4. **Crafting Database Expansion**: 79+ recipes with comprehensive weapon coverage
-5. **Code Refactoring**: Modular architecture with clean separation of concerns
-6. **Discord Formatting**: Optimized Claude responses for Discord
+1. **Unified Search Pipeline**: Created generic search architecture with provider adapters
+2. **Dual Provider Support**: Both Claude and Perplexity now use the same search flow
+3. **Code Cleanup**: Removed old handler.py, consolidated to handler_refactored.py only
+4. **Crafting System**: Extracted to dedicated module with 4-mode support
+5. **Context Enhancement**: Improved permanent context with username resolution
+6. **Architecture Simplification**: Clean modular design with clear separation of concerns
 
 ### Security Features
 - **Admin Permission Checking**: Restricted admin functionality
@@ -308,8 +321,9 @@ discord-bot/
 pip install -r requirements.txt
 
 # Test syntax
-python -m py_compile src/ai/handler.py
-python -m py_compile src/search/claude.py
+python -m py_compile src/ai/handler_refactored.py
+python -m py_compile src/search/search_pipeline.py
+python -m py_compile src/search/claude_adapter.py
 
 # Run the bot
 python main.py
