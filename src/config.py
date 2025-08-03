@@ -15,6 +15,7 @@ class Config:
     GROQ_API_KEY: Optional[str]
     OPENAI_API_KEY: Optional[str]
     PERPLEXITY_API_KEY: Optional[str]
+    ANTHROPIC_API_KEY: Optional[str]
     GOOGLE_API_KEY: Optional[str]
     GOOGLE_SEARCH_ENGINE_ID: Optional[str]
     
@@ -62,6 +63,7 @@ class Config:
         self.GROQ_API_KEY = os.getenv('GROQ_API_KEY')
         self.OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
         self.PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY')
+        self.ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
         self.GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
         self.GOOGLE_SEARCH_ENGINE_ID = os.getenv('GOOGLE_SEARCH_ENGINE_ID')
         
@@ -97,6 +99,10 @@ class Config:
     def has_perplexity_api(self) -> bool:
         """Check if Perplexity API is configured"""
         return bool(self.PERPLEXITY_API_KEY)
+    
+    def has_anthropic_api(self) -> bool:
+        """Check if Anthropic API is configured"""
+        return bool(self.ANTHROPIC_API_KEY)
     
     def has_google_search(self) -> bool:
         """Check if Google Search is configured"""

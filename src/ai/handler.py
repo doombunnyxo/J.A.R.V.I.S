@@ -11,7 +11,7 @@ from ..data.persistence import data_manager
 from ..admin.permissions import is_admin
 from ..admin.actions import AdminActionHandler
 from ..admin.parser import AdminIntentParser
-from ..search.perplexity import perplexity_search
+from ..search.claude import claude_search_analysis
 from ..utils.message_utils import smart_split_message
 
 # Constants
@@ -146,7 +146,7 @@ class RateLimiter:
         return None
 
 class AIHandler:
-    """Handles AI interactions with hybrid Groq+Perplexity approach"""
+    """Handles AI interactions with hybrid Groq+Claude approach"""
     
     _instance_count = 0
     
@@ -167,7 +167,7 @@ class AIHandler:
         self.processed_messages = set()
         
         # Track which AI provider was used for each user/channel conversation
-        self.conversation_providers = {}  # key: "user_id_channel_id", value: "groq" or "perplexity"
+        self.conversation_providers = {}  # key: "user_id_channel_id", value: "groq" or "claude"
         
         # Unified conversation context shared between both AIs
         self.unified_conversation_contexts = defaultdict(lambda: deque(maxlen=MAX_UNIFIED_CONTEXT))
@@ -205,7 +205,7 @@ class AIHandler:
             self.groq_client = None
     
     def _needs_web_search(self, query: str) -> bool:
-        """Determine if query needs web search via Perplexity (default to TRUE for most queries)"""
+        """Determine if query needs web search via Claude (default to TRUE for most queries)"""
         query_lower = query.lower()
         
         # Check for admin commands or personal queries (should NOT use web search)
@@ -220,7 +220,7 @@ class AIHandler:
         if is_personal_query and len(query_lower.split()) <= 3:
             return False
         
-        # Everything else goes to Perplexity for web-enhanced responses
+        # Everything else goes to Claude for web-enhanced responses
         return True
     
     def _get_conversation_key(self, user_id: int, channel_id: int) -> str:
@@ -567,24 +567,20 @@ Return only the relevant permanent context items, one per line, in the exact sam
         except Exception as e:
             return f"Search failed: {str(e)}"
     
-    def _extract_perplexity_model(self, query: str, user_id: int) -> tuple[str, str]:
-        """Extract Perplexity model from admin user queries and return (model, cleaned_query)"""
+    def _extract_claude_model(self, query: str, user_id: int) -> tuple[str, str]:
+        """Extract Claude model from admin user queries and return (model, cleaned_query)"""
         # Only admins can switch models
         if not is_admin(user_id):
-            return "sonar", query
+            return "haiku", query
         
-        # Available Perplexity models (current as of 2024-2025)
-        perplexity_models = {
-            'sonar': 'sonar',
-            'sonar-pro': 'sonar-pro',
-            'sonar-reasoning': 'sonar-reasoning',
-            'sonar-reasoning-pro': 'sonar-reasoning-pro',
-            'sonar-deep-research': 'sonar-deep-research',
-            'deep-research': 'sonar-deep-research',
-            'reasoning': 'sonar-reasoning',
-            'reasoning-pro': 'sonar-reasoning-pro',
-            'pro': 'sonar-pro',
-            'research': 'sonar-deep-research'
+        # Available Claude models for search processing
+        claude_models = {
+            'haiku': 'haiku',
+            'claude-haiku': 'haiku',
+            '3.5-haiku': 'haiku',
+            'claude-3.5-haiku': 'haiku',
+            'fast': 'haiku',
+            'quick': 'haiku'
         }
         
         # Patterns to detect model switching - more comprehensive and precise
@@ -615,8 +611,8 @@ Return only the relevant permanent context items, one per line, in the exact sam
             if match:
                 model_name = match.group(1).lower()
                 
-                # Check if it's a valid Perplexity model
-                if model_name in perplexity_models:
+                # Check if it's a valid Claude model
+                if model_name in claude_models:
                     # Extract the clean query from the appropriate group
                     cleaned_query = match.group(query_group).strip() if query_group else query
                     
@@ -625,14 +621,14 @@ Return only the relevant permanent context items, one per line, in the exact sam
                     cleaned_query = re.sub(r'^[-\s]+', '', cleaned_query)  # Remove leading dashes/spaces
                     cleaned_query = cleaned_query.strip()
                     
-                    actual_model = perplexity_models[model_name]
-                    print(f"DEBUG: [AIHandler-{self.instance_id}] Admin {user_id} switching to Perplexity model: {actual_model}")
+                    actual_model = claude_models[model_name]
+                    print(f"DEBUG: [AIHandler-{self.instance_id}] Admin {user_id} switching to Claude model: {actual_model}")
                     print(f"DEBUG: Original query: '{query}'")
                     print(f"DEBUG: Cleaned query: '{cleaned_query}'")
                     return actual_model, cleaned_query
         
-        # Default to sonar if no model specified
-        return "sonar", query
+        # Default to haiku if no model specified
+        return "haiku", query
 
     def _is_followup_to_existing_conversation(self, query: str, user_id: int, channel_id: int) -> bool:
         """Check if this is a follow-up to an existing conversation"""
@@ -662,12 +658,12 @@ Return only the relevant permanent context items, one per line, in the exact sam
             self.pending_admin_actions[user_id]["confirmation_message"] = sent_msg
     
     async def handle_ai_command(self, message, ai_query: str, force_provider: str = None):
-        """Handle AI command with hybrid Groq+Perplexity approach
+        """Handle AI command with hybrid Groq+Claude approach
         
         Args:
             message: Discord message object
             ai_query: User's query string
-            force_provider: Force specific provider ("groq" or "perplexity")
+            force_provider: Force specific provider ("groq" or "claude")
         """
         try:
             # Prevent duplicate processing
@@ -697,21 +693,21 @@ Return only the relevant permanent context items, one per line, in the exact sam
             is_followup = self._is_followup_to_existing_conversation(ai_query, message.author.id, message.channel.id)
             
             # Determine which AI to use
-            use_perplexity = False
+            use_claude = False
             
             if force_provider:
                 # Force specific provider
-                use_perplexity = (force_provider == "perplexity")
-                print(f"DEBUG: [AIHandler-{self.instance_id}] Forced to use {force_provider}")
+                use_claude = (force_provider == "claude" or force_provider == "perplexity")  # Support both names for compatibility
+                print(f"DEBUG: [AIHandler-{self.instance_id}] Forced to use {'claude' if use_claude else 'groq'}")
             elif is_followup:
                 # For follow-ups, use routing logic but with shared context
-                use_perplexity = self._needs_web_search(ai_query)
+                use_claude = self._needs_web_search(ai_query)
                 previous_provider = self.conversation_providers.get(conversation_key)
-                if use_perplexity:
-                    if previous_provider != "perplexity":
-                        print(f"DEBUG: [AIHandler-{self.instance_id}] Follow-up switching to Perplexity for web search (was {previous_provider})")
+                if use_claude:
+                    if previous_provider != "claude":
+                        print(f"DEBUG: [AIHandler-{self.instance_id}] Follow-up switching to Claude for web search (was {previous_provider})")
                     else:
-                        print(f"DEBUG: [AIHandler-{self.instance_id}] Follow-up continuing with Perplexity")
+                        print(f"DEBUG: [AIHandler-{self.instance_id}] Follow-up continuing with Claude")
                 else:
                     if previous_provider != "groq":
                         print(f"DEBUG: [AIHandler-{self.instance_id}] Follow-up switching to Groq for chat/admin (was {previous_provider})")
@@ -719,24 +715,24 @@ Return only the relevant permanent context items, one per line, in the exact sam
                         print(f"DEBUG: [AIHandler-{self.instance_id}] Follow-up continuing with Groq")
             else:
                 # New conversation - use normal routing logic
-                use_perplexity = self._needs_web_search(ai_query)
-                if use_perplexity:
-                    print(f"DEBUG: [AIHandler-{self.instance_id}] New conversation - routing to Perplexity for web search")
+                use_claude = self._needs_web_search(ai_query)
+                if use_claude:
+                    print(f"DEBUG: [AIHandler-{self.instance_id}] New conversation - routing to Claude for web search")
                 else:
                     print(f"DEBUG: [AIHandler-{self.instance_id}] New conversation - routing to Groq for admin/chat processing")
             
-            # ROUTE 1: Use Perplexity for web search queries
-            if use_perplexity:
-                if config.has_perplexity_api():
+            # ROUTE 1: Use Claude for web search queries
+            if use_claude:
+                if config.has_anthropic_api():
                     async with message.channel.typing():
                         # Check for admin model switching
-                        perplexity_model, cleaned_query = self._extract_perplexity_model(ai_query, message.author.id)
+                        claude_model, cleaned_query = self._extract_claude_model(ai_query, message.author.id)
                         # Use unified context for cross-AI awareness
-                        response = await self._handle_with_perplexity(message, cleaned_query, perplexity_model)
-                    # Track that we used Perplexity for this conversation
-                    self.conversation_providers[conversation_key] = "perplexity"
+                        response = await self._handle_with_claude(message, cleaned_query, claude_model)
+                    # Track that we used Claude for this conversation
+                    self.conversation_providers[conversation_key] = "claude"
                 else:
-                    response = "Web search is not available - Perplexity API not configured."
+                    response = "Web search is not available - Claude API not configured."
             
             # ROUTE 2: Use Groq for admin/chat processing
             else:
@@ -803,80 +799,6 @@ Return only the relevant permanent context items, one per line, in the exact sam
         
         return filtered_context, search_results
     
-    def _build_perplexity_system_message(self, filtered_context: str, search_results: str) -> str:
-        """Build comprehensive system message for Perplexity"""
-        parts = []
-        
-        # Add user context first if available
-        if filtered_context:
-            parts.append(f"USER CONTEXT:\n{filtered_context}")
-            parts.append("=" * 50)
-        
-        # Add web search results as information source
-        parts.append(f"CURRENT WEB SEARCH RESULTS:\n{search_results}")
-        parts.append("=" * 50)
-        
-        # Core Perplexity instructions
-        instructions = """You are a helpful assistant that provides personalized, comprehensive answers by combining current web search results with user context.
-
-INSTRUCTIONS:
-1. Use the web search results provided above as your source for current/factual information
-2. Personalize your response based on the user context provided above
-3. If the user context includes specific preferences, interests, or instructions, follow them
-4. Analyze and synthesize the information from multiple search results
-5. Always cite your sources using the URLs from the search results
-6. IMPORTANT: When including URLs in your response, wrap them in angle brackets like <https://example.com> to prevent link previews
-7. Address the user appropriately based on their context
-
-Your response should be informative, well-structured, personalized, and based on the actual current web search results provided. Remember to wrap ALL URLs in angle brackets to prevent Discord link previews."""
-
-        parts.append(instructions)
-        
-        return "\n\n".join(parts)
-    
-    async def _call_perplexity_api(self, system_message: str, user_query: str, model: str, filtered_context: str) -> str:
-        """Make API call to Perplexity for analysis"""
-        # Build messages array
-        messages = [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_query}
-        ]
-        
-        # Debug logging
-        print(f"DEBUG: [AIHandler-{self.instance_id}] Calling Perplexity API:")
-        print(f"DEBUG: Model: {model}")
-        print(f"DEBUG: System message: {len(system_message)} chars")
-        print(f"DEBUG: Filtered context: {len(filtered_context)} chars" if filtered_context else "DEBUG: No relevant context")
-        
-        payload = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": 1000,
-            "temperature": 0.2,
-            "top_p": 0.9,
-            "stream": False,
-            "presence_penalty": 0,
-            "frequency_penalty": 1
-        }
-        
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
-            headers = {
-                "Authorization": f"Bearer {config.PERPLEXITY_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            async with session.post("https://api.perplexity.ai/chat/completions", headers=headers, json=payload) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    return f"Perplexity API error ({response.status}): {error_text}"
-                
-                result = await response.json()
-                
-                if 'choices' in result and len(result['choices']) > 0:
-                    response_content = result['choices'][0]['message']['content']
-                    # Post-process to wrap any unwrapped URLs in angle brackets
-                    return self._suppress_link_previews(response_content)
-                else:
-                    return "No response from Perplexity API."
     
     def _build_groq_system_message(self, filtered_context: str, user_id: int) -> str:
         """Build comprehensive system message for Groq"""
@@ -985,8 +907,8 @@ Be concise and clear about what the action will do. The confirmation system is h
             
             return response
     
-    async def _handle_with_perplexity(self, message, ai_query: str, model: str = "sonar") -> str:
-        """Handle query with Google search + Perplexity analysis"""
+    async def _handle_with_claude(self, message, ai_query: str, model: str = "haiku") -> str:
+        """Handle query with Google search + Claude analysis"""
         try:
             # Prepare context and perform search
             filtered_context, search_results = await self._prepare_context_and_search(message, ai_query)
@@ -994,14 +916,20 @@ Be concise and clear about what the action will do. The confirmation system is h
             if not search_results or "Search failed" in search_results or "not configured" in search_results:
                 return f"Web search unavailable: {search_results}"
             
-            # Build system message for Perplexity with user context
-            system_message = self._build_perplexity_system_message(filtered_context, search_results)
+            # Debug logging
+            print(f"DEBUG: [AIHandler-{self.instance_id}] Calling Claude API:")
+            print(f"DEBUG: Model: {model}")
+            print(f"DEBUG: Search results: {len(search_results)} chars")
+            print(f"DEBUG: Filtered context: {len(filtered_context)} chars" if filtered_context else "DEBUG: No relevant context")
             
-            # Call Perplexity API for analysis
-            return await self._call_perplexity_api(system_message, ai_query, model, filtered_context)
+            # Call Claude search analysis directly
+            response = await claude_search_analysis(ai_query, search_results, filtered_context)
+            
+            # Post-process to wrap any unwrapped URLs in angle brackets
+            return self._suppress_link_previews(response)
         
         except Exception as e:
-            return f"Error with Perplexity search: {str(e)}"
+            return f"Error with Claude search: {str(e)}"
     
     async def _prepare_groq_context(self, message, ai_query: str) -> str:
         """Prepare filtered context for Groq"""
