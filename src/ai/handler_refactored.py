@@ -841,16 +841,22 @@ The relevant context section above contains only information pertinent to the cu
 - Channel management (create/delete channels)
 - Message cleanup (bulk delete messages, including from specific users)
 - Nickname changes
+- Role reorganization (reorganize all server roles based on themes/contexts)
+
+IMPORTANT: When you receive ANY admin command (like "kick user", "delete messages", "reorganize roles", etc.), you MUST respond with the confirmation format below. This triggers the reaction-based confirmation system.
 
 When you detect an administrative request, respond by clearly stating what action you understood. DO NOT ask for text-based confirmation. The system will automatically handle confirmation.
 
-Use this format:
+MANDATORY FORMAT for admin commands:
 I understand you want to [ACTION]. [Brief description of what will happen]
 
 Examples:
-- "kick that spammer" → I understand you want to kick [user]. They will be removed from the server.
-- "delete John's messages" → I understand you want to delete messages from John. I'll remove their recent messages.
+- "kick spammer" → I understand you want to kick the spammer. They will be removed from the server.
+- "delete messages from John" → I understand you want to delete messages from John. I'll remove their recent messages.
 - "rename role Moderator to Super Mod" → I understand you want to rename the Moderator role to Super Mod.
+- "reorganize roles Dune theme" → I understand you want to reorganize all server roles based on Dune universe factions. I'll rename roles using appropriate faction names and hierarchy.
+
+CRITICAL: Always use "I understand you want to [ACTION]" format for ANY admin command to trigger the confirmation system.
 
 Be concise and clear about what the action will do."""
 
