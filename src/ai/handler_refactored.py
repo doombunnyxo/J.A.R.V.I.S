@@ -277,20 +277,17 @@ class AIHandler:
             # Extract model if admin specified one
             model, cleaned_query = extract_claude_model(query, message.author.id)
             
-            # Optimize search query
-            optimized_query = await claude_optimize_search_query(cleaned_query, context)
+            # Use the generalized search pipeline
+            from ..search.search_pipeline import SearchPipeline
+            from ..search.claude_adapter import ClaudeSearchProvider
             
-            # Perform Google search
-            search_results = await self._perform_google_search(optimized_query)
+            provider = ClaudeSearchProvider(model)
+            pipeline = SearchPipeline(provider)
             
-            if not search_results or "Search failed" in search_results:
-                return f"Web search unavailable: {search_results}"
-            
-            print(f"DEBUG: Calling Claude API with model: {model}")
+            print(f"DEBUG: Using Claude search pipeline with model: {model}")
             print(f"DEBUG: Context length: {len(context)} chars")
             
-            # Call Claude for analysis
-            response = await claude_search_analysis(cleaned_query, search_results, context)
+            response = await pipeline.search_and_respond(cleaned_query, context)
             
             return self._suppress_link_previews(response)
         
@@ -298,7 +295,7 @@ class AIHandler:
             return f"Error with Claude search: {str(e)}"
     
     async def _handle_with_perplexity(self, message, query: str) -> str:
-        """Handle query with Perplexity (direct web search)"""
+        """Handle query with Perplexity (web search via Google)"""
         try:
             if not config.has_perplexity_api():
                 return "Perplexity API not configured - web search unavailable"
@@ -309,18 +306,17 @@ class AIHandler:
                 message.author.display_name, message
             )
             
-            # Import perplexity search
-            from ..search.perplexity import perplexity_search
+            # Use the generalized search pipeline
+            from ..search.search_pipeline import SearchPipeline
+            from ..search.perplexity_adapter import PerplexitySearchProvider
             
-            print(f"DEBUG: Calling Perplexity API")
+            provider = PerplexitySearchProvider()
+            pipeline = SearchPipeline(provider)
+            
+            print(f"DEBUG: Using Perplexity search pipeline")
             print(f"DEBUG: Context length: {len(context)} chars")
             
-            # Call Perplexity search
-            response = await perplexity_search.search_and_answer(
-                query, 
-                user_id=message.author.id,
-                channel_id=message.channel.id
-            )
+            response = await pipeline.search_and_respond(query, context)
             
             return self._suppress_link_previews(response)
         
@@ -360,7 +356,9 @@ class AIHandler:
                 if admin_handled:
                     return ""  # Admin handler sent its own message
                 
-                return response
+                # Prepend model name to response
+                model_display = "Groq Llama 3.1" if "llama-3.1" in config.AI_MODEL else "Groq"
+                return f"**{model_display}:** {response}"
         
         except Exception as e:
             return f"Error processing with Groq: {str(e)}"

@@ -109,7 +109,8 @@ class HelpCommands(commands.Cog):
             
             embed.add_field(
                 name="🎯 Automatic Routing",
-                value="**Claude (Web Search):**\n" +
+                value="**Claude/Perplexity (Web Search via Google):**\n" +
+                      "• Both use: Query optimization → Google Search → AI analysis\n" +
                       "• Current events, news, latest information\n" +
                       "• Research questions, comparisons\n" +
                       "• Questions needing web data\n\n" +
