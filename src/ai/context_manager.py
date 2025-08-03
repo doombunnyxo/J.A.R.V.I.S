@@ -144,18 +144,8 @@ Return only the filtered previous conversation context - no explanations."""
             return permanent_context or []
         
         try:
-            # Resolve user mentions in permanent context
-            resolved_context = []
-            for item in permanent_context:
-                if message:
-                    resolved_item = await self._resolve_user_mentions(item, message)
-                    resolved_context.append(resolved_item)
-                    if resolved_item != item:
-                        print(f"DEBUG: Resolved mention '{item}' -> '{resolved_item}'")
-                else:
-                    resolved_context.append(item)
-            
-            context_text = "\\n".join([f"- {item}" for item in resolved_context])
+            # No need to resolve mentions anymore - they're already saved as usernames
+            context_text = "\\n".join([f"- {item}" for item in permanent_context])
             
             filter_messages = [
                 {
@@ -164,20 +154,19 @@ Return only the filtered previous conversation context - no explanations."""
 
 INSTRUCTIONS:
 1. Review each permanent context item carefully
-2. You are given BOTH the resolved names AND original mentions (like <@123456>)
-3. Match users by BOTH their name AND their Discord ID when provided
-4. Include items that mention the CURRENT USER (by name OR by their Discord ID)
-5. Include items with instructions for responding to the CURRENT USER
-6. EXCLUDE items about other users UNLESS they're general rules that apply to everyone
-7. EXCLUDE items completely unrelated to the query topic
-8. Be SELECTIVE - only include items that would help answer this specific query
-9. If an item says "when UserA talks to UserB", include it ONLY if current user is UserA OR UserB
+2. Context items now contain actual usernames (not Discord IDs)
+3. Include items that mention the CURRENT USER by name
+4. Include items with instructions for responding to the CURRENT USER
+5. EXCLUDE items about other users UNLESS they're general rules that apply to everyone
+6. EXCLUDE items completely unrelated to the query topic
+7. Be SELECTIVE - only include items that would help answer this specific query
+8. If an item says "when UserA talks to UserB", include it ONLY if current user is UserA OR UserB
 
-Return only relevant permanent context items from the RESOLVED list, one per line, in the exact same format. If no items are relevant, return "No relevant permanent context"."""
+Return only relevant permanent context items, one per line, in the exact same format. If no items are relevant, return "No relevant permanent context"."""
                 },
                 {
                     "role": "user",
-                    "content": f"CURRENT USER: {user_name} (ID: {message.author.id if message else 'unknown'})\\n\\nCURRENT QUERY: {query}\\n\\nPERMANENT CONTEXT ITEMS (mentions resolved to names):\\n{context_text}\\n\\nORIGINAL CONTEXT ITEMS (with mentions):\\n" + "\\n".join([f"- {item}" for item in permanent_context]) + "\\n\\nReturn only relevant permanent context items:"
+                    "content": f"CURRENT USER: {user_name}\\n\\nCURRENT QUERY: {query}\\n\\nPERMANENT CONTEXT ITEMS:\\n{context_text}\\n\\nReturn only relevant permanent context items:"
                 }
             ]
             
@@ -212,7 +201,7 @@ Return only relevant permanent context items from the RESOLVED list, one per lin
             
         except Exception as e:
             print(f"DEBUG: Permanent context filtering failed: {e}")
-            return resolved_context if 'resolved_context' in locals() else permanent_context
+            return permanent_context
     
     async def build_full_context(self, query: str, user_id: int, channel_id: int, user_name: str, message=None) -> str:
         """Build complete filtered context for AI"""
@@ -236,16 +225,8 @@ Return only relevant permanent context items from the RESOLVED list, one per lin
         if user_key:
             unfiltered_items = data_manager.get_unfiltered_permanent_context(user_key)
             if unfiltered_items:
-                resolved_unfiltered = []
-                for item in unfiltered_items:
-                    if message:
-                        resolved_item = await self._resolve_user_mentions(item, message)
-                        resolved_unfiltered.append(resolved_item)
-                    else:
-                        resolved_unfiltered.append(item)
-                
                 context_parts.append("User preferences (always apply):\\n" + "\\n".join([
-                    f"- {item}" for item in resolved_unfiltered
+                    f"- [MANDATORY] {item}" for item in unfiltered_items
                 ]))
         
         # Add filtered permanent context

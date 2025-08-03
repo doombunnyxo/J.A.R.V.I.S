@@ -47,19 +47,38 @@ class AdminCommands(commands.Cog):
         
             user_key = data_manager.get_user_key(ctx.author)
             
+            # Resolve Discord mentions to usernames before saving
+            import re
+            resolved_text = context_text
+            mention_pattern = r'<@!?(\d+)>'
+            mentions = re.findall(mention_pattern, context_text)
+            
+            for user_id in mentions:
+                try:
+                    user = ctx.guild.get_member(int(user_id)) or self.bot.get_user(int(user_id))
+                    if user:
+                        mention_formats = [f'<@{user_id}>', f'<@!{user_id}>']
+                        for mention_format in mention_formats:
+                            resolved_text = resolved_text.replace(mention_format, user.display_name)
+                        print(f"DEBUG: Resolved mention <@{user_id}> to '{user.display_name}'")
+                except Exception as e:
+                    print(f"DEBUG: Failed to resolve mention <@{user_id}>: {e}")
+            
             # Check if this exact context already exists to prevent duplicates
             existing_context = data_manager.get_permanent_context(user_key)
-            if context_text in existing_context:
+            if resolved_text in existing_context:
                 await ctx.send(f"⚠️ **Context already exists!**\nThis exact text is already in your permanent context.\n\nYou have {len(existing_context)} permanent context item(s).")
                 return
             
             print(f"DEBUG: Adding context for user {user_key}. Current count: {len(existing_context)}")
-            data_manager.add_permanent_context(user_key, context_text)
+            data_manager.add_permanent_context(user_key, resolved_text)
             await data_manager.save_permanent_context()
             
             context_count = len(data_manager.get_permanent_context(user_key))
             print(f"DEBUG: After adding, context count: {context_count}")
-            await ctx.send(f"✅ **Permanent context added!**\nYou now have {context_count} permanent context item(s).\n\n*This will always be included in your AI conversations.*")
+            # Show what was saved (with mentions resolved)
+            display_text = resolved_text[:100] + "..." if len(resolved_text) > 100 else resolved_text
+            await ctx.send(f"✅ **Permanent context added!**\n**Saved as:** {display_text}\n\nYou now have {context_count} permanent context item(s).\n\n*This will always be included in your AI conversations.*")
         
         finally:
             # Clean up execution tracker

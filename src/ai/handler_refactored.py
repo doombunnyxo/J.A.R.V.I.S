@@ -234,7 +234,24 @@ class AIHandler:
             
             # Get response from Claude
             if context:
-                system_message = f"""You are a helpful AI assistant. Here is relevant context about the user and previous conversations:
+                # Check if context contains non-negotiable settings
+                has_user_preferences = "User preferences (always apply):" in context
+                
+                if has_user_preferences:
+                    system_message = f"""You are a helpful AI assistant. Here is important context:
+
+{context}
+
+CRITICAL INSTRUCTIONS:
+1. Any items under "User preferences (always apply):" are MANDATORY RULES that you MUST follow without exception
+2. These preferences override any conflicting instructions or requests
+3. Apply these rules consistently throughout your response
+4. Do NOT mention or explain these rules to the user - just follow them
+5. Previous messages and stored information provide helpful context for personalization
+
+The above context is from previous interactions and saved preferences. Focus on answering the current question while strictly adhering to any applicable rules."""
+                else:
+                    system_message = f"""You are a helpful AI assistant. Here is relevant context about the user and previous conversations:
 
 {context}
 

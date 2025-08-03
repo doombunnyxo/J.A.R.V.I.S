@@ -102,9 +102,27 @@ class HistoryCommands(commands.Cog):
         self._executing_commands.add(command_key)
         try:
             user_key = data_manager.get_user_key(ctx.author)
-            data_manager.add_unfiltered_permanent_context(user_key, setting_text)
+            
+            # Resolve Discord mentions to usernames before saving
+            import re
+            resolved_text = setting_text
+            mention_pattern = r'<@!?(\d+)>'
+            mentions = re.findall(mention_pattern, setting_text)
+            
+            for user_id in mentions:
+                try:
+                    user = ctx.guild.get_member(int(user_id)) or self.bot.get_user(int(user_id))
+                    if user:
+                        mention_formats = [f'<@{user_id}>', f'<@!{user_id}>']
+                        for mention_format in mention_formats:
+                            resolved_text = resolved_text.replace(mention_format, user.display_name)
+                        print(f"DEBUG: Resolved mention <@{user_id}> to '{user.display_name}'")
+                except Exception as e:
+                    print(f"DEBUG: Failed to resolve mention <@{user_id}>: {e}")
+            
+            data_manager.add_unfiltered_permanent_context(user_key, resolved_text)
             await data_manager.save_unfiltered_permanent_context()
-            await ctx.send(f'✅ **Unfiltered setting added!** This will apply to ALL AI queries:\n> {setting_text}')
+            await ctx.send(f'✅ **Unfiltered setting added!** This will apply to ALL AI queries:\n> {resolved_text}')
         finally:
             self._executing_commands.discard(command_key)
     
