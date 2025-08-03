@@ -7,7 +7,8 @@
       "WebFetch(domain:awakening.wiki)",
       "Bash(python3:*)",
       "Bash(mv:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(python:*)"
     ],
     "deny": []
   }

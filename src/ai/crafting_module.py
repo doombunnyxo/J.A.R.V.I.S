@@ -370,21 +370,16 @@ class CraftingProcessor:
             
             # Add detailed breakdown based on mode
             if full_breakdown and not by_parts:
-                # Mode 2: Full breakdown (summary + unified crafting tree)
-                response += f"\n\n**🔧 Complete Crafting Tree:**\n"
-                response += f"**{vehicle_type.replace('_', ' ').title()} Assembly:**\n"
-                
-                # Show all parts in a unified tree format
+                # Mode 2: Full breakdown (show crafting tree format)
+                response += f"\n\n**🔧 Crafting Tree:**\n"
                 for part_key, recipe, part_multiplier in part_details:
                     part_display = part_key.replace(f"{vehicle_type}_", "").replace("_", " ").title()
                     if part_multiplier > 1:
-                        response += f"- {part_display} x{part_multiplier}\n"
+                        response += f"\n**{part_display} (x{part_multiplier}):**\n"
                     else:
-                        response += f"- {part_display}\n"
-                
-                # Note: In MODE 2, we show the total materials (already shown above) 
-                # but we don't break down each individual part's crafting tree
-                # That's what MODE 3 and MODE 4 are for
+                        response += f"\n**{part_display}:**\n"
+                    # Show the actual crafting tree for each part
+                    response += format_materials_tree(part_key, part_multiplier)
             
             elif by_parts:
                 # Mode 3 or 4: Show materials for each part individually
