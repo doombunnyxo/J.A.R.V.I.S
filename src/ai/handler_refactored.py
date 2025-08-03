@@ -7,6 +7,7 @@ to a separate module for better organization.
 """
 
 import asyncio
+import re
 import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Set, Tuple
@@ -245,24 +246,227 @@ class AIHandler:
             return f"❌ Error with Claude processing: {str(e)}"
     
     async def _handle_admin_with_claude(self, message, query: str) -> str:
-        """Handle admin commands - Claude interprets, Groq executes"""
+        """Handle admin commands - new Perplexity-based flow"""
         try:
-            if not config.has_anthropic_api():
-                return "❌ Claude API not configured. Please contact an administrator."
-            
-            # Check if this admin command requires research/multi-step processing
-            needs_research = self._detect_research_needed(query)
-            
-            if needs_research:
-                # Multi-step: Research + Claude interpretation + Groq execution
-                return await self._handle_multi_step_admin_action(message, query)
-            else:
-                # Single-step: Claude interpretation + Groq execution
-                return await self._handle_single_step_admin_action_with_groq(message, query)
+            # Route all admin commands to new Perplexity-based system
+            return await self._handle_admin_with_perplexity(message, query)
                 
         except Exception as e:
-            print(f"DEBUG: Claude admin processing failed: {e}")
-            return f"❌ Error with Claude admin processing: {str(e)}"
+            print(f"DEBUG: Admin processing failed: {e}")
+            return f"❌ Error with admin processing: {str(e)}"
+    
+    async def _handle_admin_with_perplexity(self, message, query: str) -> str:
+        """Handle admin commands using Perplexity for analysis and execution"""
+        try:
+            if not config.has_perplexity_api():
+                return "❌ Perplexity API not configured for admin commands."
+            
+            # Step 1: Use Perplexity to analyze the admin command and detect if it needs research
+            admin_analysis = await self._perplexity_analyze_admin_command(message, query)
+            
+            if admin_analysis.get('needs_search'):
+                # Step 2: If it needs research, get search results
+                search_results = await self._perform_google_search_for_admin(admin_analysis['search_query'])
+                
+                # Step 3: Use Perplexity to process search results and generate role list
+                role_list = await self._perplexity_generate_role_list(query, search_results, admin_analysis['theme'])
+                
+                if role_list and not role_list.startswith("❌"):
+                    # Step 4: Create confirmation message with the role list
+                    return await self._create_admin_confirmation_with_roles(message, query, role_list, admin_analysis)
+                else:
+                    return role_list or "❌ Failed to generate role list"
+            else:
+                # Handle non-search admin commands through existing system
+                return await self._handle_standard_admin_command(message, query)
+                
+        except Exception as e:
+            print(f"DEBUG: Perplexity admin processing failed: {e}")
+            return f"❌ Error with Perplexity admin processing: {str(e)}"
+    
+    async def _perplexity_analyze_admin_command(self, message, query: str) -> dict:
+        """Use Perplexity to analyze admin command and detect if it needs internet search"""
+        try:
+            import aiohttp
+            
+            headers = {
+                "Authorization": f"Bearer {config.PERPLEXITY_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            system_message = """You are analyzing Discord admin commands to determine if they need internet research.
+
+Look for commands that rename/reorganize roles based on themes, movies, books, games, genres, etc.
+
+If the command mentions a specific theme that would benefit from internet research, respond with JSON:
+{
+  "needs_search": true,
+  "theme": "detected theme name",
+  "search_query": "optimized search query for role hierarchy information"
+}
+
+If it's a standard admin command (kick, ban, timeout, etc.) that doesn't need research, respond with:
+{
+  "needs_search": false,
+  "action_type": "standard_admin"
+}
+
+Examples:
+- "rename roles to Star Wars" → {"needs_search": true, "theme": "Star Wars", "search_query": "Star Wars hierarchy ranks roles imperial rebel alliance"}
+- "kick that spammer" → {"needs_search": false, "action_type": "standard_admin"}"""
+            
+            payload = {
+                "model": "llama-3.1-sonar-small-128k-online",
+                "messages": [
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": f"Analyze this admin command: {query}"}
+                ],
+                "max_tokens": 200,
+                "temperature": 0.1
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=15)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post("https://api.perplexity.ai/chat/completions",
+                                       headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        perplexity_response = result["choices"][0]["message"]["content"].strip()
+                        
+                        # Parse JSON response
+                        import json
+                        try:
+                            return json.loads(perplexity_response)
+                        except json.JSONDecodeError:
+                            return {"needs_search": False, "action_type": "parse_error"}
+                    else:
+                        raise Exception(f"Perplexity API error {response.status}")
+                        
+        except Exception as e:
+            print(f"DEBUG: Perplexity admin analysis failed: {e}")
+            return {"needs_search": False, "action_type": "error"}
+    
+    async def _perform_google_search_for_admin(self, search_query: str) -> str:
+        """Perform Google search and return results for admin processing"""
+        try:
+            if not config.has_google_search():
+                return "Google search not configured"
+            
+            from googleapiclient.discovery import build
+            
+            service = build("customsearch", "v1", developerKey=config.GOOGLE_API_KEY)
+            result = service.cse().list(q=search_query, cx=config.GOOGLE_SEARCH_ENGINE_ID, num=10).execute()
+            
+            if 'items' not in result:
+                return f"No search results found for: {search_query}"
+            
+            search_results = f"Search results for '{search_query}':\n\n"
+            
+            for i, item in enumerate(result['items'][:10], 1):
+                title = item['title']
+                snippet = item.get('snippet', 'No description available')
+                search_results += f"{i}. {title}\n{snippet[:300]}...\n\n"
+            
+            return search_results
+            
+        except Exception as e:
+            return f"Search failed: {str(e)}"
+    
+    async def _perplexity_generate_role_list(self, original_query: str, search_results: str, theme: str) -> str:
+        """Use Perplexity to generate a clean list of role names from search results"""
+        try:
+            import aiohttp
+            
+            headers = {
+                "Authorization": f"Bearer {config.PERPLEXITY_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            system_message = """You are generating Discord server role names based on search results about a specific theme.
+
+Based on the search results provided, generate a list of suitable role names for a Discord server. The roles should reflect the hierarchy and terminology from the theme.
+
+CRITICAL: Respond with ONLY a simple list format, one role per line, no other text, explanations, or formatting:
+
+Role Name 1
+Role Name 2  
+Role Name 3
+etc.
+
+Make the roles hierarchical (from highest to lowest authority) and appropriate for Discord server management."""
+            
+            payload = {
+                "model": "llama-3.1-sonar-large-128k-online",
+                "messages": [
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": f"Original request: {original_query}\nTheme: {theme}\n\nSearch Results:\n{search_results}\n\nGenerate role list:"}
+                ],
+                "max_tokens": 300,
+                "temperature": 0.2
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=20)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post("https://api.perplexity.ai/chat/completions",
+                                       headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        role_list = result["choices"][0]["message"]["content"].strip()
+                        return role_list
+                    else:
+                        raise Exception(f"Perplexity API error {response.status}")
+                        
+        except Exception as e:
+            print(f"DEBUG: Perplexity role generation failed: {e}")
+            return f"❌ Error generating role list: {str(e)}"
+    
+    async def _create_admin_confirmation_with_roles(self, message, original_query: str, role_list: str, admin_analysis: dict) -> str:
+        """Create Discord confirmation message with role list and reactions"""
+        try:
+            import uuid
+            import time
+            
+            # Generate unique action ID
+            action_id = str(uuid.uuid4())[:8]
+            
+            # Build confirmation message showing the role list
+            confirmation_text = f"⚠️ **ADMIN ACTION: Role Reorganization**\n\n"
+            confirmation_text += f"**Theme**: {admin_analysis.get('theme', 'Custom Theme')}\n"
+            confirmation_text += f"**Action**: Rename all server roles to match this theme\n\n"
+            confirmation_text += "**Proposed Role Names** (from highest to lowest):\n"
+            confirmation_text += f"```\n{role_list}\n```\n\n"
+            confirmation_text += "⚠️ **WARNING**: This will rename ALL existing server roles!\n\n"
+            confirmation_text += "React with ✅ to confirm or ❌ to cancel this action.\n"
+            confirmation_text += f"*Action ID: {action_id}*"
+            
+            # Store action data for reaction handling
+            self.admin_actions[action_id] = {
+                'action_type': 'role_reorganization_list',
+                'role_list': role_list.strip().split('\n'),  # Convert to list
+                'theme': admin_analysis.get('theme', 'Custom Theme'),
+                'message': message,
+                'timestamp': time.time(),
+                'original_query': original_query
+            }
+            
+            # Send confirmation message
+            confirmation_msg = await message.channel.send(confirmation_text)
+            await confirmation_msg.add_reaction("✅")
+            await confirmation_msg.add_reaction("❌")
+            
+            return ""  # No additional response needed
+            
+        except Exception as e:
+            print(f"DEBUG: Admin confirmation creation failed: {e}")
+            return f"❌ Error creating admin confirmation: {str(e)}"
+    
+    async def _handle_standard_admin_command(self, message, query: str) -> str:
+        """Handle non-search admin commands through existing system"""
+        try:
+            # Route to existing Groq-based admin system for standard commands
+            return await self._handle_single_step_admin_action_with_groq(message, query)
+        except Exception as e:
+            return f"❌ Error with standard admin command: {str(e)}"
     
     def _detect_research_needed(self, query: str) -> bool:
         """Detect if an admin command needs research before execution"""
@@ -1260,8 +1464,19 @@ Be concise and clear about what the action will do."""
         if str(reaction.emoji) == "✅":
             # Execute the admin action
             try:
+                # Handle Perplexity-based role reorganization with pre-generated list
+                if action_data.get('action_type') == 'role_reorganization_list':
+                    role_list = action_data.get('role_list', [])
+                    guild = action_data['message'].guild
+                    
+                    if role_list and guild:
+                        await self._execute_role_list_reorganization(reaction.message, guild, role_list, action_data.get('theme', 'Custom Theme'))
+                    else:
+                        await reaction.message.channel.send("❌ **Error:** No role list or guild found")
+                    return
+                
                 # Check if this is a research-enhanced action that needs final command generation
-                if action_data.get('research_context') and action_data.get('original_query'):
+                elif action_data.get('research_context') and action_data.get('original_query'):
                     # Step 1: Use Claude to generate specific admin command text
                     claude_command = await self._claude_generate_specific_admin_command(
                         action_data['message'], 
@@ -1321,3 +1536,86 @@ Be concise and clear about what the action will do."""
             await reaction.message.delete()
         except:
             pass
+    
+    async def _execute_role_list_reorganization(self, message, guild, role_list: list, theme: str):
+        """Execute role reorganization by renaming roles one by one from the generated list"""
+        try:
+            # Clean and validate the role list
+            cleaned_roles = []
+            for role_name in role_list:
+                if isinstance(role_name, str):
+                    cleaned_name = role_name.strip()
+                    # Remove numbering, bullets, or formatting
+                    cleaned_name = re.sub(r'^\d+[\.\)\-\s]*', '', cleaned_name)  # Remove "1. " or "1) " etc
+                    cleaned_name = re.sub(r'^[\-\*\•\s]+', '', cleaned_name)     # Remove bullets
+                    cleaned_name = cleaned_name.strip()
+                    
+                    if cleaned_name and len(cleaned_name) <= 100:  # Discord role name limit
+                        cleaned_roles.append(cleaned_name)
+            
+            if not cleaned_roles:
+                await message.channel.send("❌ **Error:** No valid role names found in the generated list")
+                return
+            
+            # Get server roles (excluding @everyone and managed roles)
+            server_roles = [role for role in guild.roles if role.name != "@everyone" and not role.managed]
+            server_roles.sort(key=lambda r: r.position, reverse=True)  # Highest position first
+            
+            if not server_roles:
+                await message.channel.send("❌ **Error:** No renameable roles found on the server")
+                return
+            
+            # Start the renaming process
+            progress_msg = await message.channel.send(f"🔄 **Starting role reorganization for {theme}**\n"
+                                                    f"Renaming {min(len(server_roles), len(cleaned_roles))} roles...")
+            
+            renamed_count = 0
+            errors = []
+            
+            # Rename roles one by one
+            for i, server_role in enumerate(server_roles):
+                if i >= len(cleaned_roles):
+                    break  # No more names in the list
+                
+                new_name = cleaned_roles[i]
+                old_name = server_role.name
+                
+                try:
+                    await server_role.edit(name=new_name, reason=f"Role reorganization: {theme}")
+                    renamed_count += 1
+                    
+                    # Update progress every few renames to avoid spam
+                    if renamed_count % 3 == 0 or renamed_count == len(cleaned_roles):
+                        await progress_msg.edit(content=f"🔄 **Role Reorganization Progress**\n"
+                                              f"Renamed {renamed_count}/{min(len(server_roles), len(cleaned_roles))} roles\n"
+                                              f"Latest: `{old_name}` → `{new_name}`")
+                    
+                    # Brief delay to avoid rate limits
+                    await asyncio.sleep(0.5)
+                    
+                except Exception as e:
+                    errors.append(f"`{old_name}` → `{new_name}`: {str(e)}")
+                    print(f"DEBUG: Failed to rename role {old_name} to {new_name}: {e}")
+            
+            # Final status message
+            if renamed_count > 0:
+                status_msg = f"✅ **Role Reorganization Complete**\n"
+                status_msg += f"**Theme**: {theme}\n"
+                status_msg += f"**Successfully renamed**: {renamed_count} roles\n"
+                
+                if errors:
+                    status_msg += f"**Errors**: {len(errors)} roles failed\n"
+                    # Show first few errors
+                    error_sample = errors[:3]
+                    status_msg += "**Sample errors**:\n" + "\n".join(f"• {err}" for err in error_sample)
+                    if len(errors) > 3:
+                        status_msg += f"\n• ... and {len(errors) - 3} more"
+                
+                await progress_msg.edit(content=status_msg)
+            else:
+                await progress_msg.edit(content=f"❌ **Role reorganization failed**: No roles could be renamed\n"
+                                              f"**Errors**: {len(errors)}")
+                
+        except Exception as e:
+            await message.channel.send(f"❌ **Role reorganization failed**: {str(e)}")
+            print(f"DEBUG: Role list reorganization error: {e}")
