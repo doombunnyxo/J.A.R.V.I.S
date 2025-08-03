@@ -536,8 +536,22 @@ Match this request to an exact database key:"""
                 else:
                     response += f"- {part_display} (Station: {station})\n"
             
-            response += f"\n**📦 Total Raw Materials:**\n"
+            response += f"\n**📦 Raw Materials Summary:**\n"
             response += format_materials_list(total_materials)
+            
+            # Add detailed breakdown for each part
+            response += f"\n**🔧 Detailed Crafting Tree:**\n"
+            for part_key, recipe, part_multiplier in part_details[:3]:  # Show first 3 parts to avoid too much text
+                part_display = part_key.replace(f"{vehicle_type}_", "").replace("_", " ").title()
+                if part_multiplier > 1:
+                    response += f"\n**{part_display} (x{part_multiplier}):**\n"
+                    response += format_materials_tree(part_key, part_multiplier)
+                else:
+                    response += f"\n**{part_display}:**\n"
+                    response += format_materials_tree(part_key, 1)
+            
+            if len(part_details) > 3:
+                response += f"\n... and {len(part_details) - 3} more parts"
             
             if quantity > 1:
                 response += f"\n💡 **Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
