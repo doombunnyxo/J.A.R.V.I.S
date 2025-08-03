@@ -86,6 +86,43 @@ def calculate_materials(item_name: str, quantity_needed: int = 1) -> Tuple[Optio
     
     return total_materials, None
 
+def calculate_direct_materials(item_name: str, quantity_needed: int = 1) -> Tuple[Optional[Dict], Optional[str]]:
+    """
+    Calculate only the direct upper-level materials needed for crafting an item
+    (stops at first level of crafted ingredients, doesn't break them down further)
+    
+    Args:
+        item_name: Name of the item to craft
+        quantity_needed: How many of the item to craft
+        
+    Returns:
+        Tuple of (materials_dict, error_message)
+    """
+    recipes = get_recipes()
+    
+    if item_name.lower() not in recipes:
+        return None, f"Recipe for '{item_name}' not found"
+    
+    item_name = item_name.lower()
+    recipe = recipes[item_name]
+    
+    # Check if this is a raw material (no ingredients field)
+    if "ingredients" not in recipe:
+        # This is a raw material, return it as-is
+        return {item_name: quantity_needed}, None
+    
+    # Calculate how many crafting operations we need
+    crafts_needed = (quantity_needed + recipe["quantity"] - 1) // recipe["quantity"]
+    
+    direct_materials = {}
+    
+    # Only get direct ingredients without recursion
+    for ingredient, amount in recipe["ingredients"].items():
+        total_amount = amount * crafts_needed
+        direct_materials[ingredient] = direct_materials.get(ingredient, 0) + total_amount
+    
+    return direct_materials, None
+
 def get_recipe_info(item_name: str) -> Optional[Dict]:
     """
     Get recipe information for an item

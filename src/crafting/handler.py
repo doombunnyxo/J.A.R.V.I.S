@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from dune_crafting import calculate_materials, get_recipe_info, list_craftable_items, format_materials_list, format_materials_tree, get_items_by_category, get_categories
+from dune_crafting import calculate_materials, calculate_direct_materials, get_recipe_info, list_craftable_items, format_materials_list, format_materials_tree, get_items_by_category, get_categories
 from ..config import config
 from ..search.claude import AnthropicAPI
 
@@ -338,8 +338,8 @@ Match this request to an exact database key:"""
                 await self._handle_recipe_not_found(message, item_name, craft_query)
                 return
             
-            # Calculate materials needed
-            materials, error = calculate_materials(item_name, quantity)
+            # Calculate direct materials needed (upper-level only)
+            materials, error = calculate_direct_materials(item_name, quantity)
             if error:
                 await message.channel.send(f"❌ {error}")
                 return
@@ -396,7 +396,7 @@ Match this request to an exact database key:"""
         for part_key in parts_needed:
             recipe = get_recipe_info(part_key)
             if recipe:
-                materials, _ = calculate_materials(part_key, quantity)
+                materials, _ = calculate_direct_materials(part_key, quantity)
                 if materials:
                     for mat, qty in materials.items():
                         total_materials[mat] = total_materials.get(mat, 0) + qty
@@ -415,13 +415,42 @@ Match this request to an exact database key:"""
             part_name = part_key.replace('_', ' ').title()
             response += f"- {part_name} (Station: {recipe.get('station', 'Unknown')})\n"
         
-        response += f"\n**📦 Total Raw Materials:**\n"
+        response += f"\n**📦 Direct Materials Required:**\n"
         response += format_materials_list(total_materials)
         
-        if quantity > 1:
-            response += f"\n💡 Building {quantity} complete vehicles requires {len(part_details)} different crafting operations per vehicle."
+        # Send detailed breakdown for each part, splitting between complete parts
+        messages_to_send = []
         
-        await message.channel.send(response)
+        # Start with the summary in the first message
+        current_message = response
+        current_message += f"\n**🔧 Detailed Crafting Tree:**\n"
+        
+        for part_key, recipe in part_details:
+            part_display = part_key.replace('_', ' ').title()
+            
+            # Build the complete part tree
+            part_content = f"\n**{part_display}:**\n"
+            part_content += format_materials_tree(part_key, 1)
+            
+            # Check if adding this part would exceed message limit
+            if len(current_message + part_content) > 3900:  # Small buffer for Discord's 4000 char limit
+                # Send current message and start a new one
+                messages_to_send.append(current_message)
+                current_message = f"**🔧 Detailed Crafting Tree (continued):**\n" + part_content
+            else:
+                # Add to current message
+                current_message += part_content
+        
+        # Add final notes to the last message
+        if quantity > 1:
+            current_message += f"\n💡 Building {quantity} complete vehicles requires {len(part_details)} different crafting operations per vehicle."
+        
+        # Add the final message
+        messages_to_send.append(current_message)
+        
+        # Send all messages
+        for message_content in messages_to_send:
+            await message.channel.send(message_content)
     
     async def _handle_flexible_vehicle_parts(self, message, parts_data: str, quantity: int, original_query: str):
         """Handle flexible vehicle parts assembly requests"""
@@ -472,7 +501,7 @@ Match this request to an exact database key:"""
                 return
             
             # Calculate materials for all parts
-            from dune_crafting import calculate_materials, get_recipe_info, format_materials_list
+            from dune_crafting import calculate_direct_materials, get_recipe_info, format_materials_list
             
             # Define part quantity display (for UI purposes - recipes already account for actual quantities)
             part_display_quantities = {
@@ -501,7 +530,7 @@ Match this request to an exact database key:"""
                             break
                     
                     # Calculate materials (recipes already account for multiple parts)
-                    part_materials, error = calculate_materials(part_key, quantity)
+                    part_materials, error = calculate_direct_materials(part_key, quantity)
                     
                     if isinstance(part_materials, dict):
                         for material, amount in part_materials.items():
@@ -536,29 +565,46 @@ Match this request to an exact database key:"""
                 else:
                     response += f"- {part_display} (Station: {station})\n"
             
-            response += f"\n**📦 Raw Materials Summary:**\n"
+            response += f"\n**📦 Direct Materials Required:**\n"
             response += format_materials_list(total_materials)
             
-            # Add detailed breakdown for each part
-            response += f"\n**🔧 Detailed Crafting Tree:**\n"
-            for part_key, recipe, part_multiplier in part_details[:3]:  # Show first 3 parts to avoid too much text
+            # Send detailed breakdown for each part, splitting between complete parts
+            messages_to_send = []
+            
+            # Start with the summary in the first message
+            current_message = response
+            current_message += f"\n**🔧 Detailed Crafting Tree:**\n"
+            
+            for i, (part_key, recipe, part_multiplier) in enumerate(part_details):
                 part_display = part_key.replace(f"{vehicle_type}_", "").replace("_", " ").title()
+                
+                # Build the complete part tree
                 if part_multiplier > 1:
-                    response += f"\n**{part_display} (x{part_multiplier}):**\n"
-                    response += format_materials_tree(part_key, part_multiplier)
+                    part_content = f"\n**{part_display} (x{part_multiplier}):**\n"
                 else:
-                    response += f"\n**{part_display}:**\n"
-                    response += format_materials_tree(part_key, 1)
+                    part_content = f"\n**{part_display}:**\n"
+                part_content += format_materials_tree(part_key, 1 if part_multiplier == 1 else part_multiplier)
+                
+                # Check if adding this part would exceed message limit
+                if len(current_message + part_content) > 3900:  # Small buffer for Discord's 4000 char limit
+                    # Send current message and start a new one
+                    messages_to_send.append(current_message)
+                    current_message = f"**🔧 Detailed Crafting Tree (continued):**\n" + part_content
+                else:
+                    # Add to current message
+                    current_message += part_content
             
-            if len(part_details) > 3:
-                response += f"\n... and {len(part_details) - 3} more parts"
-            
+            # Add final notes to the last message
             if quantity > 1:
-                response += f"\n💡 **Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
+                current_message += f"\n💡 **Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
+            current_message += f"\n✨ **Flexibility:** You can mix and match any tier parts within the same vehicle type!"
             
-            response += f"\n✨ **Flexibility:** You can mix and match any tier parts within the same vehicle type!"
+            # Add the final message
+            messages_to_send.append(current_message)
             
-            await message.channel.send(response)
+            # Send all messages
+            for message_content in messages_to_send:
+                await message.channel.send(message_content)
             
         except Exception as e:
             print(f"DEBUG: Flexible vehicle parts error: {e}")
@@ -652,7 +698,7 @@ Determine the exact parts needed and return as pipe-separated list:"""
                 if part_key in available_items:
                     recipe = get_recipe_info(part_key)
                     if recipe:
-                        materials, _ = calculate_materials(part_key, quantity)
+                        materials, _ = calculate_direct_materials(part_key, quantity)
                         if materials:
                             for mat, qty in materials.items():
                                 total_materials[mat] = total_materials.get(mat, 0) + qty
@@ -687,16 +733,44 @@ Determine the exact parts needed and return as pipe-separated list:"""
                 station = recipe.get('station', 'Unknown')
                 response += f"- {part_name} (Station: {station})\\n"
             
-            response += f"\\n**Total Raw Materials:**\\n"
+            response += f"\\n**📦 Direct Materials Required:**\\n"
             response += format_materials_list(total_materials)
             
+            # Send detailed breakdown for each part, splitting between complete parts
+            messages_to_send = []
+            
+            # Start with the summary in the first message
+            current_message = response
+            current_message += f"\\n**🔧 Detailed Crafting Tree:**\\n"
+            
+            for part_key, recipe in part_details:
+                part_display = part_key.replace('_', ' ').title()
+                
+                # Build the complete part tree
+                part_content = f"\\n**{part_display}:**\\n"
+                part_content += format_materials_tree(part_key, 1)
+                
+                # Check if adding this part would exceed message limit
+                if len(current_message + part_content) > 3900:  # Small buffer for Discord's 4000 char limit
+                    # Send current message and start a new one
+                    messages_to_send.append(current_message)
+                    current_message = f"**🔧 Detailed Crafting Tree (continued):**\\n" + part_content
+                else:
+                    # Add to current message
+                    current_message += part_content
+            
+            # Add final notes to the last message
             if missing_parts:
-                response += f"\\n**Note:** Some parts not found in database: {', '.join(missing_parts)}"
-            
+                current_message += f"\\n**Note:** Some parts not found in database: {', '.join(missing_parts)}"
             if quantity > 1:
-                response += f"\\n**Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
+                current_message += f"\\n**Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
             
-            await message.channel.send(response)
+            # Add the final message
+            messages_to_send.append(current_message)
+            
+            # Send all messages
+            for message_content in messages_to_send:
+                await message.channel.send(message_content)
             
         except Exception as e:
             print(f"DEBUG: LLM vehicle assembly error: {e}")
@@ -744,7 +818,7 @@ Determine the exact parts needed and return as pipe-separated list:"""
             for part_key in all_parts:
                 recipe = get_recipe_info(part_key)
                 if recipe:
-                    materials, _ = calculate_materials(part_key, quantity)
+                    materials, _ = calculate_direct_materials(part_key, quantity)
                     if materials:
                         for mat, qty in materials.items():
                             total_materials[mat] = total_materials.get(mat, 0) + qty
@@ -786,16 +860,44 @@ Determine the exact parts needed and return as pipe-separated list:"""
                         part_name = part_key.replace('_', ' ').title()
                         response += f"- {part_name}\\n"
             
-            response += f"\\n**Total Raw Materials:**\\n"
+            response += f"\\n**📦 Direct Materials Required:**\\n"
             response += format_materials_list(total_materials)
             
+            # Send detailed breakdown for each part, splitting between complete parts
+            messages_to_send = []
+            
+            # Start with the summary in the first message
+            current_message = response
+            current_message += f"\\n**🔧 Detailed Crafting Tree:**\\n"
+            
+            for part_key, recipe, part_type in part_details:
+                part_display = part_key.replace('_', ' ').title()
+                
+                # Build the complete part tree
+                part_content = f"\\n**{part_display}:**\\n"
+                part_content += format_materials_tree(part_key, 1)
+                
+                # Check if adding this part would exceed message limit
+                if len(current_message + part_content) > 3900:  # Small buffer for Discord's 4000 char limit
+                    # Send current message and start a new one
+                    messages_to_send.append(current_message)
+                    current_message = f"**🔧 Detailed Crafting Tree (continued):**\\n" + part_content
+                else:
+                    # Add to current message
+                    current_message += part_content
+            
+            # Add final notes to the last message
             if missing_parts:
-                response += f"\\n**Missing recipes:** {', '.join(missing_parts)}"
-            
+                current_message += f"\\n**Missing recipes:** {', '.join(missing_parts)}"
             if quantity > 1:
-                response += f"\\n**Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
+                current_message += f"\\n**Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
             
-            await message.channel.send(response)
+            # Add the final message
+            messages_to_send.append(current_message)
+            
+            # Send all messages
+            for message_content in messages_to_send:
+                await message.channel.send(message_content)
             
         except Exception as e:
             print(f"DEBUG: Vehicle assembly with modules error: {e}")
@@ -1030,8 +1132,8 @@ Determine the exact parts needed and return as pipe-separated list:"""
             for ingredient, qty in recipe['ingredients'].items():
                 response += f"- {ingredient.replace('_', ' ').title()}: {qty * quantity:,}\n"
         
-        response += f"\n**📦 Crafting Tree:**\n"
-        response += format_materials_tree(item_name, quantity)
+        response += f"\n**📦 Direct Materials Required:**\n"
+        response += format_materials_list(materials)
         
         # Add description if available
         if 'description' in recipe:
