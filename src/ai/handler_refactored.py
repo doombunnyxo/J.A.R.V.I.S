@@ -565,10 +565,10 @@ Be concise and clear about what the action will do."""
         
         # Import admin modules
         from ..admin.parser import AdminIntentParser
-        from ..admin.actions import AdminActionExecutor
+        from ..admin.actions import AdminActionHandler
         
         parser = AdminIntentParser(self.bot)
-        executor = AdminActionExecutor(self.bot)
+        executor = AdminActionHandler(self.bot)
         
         # Parse admin intent from both query and response
         action_type, parameters = await parser.parse_admin_intent(query, message.guild, message.author)
@@ -694,7 +694,11 @@ Be concise and clear about what the action will do."""
         if str(reaction.emoji) == "✅":
             # Execute the admin action
             try:
-                result = await executor.execute_admin_action(intent, action_data['message'])
+                result = await executor.execute_admin_action(
+                    action_data['message'], 
+                    intent['action_type'], 
+                    intent['parameters']
+                )
                 await reaction.message.channel.send(f"✅ **Action completed:** {result}")
             except Exception as e:
                 await reaction.message.channel.send(f"❌ **Action failed:** {str(e)}")
