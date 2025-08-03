@@ -29,8 +29,8 @@ class CraftingProcessor:
             elif query_lower in ['tools', 'list tools']:
                 return await self._handle_crafting_category_list('tools')
             
-            # Use Claude to interpret the crafting request
-            result = await self._interpret_recipe_request(query)
+            # Use Claude to interpret the crafting request with context
+            result = await self._interpret_recipe_request(query, message)
             
             if isinstance(result, tuple) and len(result) == 2:
                 item_name, quantity = result
@@ -420,7 +420,7 @@ class CraftingProcessor:
         except Exception as e:
             return f"❌ **Error processing vehicle assembly:** {str(e)}\n\n**Original request:** {original_query}"
 
-    async def _interpret_recipe_request(self, user_query: str) -> Tuple[str, int]:
+    async def _interpret_recipe_request(self, user_query: str, message=None) -> Tuple[str, int]:
         """Use Claude Haiku to interpret natural language recipe requests and match to JSON structure"""
         try:
             from src.config import config
@@ -463,6 +463,8 @@ class CraftingProcessor:
             
             system_message = """You are a Dune Awakening crafting interpreter. Parse complex user requests and determine what they want to craft.
 
+CRITICAL RULE: When a user mentions a vehicle type followed by parts, ALL parts mentioned afterward belong to that vehicle unless explicitly stated otherwise.
+
 RESPONSE FORMATS:
 1. Single item: "exact_key|quantity"
 2. Vehicle assembly: "VEHICLE_ASSEMBLY|vehicle_type|tier|modules|quantity"
@@ -473,24 +475,27 @@ SPECIAL MODIFIERS (add to end of any format above):
 - If user mentions "full breakdown", "complete breakdown", "detailed breakdown", "raw materials", "all materials", "break down", "breakdown": add "|FULL_BREAKDOWN"
 - Both can be combined: "|BY_PARTS|FULL_BREAKDOWN"
 
-EXAMPLES WITH MODIFIERS:
-- "assault ornithopter mk6 by parts" -> "VEHICLE_ASSEMBLY|assault_ornithopter|mk6|none|1|BY_PARTS"
-- "assault ornithopter mk6 full breakdown" -> "VEHICLE_ASSEMBLY|assault_ornithopter|mk6|none|1|FULL_BREAKDOWN"  
-- "assault ornithopter mk6 by parts raw materials" -> "VEHICLE_ASSEMBLY|assault_ornithopter|mk6|none|1|BY_PARTS|FULL_BREAKDOWN"
-- "karpov 38 by parts" -> "karpov_38|1|BY_PARTS"
+CONTEXT AWARENESS:
+- If user says "assault ornithopter mk6 with engine mk6, wings mk5" - the engine and wings are ASSAULT ORNITHOPTER parts
+- If user says "sandbike mk3 with engine mk2" - the engine is a SANDBIKE engine
+- Always prefix parts with the vehicle type mentioned in the same request
 
-VEHICLE ASSEMBLY FORMAT:
-- For complete vehicles, return: "VEHICLE_PARTS|vehicle_type|parts_list|quantity"
-- Mix and match ANY tier parts within the same vehicle type
-- Users can upgrade specific parts while keeping others at lower tiers
+VEHICLE PARSING RULES:
+1. When a vehicle is mentioned, ALL subsequent parts in that request belong to that vehicle
+2. "assault ornithopter mk6 with engine mk6" means assault_ornithopter_engine_mk6, NOT generic engine_mk6
+3. Default tier for unspecified parts = the main vehicle tier mentioned
+4. Parse "wings" as "wing" (singular) for database matching
 
 VEHICLE EXAMPLES (FLEXIBLE MIXING):
 COMPLETE VEHICLES:
-- "sandbike mk5" -> "VEHICLE_PARTS|sandbike|engine_mk5,chassis_mk5,hull_mk5,psu_mk5,tread_mk5|1"
 - "assault ornithopter mk6" -> "VEHICLE_PARTS|assault_ornithopter|engine_mk6,chassis_mk6,cockpit_mk6,cabin_mk6,generator_mk6,tail_mk6,wing_mk6|1"
+- "assault ornithopter mk6 with engine mk6, wings mk5" -> "VEHICLE_PARTS|assault_ornithopter|engine_mk6,chassis_mk6,cockpit_mk6,cabin_mk6,generator_mk6,tail_mk6,wing_mk5|1"
+- "assault ornithopter mk6 with engine mk5 and wings mk5" -> "VEHICLE_PARTS|assault_ornithopter|engine_mk5,chassis_mk6,cockpit_mk6,cabin_mk6,generator_mk6,tail_mk6,wing_mk5|1"
 - "sandbike mk3 with mk2 engine, mk5 booster and mk1 treads" -> "VEHICLE_PARTS|sandbike|engine_mk2,chassis_mk3,hull_mk3,psu_mk3,tread_mk1,booster_mk5|1"
 
-INDIVIDUAL PARTS:
+INDIVIDUAL PARTS (must include vehicle prefix):
+- "engine mk6" (after mentioning assault ornithopter) -> "assault_ornithopter_engine_mk6|1"
+- "wings mk5" (after mentioning assault ornithopter) -> "assault_ornithopter_wing_mk5|1"
 - "assault ornithopter thruster mk6" -> "assault_ornithopter_thruster_mk6|1"
 - "sandbike engine mk3" -> "sandbike_engine_mk3|1"
 
@@ -501,7 +506,7 @@ Return ONLY the specified format with NO explanations."""
 Available items (sample):
 {sample_text}
 
-Match this request to an exact database key:"""
+Match this request to an exact database key. Remember: if a vehicle type was mentioned, all parts in the request belong to that vehicle."""
             
             response = await claude.create_message(
                 system_message=system_message,

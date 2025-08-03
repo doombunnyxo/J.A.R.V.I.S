@@ -77,9 +77,8 @@ class AIHandler:
         self.processed_messages: Set[int] = set()
         self.admin_actions: Dict[str, dict] = {}
         
-        # Cleanup tasks
-        asyncio.create_task(self._cleanup_processed_messages())
-        asyncio.create_task(self._cleanup_stale_admin_actions())
+        # Cleanup tasks will be started when bot is ready
+        self._cleanup_tasks_started = False
         
         # Instance ID for debugging
         self.instance_id = str(uuid.uuid4())[:8]
@@ -112,6 +111,17 @@ class AIHandler:
             for action_id in stale_actions:
                 del self.admin_actions[action_id]
     
+    def _start_cleanup_tasks(self):
+        """Start cleanup tasks if not already started"""
+        if not self._cleanup_tasks_started:
+            try:
+                asyncio.create_task(self._cleanup_processed_messages())
+                asyncio.create_task(self._cleanup_stale_admin_actions())
+                self._cleanup_tasks_started = True
+            except RuntimeError:
+                # Event loop not running yet, will be started later
+                pass
+    
     async def handle_ai_command(self, message, ai_query: str, force_provider: str = None):
         """
         Main entry point for AI command processing
@@ -128,7 +138,9 @@ class AIHandler:
                 return
             
             self.processed_messages.add(message.id)
-            self._cleanup_processed_messages()
+            
+            # Start cleanup tasks if not already started
+            self._start_cleanup_tasks()
             
             # Check rate limit
             if not self.rate_limiter.is_allowed(message.author.id):
@@ -221,8 +233,17 @@ class AIHandler:
             )
             
             # Get response from Claude
+            if context:
+                system_message = f"""You are a helpful AI assistant. Here is relevant context about the user and previous conversations:
+
+{context}
+
+IMPORTANT: The above is BACKGROUND CONTEXT from previous messages, not part of the current question. Use it to understand the user better and provide personalized responses, but focus on answering their current question below."""
+            else:
+                system_message = "You are a helpful AI assistant."
+            
             response = await claude.create_message(
-                system_message=f"Context: {context}" if context else None,
+                system_message=system_message,
                 user_message=query,
                 max_tokens=1000
             )
@@ -352,17 +373,22 @@ Be concise and clear about what the action will do."""
             return False
         
         # Import admin modules
-        from ..admin.parser import AdminActionParser
+        from ..admin.parser import AdminIntentParser
         from ..admin.actions import AdminActionExecutor
         
-        parser = AdminActionParser()
+        parser = AdminIntentParser(self.bot)
         executor = AdminActionExecutor(self.bot)
         
         # Parse admin intent from both query and response
-        admin_intent = parser.parse_admin_intent(query, response)
+        action_type, parameters = await parser.parse_admin_intent(query, message.guild, message.author)
         
-        if not admin_intent:
+        if not action_type:
             return False
+        
+        admin_intent = {
+            "action_type": action_type,
+            "parameters": parameters
+        }
         
         print(f"DEBUG: Admin intent detected: {admin_intent}")
         

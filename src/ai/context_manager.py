@@ -66,8 +66,8 @@ class ContextManager:
                 return f"User: {user_name}" if user_name else ""
             
             context_parts = [f"User: {user_name}"] if user_name else []
-            context_parts.append("Recent conversation:\\n" + "\\n".join([
-                f"{msg['role']}: {msg['content'][:200]}..." 
+            context_parts.append("Previous messages (context only):\\n" + "\\n".join([
+                f"[Previous] {msg['role']}: {msg['content'][:200]}..." 
                 for msg in conversation_context[-4:]
             ]))
             return "\\n\\n".join(context_parts)
@@ -80,8 +80,8 @@ class ContextManager:
             if user_name:
                 context_parts.append(f"USER: {user_name}")
             
-            context_parts.append("RECENT CONVERSATION:\\n" + "\\n".join([
-                f"{msg['role']}: {msg['content']}" 
+            context_parts.append("PREVIOUS MESSAGES (NOT part of current request):\\n" + "\\n".join([
+                f"[Previous] {msg['role']}: {msg['content']}" 
                 for msg in conversation_context[-6:]
             ]))
             
@@ -90,19 +90,19 @@ class ContextManager:
             filter_messages = [
                 {
                     "role": "system",
-                    "content": """You are a context filter. Extract information relevant to the user's current query.
+                    "content": """You are a context filter. Extract information from PREVIOUS conversations that is relevant to the user's current query.
 
 INSTRUCTIONS:
 1. ALWAYS include the user's name/identity
-2. Review recent conversation history  
-3. Include conversation context relevant to the current query
-4. Summarize and organize information concisely
+2. The conversation history shown is from PREVIOUS messages, not the current query
+3. Extract only context from past messages that helps answer the CURRENT query
+4. Format extracted context to clearly show it's from previous messages
 5. Keep response under 300 tokens
-6. Focus on recent conversation that would help answer the query
+6. If previous messages aren't relevant to current query, just return the user's name
 
 Note: Permanent user context will be added separately.
 
-Return only the filtered conversation context - no explanations."""
+Return only the filtered previous conversation context - no explanations."""
                 },
                 {
                     "role": "user", 
@@ -235,7 +235,7 @@ Return only relevant permanent context items, one per line, in the exact same fo
                     else:
                         resolved_unfiltered.append(item)
                 
-                context_parts.append("Always apply settings:\\n" + "\\n".join([
+                context_parts.append("User preferences (always apply):\\n" + "\\n".join([
                     f"- {item}" for item in resolved_unfiltered
                 ]))
         
@@ -248,7 +248,7 @@ Return only relevant permanent context items, one per line, in the exact same fo
                 )
                 
                 if relevant_permanent:
-                    context_parts.append("Relevant context:\\n" + "\\n".join([
+                    context_parts.append("Stored information about user:\\n" + "\\n".join([
                         f"- {item}" for item in relevant_permanent
                     ]))
         
