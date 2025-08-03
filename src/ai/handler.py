@@ -649,6 +649,14 @@ Return only the relevant permanent context items, one per line, in the exact sam
             use_claude = False
             
             if force_provider:
+                # Handle crafting requests specially
+                if force_provider == "crafting":
+                    print(f"DEBUG: [AIHandler-{self.instance_id}] Routing to crafting system")
+                    # Import here to avoid circular imports
+                    from ..crafting.handler import CraftingHandler
+                    crafting_handler = CraftingHandler(self.bot)
+                    await crafting_handler.handle_craft_command(message, ai_query)
+                    return
                 # Force specific provider
                 use_claude = (force_provider == "claude" or force_provider == "perplexity")  # Support both names for compatibility
                 print(f"DEBUG: [AIHandler-{self.instance_id}] Forced to use {'claude' if use_claude else 'groq'}")
