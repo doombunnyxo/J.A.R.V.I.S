@@ -3,7 +3,7 @@
     "version": "6.3",
     "source": "Game8.co comprehensive database + Fextralife wiki for complete vehicle systems + Game8 tools database",
     "last_updated": "2025-01-03",
-    "total_recipes": 232,
+    "total_recipes": 240,
     "weapon_tiers": ["Salvage", "Copper", "Iron", "Steel", "Aluminum", "Duraluminum", "Plastanium"],
     "weapon_series": ["Karpov 38", "Maula Pistol", "Disruptor M11", "Sword", "Rapier", "JABAL Spitdart", "Drillshot FK7", "GRDA 44", "Dirk", "Kindjal"],
     "weapon_types": {
@@ -1389,6 +1389,14 @@
       "intel_requirement": {"points": 45, "total_spent": 700},
       "category": "vehicle_component"
     },
+    "assault_ornithopter_tail_mk6": {
+      "ingredients": {"water": 1050, "spice_melange": 55, "cobalt_paste": 45, "diamondine_dust": 15, "plastanium_ingot": 85, "plasteel_composite_armor_plating": 30, "advanced_servoks": 30},
+      "quantity": 1,
+      "station": "Advanced Vehicles Fabricator",
+      "description": "Tail for assault ornithopter mk6",
+      "intel_requirement": {"points": 60, "total_spent": 1200},
+      "category": "vehicle_component"
+    },
     "assault_ornithopter_wing_mk5": {
       "ingredients": {"water": 135, "duraluminum_ingot": 8, "advanced_servoks": 5, "cobalt_paste": 4, "industrial_pump": 2},
       "quantity": 6,
@@ -1812,16 +1820,18 @@
       "category": "material"
     },
     "silicone_block": {
-      "ingredients": {"silicate_ore": 1, "water": 3},
+      "ingredients": {"flour_sand": 3, "water": 50},
       "quantity": 1,
-      "station": "Chemical Refinery",
-      "category": "material"
+      "station": "Small Chemical Refinery",
+      "category": "component",
+      "description": "A block of plastic refined from Flour Sand in a Chemical Refinery"
     },
     "cobalt_paste": {
-      "ingredients": {"cobalt_ore": 1, "water": 7},
+      "ingredients": {"erythrite_crystal": 3, "water": 75},
       "quantity": 1,
-      "station": "Chemical Refinery",
-      "category": "material"
+      "station": "Small Chemical Refinery",
+      "category": "component",
+      "description": "A dissolution of Cobalt, refined from Erythrite Crystal from the Hagga Rift at a Chemical Refinery"
     },
     "steel_ingot": {
       "ingredients": {"iron_ore": 1, "carbon_ore": 1, "water": 8},
@@ -1923,30 +1933,24 @@
       "category": "component"
     },
     "particle_capacitor": {
-      "ingredients": {"aluminum_ingot": 3, "silicone_block": 4, "mechanical_parts": 2},
-      "quantity": 1,
-      "station": "Component Fabricator",
-      "description": "Energy storage component for vehicle systems",
-      "category": "component"
+      "description": "Energy storage component for vehicle systems (base material - can only be found/looted)",
+      "category": "raw_material"
     },
     "complex_machinery": {
-      "ingredients": {"duraluminum_ingot": 5, "mechanical_parts": 8, "silicone_block": 6, "gun_parts": 3},
-      "quantity": 1,
-      "station": "Advanced Fabricator",
-      "description": "Sophisticated mechanical components for advanced vehicles",
-      "category": "component"
+      "description": "Sophisticated mechanical components for advanced vehicles (base material - can only be found/looted)",
+      "category": "raw_material"
     },
     "advanced_machinery": {
-      "ingredients": {"plastanium_ingot": 8, "complex_machinery": 3, "particle_capacitor": 4, "carbide_scraps": 2},
+      "ingredients": {"complex_machinery": 3, "plasteel_plate": 2, "cobalt_paste": 1, "water": 50},
       "quantity": 1,
-      "station": "Advanced Fabricator",
-      "description": "Elite mechanical components for ultimate vehicles",
+      "station": "Advanced Survival Fabricator",
+      "description": "An Infrastructure crafting component used in plastanium tier crafting",
       "category": "component"
     },
     "tri_forged_hydraulic_piston": {
-      "ingredients": {"duraluminum_ingot": 4, "mechanical_parts": 6, "silicone_block": 3, "heavy_caliber_compressor": 1},
+      "ingredients": {"hydraulic_piston": 3, "plasteel_plate": 2, "duraluminum_ingot": 1, "water": 50},
       "quantity": 1,
-      "station": "Advanced Fabricator",
+      "station": "Advanced Survival Fabricator",
       "description": "High-pressure hydraulic component for heavy vehicles",
       "category": "component"
     },
@@ -1957,9 +1961,41 @@
       "category": "component"
     },
     "spice_infused_plastanium_dust": {
-      "ingredients": {"plastanium_ingot": 1, "spice_melange": 3},
+      "description": "Found only, cannot be crafted. A fabrication component used in unique items. Truly Unique items often rely on spice-infused metal to enhance their qualities.",
+      "category": "raw_material"
+    },
+    "hydraulic_piston": {
+      "description": "Found only, cannot be crafted. A component used to craft vehicle engines. The Great Houses have a stranglehold on this type of component on Arrakis.",
+      "category": "raw_material"
+    },
+    "advanced_servoks": {
+      "description": "Found only, cannot be crafted. A fabrication component used in vehicles such as Sandbikes. Found in Old Imperial remnants, such as Imperial Testing Stations.",
+      "category": "raw_material"
+    },
+    "plasteel_plate": {
+      "description": "Found only, cannot be crafted. A crafting component found in the Deep Desert.",
+      "category": "raw_material"
+    },
+    "carbide_scraps": {
+      "description": "Found only, cannot be crafted. This industrial byproduct is closely guarded by the Maas Kharet in their most sacred site.",
+      "category": "raw_material"
+    },
+    "diamondine_dust": {
+      "description": "Found only, cannot be crafted. This industrial byproduct is closely guarded by the Maas Kharet in their most sacred site.",
+      "category": "raw_material"
+    },
+    "plasteel_composite_armor_plating": {
+      "ingredients": {"armor_plating": 3, "plasteel_plate": 2, "spice_melange": 1, "water": 50},
       "quantity": 1,
-      "station": "Spice Refinery",
+      "station": "Advanced Survival Fabricator",
+      "description": "An Armor crafting component used in plastanium tier crafting",
+      "category": "component"
+    },
+    "armor_plating": {
+      "ingredients": {"iron_ingot": 9, "plasteel_microflora_fiber": 3, "plant_fiber": 3, "spice_infused_iron_dust": 3},
+      "quantity": 1,
+      "station": "Fabricator",
+      "description": "Strengthened plating can be liberated from those who make use of them in their heavy armor, and repurposed to other ends",
       "category": "component"
     }
   }

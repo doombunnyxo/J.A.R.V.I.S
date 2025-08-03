@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from dune_crafting import calculate_materials, get_recipe_info, list_craftable_items, format_materials_list, get_items_by_category, get_categories
+from dune_crafting import calculate_materials, get_recipe_info, list_craftable_items, format_materials_list, format_materials_tree, get_items_by_category, get_categories
 from ..config import config
 from ..search.claude import AnthropicAPI
 
@@ -247,7 +247,7 @@ Match this request to an exact database key:"""
             
             # Check if this is a vehicle assembly request
             if item_name.startswith('VEHICLE_ASSEMBLY|'):
-                await self._handle_vehicle_assembly_with_modules(message, item_name, quantity)
+                await self._handle_vehicle_assembly_with_llm(message, item_name, quantity, craft_query)
                 return
             elif await self._is_vehicle_assembly_request(craft_query, item_name):
                 await self._handle_vehicle_assembly(message, craft_query, item_name, quantity)
@@ -343,6 +343,144 @@ Match this request to an exact database key:"""
             response += f"\n💡 Building {quantity} complete vehicles requires {len(part_details)} different crafting operations per vehicle."
         
         await message.channel.send(response)
+    
+    async def _handle_vehicle_assembly_with_llm(self, message, assembly_data: str, quantity: int, original_query: str):
+        """Use LLM to determine exact parts needed from JSON database"""
+        try:
+            # Parse the assembly intent
+            parts = assembly_data.split('|')
+            if len(parts) < 4:
+                await message.channel.send("Error: Invalid vehicle assembly format")
+                return
+            
+            vehicle_type = parts[1]
+            tier = parts[2] 
+            modules_str = parts[3]
+            
+            print(f"DEBUG: LLM vehicle assembly - {vehicle_type} {tier} with modules: {modules_str}")
+            
+            # Get all available items for the LLM to choose from
+            available_items = list_craftable_items()
+            
+            # Filter items relevant to this vehicle type and tier
+            relevant_items = [item for item in available_items 
+                            if vehicle_type.replace('_', ' ') in item.replace('_', ' ') 
+                            and tier in item]
+            
+            # Create a focused list for the LLM
+            items_text = "\\n".join([f"- {item}" for item in relevant_items])
+            
+            if not config.has_anthropic_api():
+                await message.channel.send("Claude API not available for vehicle assembly analysis")
+                return
+            
+            # Create Claude client
+            claude = AnthropicAPI(config.ANTHROPIC_API_KEY)
+            
+            system_message = """You are a Dune Awakening vehicle assembly expert. Given a user's vehicle request and available parts from our database, determine exactly which parts are needed.
+
+TASK: Return a pipe-separated list of exact database keys for the parts needed.
+
+RULES:
+1. Use ONLY the exact keys from the provided available items list
+2. Include all required parts for the vehicle to function
+3. Add optional parts based on user's module specifications
+4. Return format: "part1|part2|part3|..."
+5. If modules are "none", include only required parts
+6. If modules are "all_optional", include all available optional parts
+7. For specific modules, include only those requested
+
+VEHICLE KNOWLEDGE:
+- Sandbikes need: engine, chassis, hull, psu, tread (x3 quantity)
+- Ornithopters need: engine, chassis, cockpit/cabin, generator, wing(s), tail (assault/carrier)
+- Buggies need: engine, chassis, psu, tread (x4), rear system
+- Sandcrawlers need: engine, chassis, cabin, tread (x2), vacuum, centrifuge, psu
+
+Return ONLY the pipe-separated list of exact database keys."""
+            
+            user_message = f"""User request: "{original_query}"
+Vehicle type: {vehicle_type}
+Tier: {tier}
+Modules: {modules_str}
+
+Available parts for this vehicle:
+{items_text}
+
+Determine the exact parts needed and return as pipe-separated list:"""
+            
+            response = await claude.create_message(
+                system_message=system_message,
+                user_message=user_message,
+                max_tokens=200
+            )
+            
+            # Parse the LLM response to get part list
+            parts_list = [part.strip() for part in response.strip().split('|') if part.strip()]
+            
+            print(f"DEBUG: LLM determined parts: {parts_list}")
+            
+            if not parts_list:
+                await message.channel.send("Error: Could not determine parts for vehicle assembly")
+                return
+            
+            # Calculate materials for all parts
+            total_materials = {}
+            part_details = []
+            missing_parts = []
+            
+            for part_key in parts_list:
+                if part_key in available_items:
+                    recipe = get_recipe_info(part_key)
+                    if recipe:
+                        materials, _ = calculate_materials(part_key, quantity)
+                        if materials:
+                            for mat, qty in materials.items():
+                                total_materials[mat] = total_materials.get(mat, 0) + qty
+                            part_details.append((part_key, recipe))
+                    else:
+                        missing_parts.append(part_key)
+                else:
+                    print(f"DEBUG: LLM suggested non-existent part: {part_key}")
+                    missing_parts.append(part_key)
+            
+            if not total_materials:
+                await message.channel.send(f"Error: Could not calculate materials for {vehicle_type} {tier}")
+                return
+            
+            # Format response
+            response = f"**{vehicle_type.replace('_', ' ').title()} {tier.upper()} Assembly**\\n\\n"
+            if quantity > 1:
+                response += f"**Quantity:** {quantity}\\n\\n"
+            
+            # Show configuration
+            if modules_str.lower() == 'none':
+                response += "**Configuration:** Base vehicle (no optional modules)\\n\\n"
+            elif modules_str.lower() == 'all_optional':
+                response += "**Configuration:** Complete vehicle (all optional modules)\\n\\n"
+            else:
+                response += f"**Configuration:** With modules: {modules_str}\\n\\n"
+            
+            # List all parts
+            response += f"**Parts Required ({len(part_details)}):**\\n"
+            for part_key, recipe in part_details:
+                part_name = part_key.replace('_', ' ').title()
+                station = recipe.get('station', 'Unknown')
+                response += f"- {part_name} (Station: {station})\\n"
+            
+            response += f"\\n**Total Raw Materials:**\\n"
+            response += format_materials_list(total_materials)
+            
+            if missing_parts:
+                response += f"\\n**Note:** Some parts not found in database: {', '.join(missing_parts)}"
+            
+            if quantity > 1:
+                response += f"\\n**Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
+            
+            await message.channel.send(response)
+            
+        except Exception as e:
+            print(f"DEBUG: LLM vehicle assembly error: {e}")
+            await message.channel.send(f"Error processing vehicle assembly: {str(e)}")
     
     async def _handle_vehicle_assembly_with_modules(self, message, assembly_data: str, quantity: int):
         """Handle vehicle assembly requests with specific module requirements from Claude"""
@@ -672,8 +810,8 @@ Match this request to an exact database key:"""
             for ingredient, qty in recipe['ingredients'].items():
                 response += f"- {ingredient.replace('_', ' ').title()}: {qty * quantity:,}\n"
         
-        response += f"\n**📦 Total Raw Materials:**\n"
-        response += format_materials_list(materials)
+        response += f"\n**📦 Crafting Tree:**\n"
+        response += format_materials_tree(item_name, quantity)
         
         # Add description if available
         if 'description' in recipe:

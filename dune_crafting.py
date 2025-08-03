@@ -54,6 +54,11 @@ def calculate_materials(item_name: str, quantity_needed: int = 1) -> Tuple[Optio
     item_name = item_name.lower()
     recipe = recipes[item_name]
     
+    # Check if this is a raw material (no ingredients field)
+    if "ingredients" not in recipe:
+        # This is a raw material, return it as-is
+        return {item_name: quantity_needed}, None
+    
     # Calculate how many crafting operations we need
     crafts_needed = (quantity_needed + recipe["quantity"] - 1) // recipe["quantity"]
     
@@ -62,13 +67,19 @@ def calculate_materials(item_name: str, quantity_needed: int = 1) -> Tuple[Optio
     def add_materials(ingredients: Dict, multiplier: int):
         for ingredient, amount in ingredients.items():
             if ingredient.lower() in recipes:
-                # This ingredient is also craftable, recurse
-                sub_materials, _ = calculate_materials(ingredient, amount * multiplier)
-                if sub_materials:
-                    for mat, qty in sub_materials.items():
-                        total_materials[mat] = total_materials.get(mat, 0) + qty
+                ingredient_recipe = recipes[ingredient.lower()]
+                # Check if the ingredient is a raw material
+                if "ingredients" not in ingredient_recipe:
+                    # Raw material
+                    total_materials[ingredient] = total_materials.get(ingredient, 0) + (amount * multiplier)
+                else:
+                    # This ingredient is also craftable, recurse
+                    sub_materials, _ = calculate_materials(ingredient, amount * multiplier)
+                    if sub_materials:
+                        for mat, qty in sub_materials.items():
+                            total_materials[mat] = total_materials.get(mat, 0) + qty
             else:
-                # Raw material
+                # Raw material not in recipes database
                 total_materials[ingredient] = total_materials.get(ingredient, 0) + (amount * multiplier)
     
     add_materials(recipe["ingredients"], crafts_needed)
@@ -148,6 +159,49 @@ def format_materials_list(materials: Dict) -> str:
         formatted.append(f"- {material.replace('_', ' ').title()}: {quantity:,}")
     
     return "\n".join(formatted)
+
+def format_materials_tree(item_name: str, quantity: int = 1, indent: int = 0) -> str:
+    """
+    Format materials in a tree-like structure showing crafting dependencies
+    
+    Args:
+        item_name: Name of the item to craft
+        quantity: How many of the item to craft
+        indent: Current indentation level
+        
+    Returns:
+        Tree-formatted string representation
+    """
+    recipes = get_recipes()
+    
+    if item_name.lower() not in recipes:
+        return f"{'  ' * indent}- {item_name.replace('_', ' ').title()}: {quantity:,} (base resource)"
+    
+    item_name = item_name.lower()
+    recipe = recipes[item_name]
+    
+    # Format the current item
+    result = f"{'  ' * indent}- {item_name.replace('_', ' ').title()}: {quantity:,}"
+    
+    # Check if this is a raw material (no ingredients field)
+    if "ingredients" not in recipe:
+        result += " (raw material)"
+        return result
+    
+    # Add station info
+    if "station" in recipe:
+        result += f" [{recipe['station']}]"
+    
+    # Calculate how many crafting operations we need
+    crafts_needed = (quantity + recipe["quantity"] - 1) // recipe["quantity"]
+    
+    # Add each ingredient as a child
+    for ingredient, amount in recipe["ingredients"].items():
+        total_amount = amount * crafts_needed
+        child_tree = format_materials_tree(ingredient, total_amount, indent + 1)
+        result += "\n" + child_tree
+    
+    return result
 
 def get_recipe_count() -> int:
     """

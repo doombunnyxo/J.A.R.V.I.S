@@ -351,7 +351,7 @@ class AIHandler:
                 item_name, quantity = result
                 
                 # Import crafting functions
-                from dune_crafting import calculate_materials, get_recipe_info, format_materials_list, list_craftable_items
+                from dune_crafting import calculate_materials, get_recipe_info, format_materials_list, format_materials_tree, list_craftable_items
                 
                 try:
                     # Get the recipe information
@@ -383,9 +383,9 @@ class AIHandler:
                     if recipe_info.get('ingredients'):
                         response += f"• **Ingredients:** {', '.join([f'{qty}x {item}' for item, qty in recipe_info['ingredients'].items()])}\n\n"
                     
-                    # Add total materials breakdown
-                    response += f"**Total Materials Needed:**\n"
-                    response += format_materials_list(total_materials)
+                    # Add crafting tree breakdown
+                    response += f"**Crafting Tree:**\n"
+                    response += format_materials_tree(item_name, quantity)
                     
                     if 'description' in recipe_info:
                         response += f"\n**Description:** {recipe_info['description']}"
