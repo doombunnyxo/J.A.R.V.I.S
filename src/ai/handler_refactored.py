@@ -388,8 +388,24 @@ class AIHandler:
                 from dune_crafting import calculate_materials, get_recipe_info, format_materials_list, format_materials_tree, list_craftable_items
                 
                 try:
+                    # Check if this is a flexible vehicle parts request
+                    if item_name.startswith('VEHICLE_PARTS|'):
+                        # Delegate to main crafting handler for flexible vehicle parts
+                        from ..crafting.handler import CraftingHandler
+                        crafting_handler = CraftingHandler(None)
+                        
+                        # Create a mock message object to pass to the handler
+                        class MockMessage:
+                            def __init__(self, original_message):
+                                self.channel = original_message.channel
+                                self.author = original_message.author
+                        
+                        mock_message = MockMessage(message)
+                        await crafting_handler._handle_flexible_vehicle_parts(mock_message, item_name, quantity, query)
+                        return ""  # Return empty string since the handler sends the message directly
+                    
                     # Check if this is a vehicle assembly request
-                    if item_name.startswith('VEHICLE_ASSEMBLY|'):
+                    elif item_name.startswith('VEHICLE_ASSEMBLY|'):
                         return await self._handle_vehicle_assembly_request(item_name, quantity, query)
                     
                     # Get the recipe information for individual items
