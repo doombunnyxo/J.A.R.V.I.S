@@ -190,11 +190,11 @@ Match this request to an exact database key:"""
                     parts = parts[:-1]
                 
                 # Check if this is a flexible vehicle parts request
-                if parts[0].strip() == 'VEHICLE_PARTS' and len(parts) >= 4:
+                if parts[0].strip() == 'VEHICLE_PARTS' and len(parts) >= 3:
                     vehicle_type = parts[1].strip()
                     parts_list = parts[2].strip()
                     try:
-                        quantity = int(parts[3].strip())
+                        quantity = int(parts[3].strip()) if len(parts) > 3 else 1
                     except (ValueError, IndexError):
                         quantity = 1
                     
