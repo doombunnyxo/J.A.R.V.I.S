@@ -400,24 +400,221 @@ The goal is to find authentic terminology and structure that can be adapted for 
             return f"Error researching {research_query}: {str(e)}"
     
     async def _execute_admin_with_research(self, message, original_query: str, research_context: str) -> str:
-        """Execute the admin command with research context - Claude plans, Groq executes"""
+        """Execute the admin command with research context - direct confirmation approach"""
         try:
-            print(f"DEBUG: Using Claude+Groq hybrid approach for research-enhanced admin action")
+            print(f"DEBUG: Using direct confirmation approach for research-enhanced admin action")
             
-            # Step 1: Use Claude to analyze research and generate specific admin commands
-            admin_commands = await self._claude_generate_admin_commands(message, original_query, research_context)
+            # Step 1: Use Claude to analyze research and create confirmation message
+            confirmation_info = await self._claude_analyze_research_for_confirmation(message, original_query, research_context)
             
-            if not admin_commands or admin_commands.startswith("❌"):
-                return admin_commands or "❌ Failed to generate admin commands from research"
+            if not confirmation_info or confirmation_info.get('error'):
+                return confirmation_info.get('error', "❌ Failed to analyze research for confirmation")
             
-            print(f"DEBUG: Claude generated admin commands: {admin_commands}")
+            print(f"DEBUG: Claude analyzed research, creating direct confirmation")
             
-            # Step 2: Use Groq to execute the specific admin commands
-            return await self._groq_execute_admin_command(message, admin_commands, research_context)
+            # Step 2: Send confirmation message directly to Discord (no LLM generation)
+            return await self._send_direct_admin_confirmation(message, original_query, confirmation_info, research_context)
             
         except Exception as e:
-            print(f"DEBUG: Hybrid admin execution failed: {e}")
-            return f"❌ Error with hybrid admin processing: {str(e)}"
+            print(f"DEBUG: Direct confirmation admin execution failed: {e}")
+            return f"❌ Error with direct confirmation admin processing: {str(e)}"
+    
+    async def _claude_analyze_research_for_confirmation(self, message, original_query: str, research_context: str) -> dict:
+        """Use Claude to analyze research and create confirmation info (not LLM-generated message)"""
+        try:
+            if not config.has_anthropic_api():
+                return {"error": "❌ Claude API not configured"}
+            
+            # Build context for Claude's analysis
+            user_context = await self.context_manager.build_full_context(
+                original_query, message.author.id, message.channel.id,
+                message.author.display_name, message
+            )
+            
+            import aiohttp
+            
+            headers = {
+                "x-api-key": config.ANTHROPIC_API_KEY,
+                "Content-Type": "application/json",
+                "anthropic-version": "2023-06-01"
+            }
+            
+            # System message for research analysis and confirmation planning
+            system_message = f"""You are Claude, analyzing research results to plan a Discord admin action confirmation.
+
+USER CONTEXT:
+{user_context}
+
+RESEARCH CONTEXT:
+{research_context}
+
+Your task is to analyze the research and provide structured information for a confirmation message.
+
+Based on the user's request and research context, provide:
+1. ACTION_TYPE: The type of admin action (e.g., "reorganize_roles")
+2. ACTION_DESCRIPTION: Brief description of what will happen
+3. RESEARCH_SUMMARY: Key findings from research (2-3 bullet points)
+4. THEME_NAME: The theme/context name for the action
+
+FORMAT your response as JSON:
+{{
+  "action_type": "reorganize_roles",
+  "action_description": "Reorganize all server roles based on Dune universe factions",
+  "research_summary": [
+    "House Atreides: Noble leadership house",
+    "House Harkonnen: Rival political house", 
+    "Fremen: Desert warriors and survivors"
+  ],
+  "theme_name": "Dune Universe Factions"
+}}
+
+Respond with ONLY the JSON, no other text."""
+            
+            payload = {
+                "model": "claude-3-5-haiku-20241022",
+                "max_tokens": 300,
+                "temperature": 0.1,
+                "messages": [
+                    {"role": "user", "content": f"User request: {original_query}\n\nAnalyze the research and create confirmation info."}
+                ]
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=15)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post("https://api.anthropic.com/v1/messages", 
+                                       headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        claude_response = result["content"][0]["text"].strip()
+                        
+                        # Parse JSON response
+                        import json
+                        try:
+                            confirmation_info = json.loads(claude_response)
+                            return confirmation_info
+                        except json.JSONDecodeError as e:
+                            return {"error": f"❌ Failed to parse Claude response as JSON: {str(e)}"}
+                    else:
+                        raise Exception(f"Claude API error {response.status}: {await response.text()}")
+                        
+        except Exception as e:
+            print(f"DEBUG: Claude research analysis failed: {e}")
+            return {"error": f"❌ Error analyzing research: {str(e)}"}
+    
+    async def _send_direct_admin_confirmation(self, message, original_query: str, confirmation_info: dict, research_context: str) -> str:
+        """Send admin confirmation directly to Discord and set up reaction handling"""
+        try:
+            # Generate unique action ID
+            import uuid
+            action_id = str(uuid.uuid4())[:8]
+            
+            # Build confirmation message (not LLM generated)
+            confirmation_text = f"🔧 **Admin Action: {confirmation_info['theme_name']}**\n\n"
+            confirmation_text += f"**Action**: {confirmation_info['action_description']}\n\n"
+            
+            if confirmation_info.get('research_summary'):
+                confirmation_text += "**Based on research findings**:\n"
+                for bullet in confirmation_info['research_summary']:
+                    confirmation_text += f"• {bullet}\n"
+                confirmation_text += "\n"
+            
+            confirmation_text += "React with ✅ to confirm or ❌ to cancel this action.\n"
+            confirmation_text += f"*Action ID: {action_id}*"
+            
+            # Store action data for when user reacts
+            self.admin_actions[action_id] = {
+                'intent': {
+                    'action_type': confirmation_info['action_type'],
+                    'parameters': {
+                        'context': confirmation_info['theme_name'],
+                        'guild': message.guild,
+                        'research_context': research_context
+                    }
+                },
+                'message': message,
+                'timestamp': time.time(),
+                'original_query': original_query,
+                'research_context': research_context
+            }
+            
+            # Send confirmation message directly
+            confirmation_msg = await message.channel.send(confirmation_text)
+            await confirmation_msg.add_reaction("✅")
+            await confirmation_msg.add_reaction("❌")
+            
+            return ""  # No additional response needed
+            
+        except Exception as e:
+            print(f"DEBUG: Direct confirmation sending failed: {e}")
+            return f"❌ Error sending confirmation: {str(e)}"
+    
+    async def _claude_generate_final_admin_commands(self, message, original_query: str, research_context: str) -> str:
+        """Use Claude to generate final admin commands after user confirms research-based action"""
+        try:
+            if not config.has_anthropic_api():
+                return "❌ Claude API not configured"
+            
+            # This method is called AFTER user clicks ✅, so we generate the detailed context for execution
+            user_context = await self.context_manager.build_full_context(
+                original_query, message.author.id, message.channel.id,
+                message.author.display_name, message
+            )
+            
+            import aiohttp
+            
+            headers = {
+                "x-api-key": config.ANTHROPIC_API_KEY,
+                "Content-Type": "application/json",
+                "anthropic-version": "2023-06-01"
+            }
+            
+            # System message for final command generation with research
+            system_message = f"""You are Claude, generating the final execution context for a confirmed Discord admin action.
+
+USER CONTEXT:
+{user_context}
+
+RESEARCH CONTEXT:
+{research_context}
+
+The user has CONFIRMED they want to proceed with this admin action. Your task is to provide the detailed context description that will be used for role reorganization.
+
+Based on the research context, create a comprehensive description that includes:
+1. The theme/universe name
+2. Key hierarchy levels and role names from the research
+3. Specific terminology that should be used
+
+This description will be passed to the role reorganization system to create authentic role names.
+
+FORMAT: Provide a detailed description in plain text that captures the essence of the research findings.
+
+EXAMPLE: "Dune universe factions with House Atreides as noble leadership, House Harkonnen as rival political power, Fremen as desert warriors, Spacing Guild as transport monopoly, Bene Gesserit as religious sisterhood, with appropriate hierarchy levels for each faction"
+
+Respond with ONLY the detailed description, no other text."""
+            
+            payload = {
+                "model": "claude-3-5-haiku-20241022",
+                "max_tokens": 200,
+                "temperature": 0.1,
+                "messages": [
+                    {"role": "user", "content": f"User confirmed request: {original_query}\n\nGenerate detailed context for role reorganization based on research."}
+                ]
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=15)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post("https://api.anthropic.com/v1/messages", 
+                                       headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        detailed_context = result["content"][0]["text"].strip()
+                        return detailed_context
+                    else:
+                        raise Exception(f"Claude API error {response.status}: {await response.text()}")
+                        
+        except Exception as e:
+            print(f"DEBUG: Claude final command generation failed: {e}")
+            return f"❌ Error generating final commands: {str(e)}"
     
     async def _claude_generate_admin_commands(self, message, original_query: str, research_context: str) -> str:
         """Use Claude to analyze research and generate specific admin commands for Groq"""
@@ -1050,18 +1247,51 @@ Be concise and clear about what the action will do."""
             return
         
         action_data = self.admin_actions[action_id]
-        executor = action_data['executor']
+        executor = action_data.get('executor')
         intent = action_data['intent']
         
         if str(reaction.emoji) == "✅":
             # Execute the admin action
             try:
-                result = await executor.execute_admin_action(
-                    action_data['message'], 
-                    intent['action_type'], 
-                    intent['parameters']
-                )
-                await reaction.message.channel.send(f"✅ **Action completed:** {result}")
+                # Check if this is a research-enhanced action that needs final command generation
+                if action_data.get('research_context') and action_data.get('original_query'):
+                    # Use Claude to generate final admin commands based on research
+                    final_commands = await self._claude_generate_final_admin_commands(
+                        action_data['message'], 
+                        action_data['original_query'], 
+                        action_data['research_context']
+                    )
+                    
+                    if final_commands and not final_commands.startswith("❌"):
+                        # Execute the commands directly through admin actions with enhanced context
+                        from ..admin.actions import AdminActionHandler
+                        executor = AdminActionHandler(self.bot)
+                        
+                        # Update parameters with the detailed context from Claude
+                        enhanced_parameters = intent['parameters'].copy()
+                        enhanced_parameters['context'] = final_commands
+                        enhanced_parameters['research_context'] = action_data['research_context']
+                        
+                        result = await executor.execute_admin_action(
+                            action_data['message'], 
+                            intent['action_type'], 
+                            enhanced_parameters
+                        )
+                        await reaction.message.channel.send(f"✅ **Action completed:** {result}")
+                    else:
+                        await reaction.message.channel.send(f"❌ **Action failed:** {final_commands}")
+                else:
+                    # Standard admin action (non-research) - needs executor
+                    if not executor:
+                        from ..admin.actions import AdminActionHandler
+                        executor = AdminActionHandler(self.bot)
+                    
+                    result = await executor.execute_admin_action(
+                        action_data['message'], 
+                        intent['action_type'], 
+                        intent['parameters']
+                    )
+                    await reaction.message.channel.send(f"✅ **Action completed:** {result}")
             except Exception as e:
                 await reaction.message.channel.send(f"❌ **Action failed:** {str(e)}")
         elif str(reaction.emoji) == "❌":
