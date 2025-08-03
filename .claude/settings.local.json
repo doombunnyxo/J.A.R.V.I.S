@@ -4,7 +4,8 @@
       "WebFetch(domain:game8.co)",
       "WebFetch(domain:duneawakening.wiki.fextralife.com)",
       "WebFetch(domain:duneawakening.wiki.fextralife.com)",
-      "WebFetch(domain:awakening.wiki)"
+      "WebFetch(domain:awakening.wiki)",
+      "Bash(python3:*)"
     ],
     "deny": []
   }

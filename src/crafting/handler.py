@@ -207,14 +207,20 @@ Match this request to an exact database key:"""
                     return base_format, quantity
                 
                 # Check if this is a legacy vehicle assembly request
-                elif parts[0].strip() == 'VEHICLE_ASSEMBLY' and len(parts) >= 5:
+                elif parts[0].strip() == 'VEHICLE_ASSEMBLY' and len(parts) >= 4:
                     vehicle_type = parts[1].strip()
                     tier = parts[2].strip()
                     modules = parts[3].strip()
-                    try:
-                        quantity = int(parts[4].strip())
-                    except (ValueError, IndexError):
-                        quantity = 1
+                    
+                    # Find quantity from remaining parts (skip modifiers)
+                    quantity = 1
+                    for part in parts[4:]:
+                        if part.strip() not in ['BY_PARTS', 'FULL_BREAKDOWN']:
+                            try:
+                                quantity = int(part.strip())
+                                break
+                            except ValueError:
+                                continue
                     
                     # Add modifiers to the return format
                     base_format = f"VEHICLE_ASSEMBLY|{vehicle_type}|{tier}|{modules}"
@@ -489,8 +495,19 @@ Match this request to an exact database key:"""
             await message.channel.send(f"❌ Could not calculate materials for {vehicle_type} {tier}")
             return
         
+        # Determine mode for display
+        if by_parts and full_breakdown:
+            mode_text = "**📊 MODE 4:** By Parts + Full Breakdown (Complete trees for each part)"
+        elif by_parts:
+            mode_text = "**📊 MODE 3:** By Parts (Direct materials for each part)"
+        elif full_breakdown:
+            mode_text = "**📊 MODE 2:** Full Breakdown (Summary + complete trees)"
+        else:
+            mode_text = "**📊 MODE 1:** Default (Parts list + total materials summary)"
+        
         # Format vehicle assembly response
         response = f"🚗 **Complete {vehicle_type.title()} {tier.upper()} Assembly**\n\n"
+        response += f"{mode_text}\n\n"
         response += f"**Quantity:** {quantity}\n\n"
         
         response += f"**Required Parts ({len(part_details)}):**\n"
@@ -681,8 +698,19 @@ Match this request to an exact database key:"""
                 await message.channel.send(f"❌ Could not calculate materials for {vehicle_type} parts")
                 return
             
+            # Determine mode for display
+            if by_parts and full_breakdown:
+                mode_text = "**📊 MODE 4:** By Parts + Full Breakdown (Complete trees for each part)"
+            elif by_parts:
+                mode_text = "**📊 MODE 3:** By Parts (Direct materials for each part)"
+            elif full_breakdown:
+                mode_text = "**📊 MODE 2:** Full Breakdown (Summary + complete trees)"
+            else:
+                mode_text = "**📊 MODE 1:** Default (Parts list + total materials summary)"
+            
             # Format response
             response = f"🚗 **Custom {vehicle_type.replace('_', ' ').title()} Assembly**\n\n"
+            response += f"{mode_text}\n\n"
             if quantity > 1:
                 response += f"**Quantity:** {quantity}\n\n"
             
@@ -1412,7 +1440,14 @@ Determine the exact parts needed and return as pipe-separated list:"""
         station = recipe.get('station', 'Unknown')
         item_display = item_name.replace('_', ' ').title()
         
+        # Determine mode for display
+        if breakdown_type == "raw":
+            mode_text = "**📊 MODE 2:** Full Breakdown (Complete crafting tree)"
+        else:
+            mode_text = "**📊 MODE 1:** Default (Direct materials only)"
+        
         response = f"🔧 **Dune Awakening - Crafting Recipe**\n\n"
+        response += f"{mode_text}\n\n"
         response += f"**Item:** {item_display}\n"
         
         if quantity > 1:
