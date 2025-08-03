@@ -24,7 +24,7 @@ class CraftingHandler(commands.Cog):
             
             # Create strategic samples to show Claude the naming patterns
             pattern_samples = {
-                "weapons": [item for item in available_items if any(w in item for w in ['karpov_38', 'maula_pistol', 'drillshot', 'sword']) and not any(part in item for part in ['engine', 'chassis', 'hull'])],
+                "weapons": [item for item in available_items if any(w in item for w in ['karpov_38', 'maula_pistol', 'drillshot_fk7', 'grda_44', 'jabal_spitdart', 'disruptor_m11', 'sword', 'rapier', 'dirk', 'kindjal']) and not any(part in item for part in ['engine', 'chassis', 'hull'])],
                 "vehicles": [item for item in available_items if any(v in item for v in ['sandbike_', 'buggy_', 'ornithopter_']) and any(part in item for part in ['engine', 'chassis', 'hull', 'wing', 'tread'])],
                 "tools": [item for item in available_items if any(t in item for t in ['cutteray', 'construction', 'survey', 'binoculars'])],
                 "consumables": [item for item in available_items if any(c in item for c in ['healkit', 'pill', 'beer', 'coffee'])]
@@ -34,7 +34,7 @@ class CraftingHandler(commands.Cog):
             samples = []
             query_lower = user_query.lower()
             
-            if any(weapon in query_lower for weapon in ['karpov', 'maula', 'sword', 'rifle', 'pistol', 'blade']):
+            if any(weapon in query_lower for weapon in ['karpov', '38', 'maula', 'sword', 'rifle', 'pistol', 'blade', 'drillshot', 'fk7', 'grda', '44', 'spitdart', 'disruptor']):
                 samples.extend(pattern_samples["weapons"][:15])
             elif any(vehicle in query_lower for vehicle in ['sandbike', 'buggy', 'ornithopter', 'vehicle']):
                 samples.extend(pattern_samples["vehicles"][:20])
@@ -54,11 +54,43 @@ RESPONSE FORMATS:
 2. Vehicle assembly: "VEHICLE_ASSEMBLY|vehicle_type|tier|modules|quantity"
 
 VEHICLE ASSEMBLY FORMAT:
-- vehicle_type: "sandbike", "buggy", "scout_ornithopter", "assault_ornithopter", "carrier_ornithopter", "sandcrawler"
-- tier: "mk1", "mk2", "mk3", "mk4", "mk5", "mk6"
-- modules: comma-separated list or "none" or "all_optional"
-- Examples: "VEHICLE_ASSEMBLY|assault_ornithopter|mk6|none|1"
-- Examples: "VEHICLE_ASSEMBLY|sandbike|mk3|boost,storage|1"
+- For complete vehicles, use exact database keys instead of VEHICLE_ASSEMBLY format
+- Available vehicle assemblies:
+
+ASSAULT ORNITHOPTERS:
+  * "assault_ornithopter_mk5_base", "assault_ornithopter_mk6_base" (no modules)
+  * "assault_ornithopter_mk5_with_storage", "assault_ornithopter_mk5_with_rocket_launcher", "assault_ornithopter_mk5_with_thruster"
+  * "assault_ornithopter_mk5_complete" (storage + thruster)
+  * "assault_ornithopter_mk6_with_rocket_launcher", "assault_ornithopter_mk6_with_thruster"
+  * "assault_ornithopter_mk6_with_rocket_launcher_and_thruster"
+
+SCOUT ORNITHOPTERS:
+  * "scout_ornithopter_mk4_base", "scout_ornithopter_mk5_base", "scout_ornithopter_mk6_base" (no modules)
+  * "scout_ornithopter_mk4_with_storage", "scout_ornithopter_mk4_with_thruster"
+  * "scout_ornithopter_mk5_with_rocket_launcher", "scout_ornithopter_mk5_with_thruster"
+  * "scout_ornithopter_mk6_with_rocket_launcher", "scout_ornithopter_mk6_with_thruster"
+
+CARRIER ORNITHOPTERS:
+  * "carrier_ornithopter_mk6_base" (no modules)
+  * "carrier_ornithopter_mk6_with_thruster"
+
+SANDBIKES:
+  * "sandbike_mk1_base", "sandbike_mk1_with_backseat"
+  * "sandbike_mk2_base", "sandbike_mk2_with_booster", "sandbike_mk2_with_storage", "sandbike_mk2_complete"
+  * "sandbike_mk3_base", "sandbike_mk3_with_booster"
+  * "sandbike_mk4_base", "sandbike_mk4_with_booster"  
+  * "sandbike_mk5_base", "sandbike_mk5_with_booster"
+
+BUGGIES:
+  * "buggy_mk3_base_with_rear", "buggy_mk3_with_utility_rear"
+  * "buggy_mk3_with_rear_and_booster", "buggy_mk3_with_utility_rear_and_cutteray", "buggy_mk3_with_utility_rear_and_storage"
+  * "buggy_mk4_base_with_rear", "buggy_mk4_with_utility_rear"
+  * "buggy_mk5_base_with_rear", "buggy_mk5_with_utility_rear"
+  * "buggy_mk6_base_with_rear", "buggy_mk6_with_utility_rear"
+
+SANDCRAWLERS:
+  * "sandcrawler_mk6_base" (standard)
+  * "walker_sandcrawler_mk6" (walker variant)
 
 KEY PATTERNS:
 - Weapons: "karpov_38", "maula_pistol", "sword" (add material tier if specified)
@@ -80,11 +112,40 @@ INTERPRETATION RULES:
 4. Individual part requests = single item format
 5. Extract quantity (default: 1)
 
-EXAMPLES:
+CRITICAL: WEAPON NUMBERS ARE PART OF THE NAME, NOT QUANTITY!
+
+WEAPON NAME EXAMPLES:
+- "karpov 38" -> weapon name is "karpov_38" (NOT 38 quantity of karpov)
+- "drillshot fk7" -> weapon name is "drillshot_fk7" 
+- "grda 44" -> weapon name is "grda_44"
+- "maula pistol" -> weapon name is "maula_pistol"
+
+WEAPON TIER EXAMPLES:
 - "karpov 38 plastanium" -> "karpov_38_plastanium|1"
-- "mk6 assault ornithopter without modules" -> "VEHICLE_ASSEMBLY|assault_ornithopter|mk6|none|1"
-- "sandbike mk3 with boost" -> "VEHICLE_ASSEMBLY|sandbike|mk3|boost|1"
-- "scout ornithopter mk5 with storage and scan" -> "VEHICLE_ASSEMBLY|scout_ornithopter|mk5|storage,scan|1"
+- "karpov 38 steel" -> "karpov_38_steel|1"
+- "maula pistol iron" -> "maula_pistol_iron|1"
+- "5 karpov 38 plastanium" -> "karpov_38_plastanium|5"
+
+VEHICLE EXAMPLES:
+- "mk6 assault ornithopter without modules" -> "assault_ornithopter_mk6_base|1"
+- "assault ornithopter mk6 with no modules" -> "assault_ornithopter_mk6_base|1"
+- "assault ornithopter mk5 with storage" -> "assault_ornithopter_mk5_with_storage|1"
+- "complete assault ornithopter mk5" -> "assault_ornithopter_mk5_complete|1"
+- "scout ornithopter mk4" -> "scout_ornithopter_mk4_base|1"
+- "scout ornithopter mk6 with rocket launcher" -> "scout_ornithopter_mk6_with_rocket_launcher|1"
+- "carrier ornithopter mk6" -> "carrier_ornithopter_mk6_base|1"  
+- "carrier ornithopter mk6 with thruster" -> "carrier_ornithopter_mk6_with_thruster|1"
+- "sandbike mk1" -> "sandbike_mk1_base|1"
+- "sandbike mk1 with backseat" -> "sandbike_mk1_with_backseat|1"
+- "sandbike mk3 with booster" -> "sandbike_mk3_with_booster|1"
+- "complete sandbike mk2" -> "sandbike_mk2_complete|1"
+- "buggy mk3" -> "buggy_mk3_base_with_rear|1"
+- "buggy mk4 with utility rear" -> "buggy_mk4_with_utility_rear|1"
+- "buggy mk3 with cutteray" -> "buggy_mk3_with_utility_rear_and_cutteray|1"
+- "sandcrawler mk6" -> "sandcrawler_mk6_base|1"
+- "walker sandcrawler" -> "walker_sandcrawler_mk6|1"
+
+PART EXAMPLES:
 - "sandbike engine mk3" -> "sandbike_engine_mk3|1"
 
 Return ONLY the specified format with NO explanations."""

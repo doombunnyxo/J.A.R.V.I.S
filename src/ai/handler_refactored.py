@@ -623,6 +623,7 @@ class AIHandler:
             # Calculate total materials for all required parts
             total_materials = {}
             parts_list = []
+            missing_parts = []
             
             for part in vehicle_info["required"]:
                 part_key = f"{vehicle_type}_{part}_{tier.lower()}"
@@ -640,8 +641,16 @@ class AIHandler:
                 recipe_info = get_recipe_info(part_key)
                 if recipe_info:
                     part_materials = calculate_materials(part_key, part_quantity)
-                    for material, amount in part_materials.items():
-                        total_materials[material] = total_materials.get(material, 0) + amount
+                    # Check if calculate_materials returned a dict (success) or tuple (error)
+                    if isinstance(part_materials, dict):
+                        for material, amount in part_materials.items():
+                            total_materials[material] = total_materials.get(material, 0) + amount
+                    else:
+                        print(f"DEBUG: calculate_materials failed for {part_key}, returned: {part_materials}")
+                        missing_parts.append(part_key)
+                else:
+                    print(f"DEBUG: No recipe found for part: {part_key}")
+                    missing_parts.append(part_key)
             
             response += "\n".join(parts_list)
             
@@ -663,6 +672,16 @@ class AIHandler:
                 response += f"\n\n**Total Base Materials (Required Parts Only):**\n"
                 for material, amount in sorted(total_materials.items()):
                     response += f"• {amount}x {material}\n"
+            else:
+                response += f"\n\n**Note:** No material calculations available (recipes not found for parts)"
+            
+            # Warn about missing parts
+            if missing_parts:
+                response += f"\n\n⚠️ **Missing Recipes:** {len(missing_parts)} parts don't have recipes in database:\n"
+                for part in missing_parts[:5]:  # Show first 5
+                    response += f"• {part}\n"
+                if len(missing_parts) > 5:
+                    response += f"• ... and {len(missing_parts) - 5} more\n"
             
             response += f"\n**Note:** Use individual part names for detailed recipes (e.g., `@bot craft: {vehicle_type}_engine_{tier.lower()}`)"
             
