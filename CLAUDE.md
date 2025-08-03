@@ -50,8 +50,8 @@ This is a Discord bot with hybrid AI functionality that combines Groq and Claude
 
 #### Context Manager (context_manager.py)
 **Core functionality**: Sophisticated context management across AI providers
-- **Unified Context**: Shared conversation history between Groq and Claude
-- **Context Filtering**: Uses Groq to filter context for relevance to each query
+- **Unified Context**: Shared conversation history between all AI providers
+- **Context Filtering**: Uses Claude Haiku to filter context for relevance to each query
 - **Context Types**:
   - **Conversation Context**: Recent chat history (expires after 30 minutes)
   - **Permanent Context**: User preferences and info (filtered per query)
@@ -66,18 +66,25 @@ This is a Discord bot with hybrid AI functionality that combines Groq and Claude
 - **Standard Flow**: Optimize query → Google search → analyze results
 - **Provider Agnostic**: Works with Claude, Perplexity, or any future providers
 
+#### Hybrid Search Provider (hybrid_search_provider.py)
+**Core functionality**: Optimal cost/quality balance combining Claude and Perplexity
+- **Claude Query Optimization**: Fast, cheap query refinement with Claude Haiku
+- **Perplexity Result Analysis**: High-quality summarization with Perplexity Sonar
+- **Cost Optimization**: Minimizes expensive operations while maximizing response quality
+- **Default Search Method**: Used automatically for all search queries
+
 #### Claude Adapter (claude_adapter.py)
-**Core functionality**: Claude integration for the unified search pipeline
-- **Search Query Optimization**: Uses Claude to refine search queries for better results
-- **Search Result Analysis**: Processes Google search results with user context
+**Core functionality**: Pure Claude integration for the unified search pipeline
+- **Complete Claude Pipeline**: Both optimization and analysis with Claude
 - **Model Support**: Haiku (default), Sonnet, Opus for admin users
-- **Cost Effective**: ~99.96% cheaper than Perplexity (~$0.002 vs $5 per request)
+- **Force Provider Support**: Accessible via `pure-claude:` and `claude-only:` prefixes
+- **Fallback Option**: Used when Perplexity is unavailable in hybrid mode
 
 #### Perplexity Adapter (perplexity_adapter.py)
-**Core functionality**: Perplexity integration for the unified search pipeline
-- **Sonar Model**: Uses Perplexity's Sonar model for optimization and analysis
-- **Alternative Provider**: Backup option when Claude is unavailable
-- **Force Provider Support**: Accessible via `p:` and `perplexity:` prefixes
+**Core functionality**: Pure Perplexity integration for the unified search pipeline
+- **Complete Perplexity Pipeline**: Both optimization and analysis with Sonar model
+- **High-Quality Results**: Premium analysis but higher cost per request
+- **Force Provider Support**: Accessible via `pure-perplexity:` and `perplexity-only:` prefixes
 
 #### Google Search (google.py)
 **Core functionality**: Google Custom Search Engine integration
@@ -165,8 +172,9 @@ discord-bot/
     │   └── handlers.py       # Discord event handlers
     ├── search/               # Search integrations
     │   ├── search_pipeline.py    # Unified search pipeline
-    │   ├── claude_adapter.py     # Claude search provider adapter
-    │   ├── perplexity_adapter.py # Perplexity search provider adapter
+    │   ├── hybrid_search_provider.py # Hybrid Claude+Perplexity provider (default)
+    │   ├── claude_adapter.py     # Pure Claude search provider
+    │   ├── perplexity_adapter.py # Pure Perplexity search provider
     │   ├── claude.py         # Claude API functions
     │   └── google.py         # Google Custom Search
     ├── scraping/
@@ -200,7 +208,10 @@ discord-bot/
 
 #### Force Specific Provider
 - `@bot groq: your question` or `@bot g: question` - Force Groq
-- `@bot claude: your question` or `@bot perplexity: question` - Force Claude  
+- `@bot claude: your question` or `@bot hybrid: question` - Hybrid search (default)
+- `@bot pure-claude: question` or `@bot claude-only: question` - Pure Claude only
+- `@bot perplexity: question` or `@bot p: question` - Pure Perplexity
+- `@bot pure-perplexity: question` - Pure Perplexity only
 - `@bot search: query` - Direct Google search
 - `@bot craft: item request` - Crafting system
 
@@ -285,12 +296,12 @@ discord-bot/
 - **Discord Optimization**: Responses formatted for Discord markdown
 
 ### Recent Major Updates
-1. **Unified Search Pipeline**: Created generic search architecture with provider adapters
-2. **Dual Provider Support**: Both Claude and Perplexity now use the same search flow
-3. **Code Cleanup**: Removed old handler.py, consolidated to handler_refactored.py only
-4. **Crafting System**: Extracted to dedicated module with 4-mode support
-5. **Context Enhancement**: Improved permanent context with username resolution
-6. **Architecture Simplification**: Clean modular design with clear separation of concerns
+1. **Claude-Powered Context Filtering**: Migrated context filtering from Groq to Claude Haiku for better quality and consistency
+2. **Hybrid Search Optimization**: Claude for query optimization + Perplexity for analysis (optimal cost/quality)
+3. **Multi-Provider Options**: Hybrid (default), pure-claude, pure-perplexity modes available
+4. **Unified Search Pipeline**: Generic search architecture with provider adapters
+5. **Cost Optimization**: Minimizes expensive operations while maximizing response quality
+6. **Code Cleanup**: Removed old handler.py, consolidated to handler_refactored.py only
 
 ### Security Features
 - **Admin Permission Checking**: Restricted admin functionality
@@ -323,6 +334,7 @@ pip install -r requirements.txt
 # Test syntax
 python -m py_compile src/ai/handler_refactored.py
 python -m py_compile src/search/search_pipeline.py
+python -m py_compile src/search/hybrid_search_provider.py
 python -m py_compile src/search/claude_adapter.py
 
 # Run the bot

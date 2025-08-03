@@ -9,10 +9,11 @@ A sophisticated Discord bot with hybrid AI functionality that intelligently rout
 ## ✨ Key Features
 
 ### 🤖 **Hybrid AI System**
-- **Intelligent Routing**: Automatically routes queries between Groq (chat/admin), Claude (search), and Perplexity (backup search)
+- **Intelligent Routing**: Automatically routes queries between Groq (chat/admin) and hybrid search (Claude + Perplexity)
+- **Hybrid Search**: Claude for fast query optimization, Perplexity for high-quality result analysis
 - **Unified Search Pipeline**: Generic search architecture with provider adapters
 - **Cross-AI Context**: Unified conversation context shared between all AI providers
-- **Force Provider Syntax**: Override routing with `groq:`, `claude:`, `perplexity:`, or `search:` prefixes
+- **Force Provider Syntax**: Override routing with `groq:`, `claude:`, `pure-claude:`, `perplexity:`, `pure-perplexity:` prefixes
 - **Model Switching**: Admin users can switch Claude models (haiku, sonnet, opus)
 
 ### 🛡️ **Advanced Admin System**
@@ -27,12 +28,12 @@ A sophisticated Discord bot with hybrid AI functionality that intelligently rout
 - **Permanent Context**: Filtered relevant context for personalized responses
 - **Unfiltered Settings**: Always-applied settings that appear in every query
 - **User Settings**: Individual preferences and configurations
-- **Context Filtering**: AI-powered relevance filtering to optimize token usage
+- **Context Filtering**: Claude Haiku-powered relevance filtering to optimize token usage
 
 ### 🔍 **Search Integration**
+- **Hybrid Search (Default)**: Claude optimization + Perplexity analysis for optimal cost/quality balance
 - **Unified Search Pipeline**: Generic search flow that works with any AI provider
-- **Claude Search**: Cost-effective search with Claude 3.5 Haiku (99.96% cheaper than Perplexity)
-- **Perplexity Backup**: Alternative search provider using Sonar model
+- **Pure Provider Options**: Force pure Claude or pure Perplexity when needed
 - **Google Custom Search**: Optimized query enhancement for better results
 - **Context-Aware Results**: Search results combined with user context
 
@@ -109,8 +110,9 @@ AI_TEMPERATURE=0.7                       # AI creativity (0.0-2.0)
 #### Force Specific Provider
 ```
 @bot groq: Explain quantum computing
-@bot claude: What happened in tech news today?
-@bot perplexity: Latest crypto trends
+@bot claude: What happened in tech news today?         # Hybrid (default)
+@bot pure-claude: Latest AI developments               # Claude only
+@bot perplexity: Latest crypto trends                  # Perplexity only
 @bot search: best programming tutorials 2025
 ```
 
@@ -190,8 +192,9 @@ discord-bot/
     │   └── handlers.py        # Discord events
     ├── search/                # Search integrations
     │   ├── search_pipeline.py # Unified search pipeline
-    │   ├── claude_adapter.py  # Claude search provider
-    │   ├── perplexity_adapter.py # Perplexity search provider
+    │   ├── hybrid_search_provider.py # Hybrid Claude+Perplexity (default)
+    │   ├── claude_adapter.py  # Pure Claude search provider
+    │   ├── perplexity_adapter.py # Pure Perplexity search provider
     │   ├── claude.py          # Claude API functions
     │   └── google.py          # Google Custom Search
     ├── scraping/
@@ -209,11 +212,17 @@ discord-bot/
 - Rate limiting (10 requests/60 seconds per user)
 - Admin action detection
 
+#### HybridSearchProvider (`src/search/hybrid_search_provider.py`)
+- Optimal cost/quality balance using Claude + Perplexity
+- Claude Haiku for fast, cheap query optimization
+- Perplexity Sonar for high-quality result analysis
+- Default search method for all queries
+
 #### SearchPipeline (`src/search/search_pipeline.py`)
 - Generic search architecture with provider adapters
 - Protocol-based design for extensibility
 - Standard flow: optimize query → Google search → analyze results
-- Works with Claude, Perplexity, or any future providers
+- Works with Claude, Perplexity, hybrid, or any future providers
 
 #### AdminSystem (`src/admin/`)
 - Natural language admin command parsing
@@ -347,7 +356,7 @@ python -m json.tool data/conversation_history.json
 
 ### Optimizations
 - **Async Operations**: All file I/O and API calls are asynchronous
-- **Context Filtering**: AI-powered relevance filtering reduces token usage
+- **Context Filtering**: Claude Haiku-powered relevance filtering reduces token usage
 - **Connection Pooling**: Efficient HTTP connection management
 - **Memory Management**: Automatic cleanup of old conversations and contexts
 

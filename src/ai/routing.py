@@ -169,10 +169,16 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
         # Craft commands first to avoid conflicts
         (r'^craft:\s*(.+)', 'crafting'),
         (r'^cr:\s*(.+)', 'crafting'),
-        # Other providers
+        # Pure provider options (for explicit single-provider usage)
+        (r'^pure-claude:\s*(.+)', 'pure-claude'),
+        (r'^claude-only:\s*(.+)', 'pure-claude'),
+        (r'^pure-perplexity:\s*(.+)', 'pure-perplexity'),
+        (r'^perplexity-only:\s*(.+)', 'pure-perplexity'),
+        # Hybrid and regular providers
         (r'^groq:\s*(.+)', 'groq'),
         (r'^g:\s*(.+)', 'groq'),
-        (r'^claude:\s*(.+)', 'claude'),
+        (r'^claude:\s*(.+)', 'claude'),  # Uses hybrid by default
+        (r'^hybrid:\s*(.+)', 'claude'),  # Explicitly hybrid
         (r'^perplexity:\s*(.+)', 'perplexity'),
         (r'^p:\s*(.+)', 'perplexity'),
         (r'^search:\s*(.+)', 'claude'),

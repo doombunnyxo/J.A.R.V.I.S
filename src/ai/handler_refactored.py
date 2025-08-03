@@ -152,9 +152,13 @@ class AIHandler:
             
             # Route to appropriate handler
             if provider == "claude":
-                response = await self._handle_with_claude(message, cleaned_query)
+                response = await self._handle_with_claude(message, cleaned_query)  # Hybrid by default
+            elif provider == "pure-claude":
+                response = await self._handle_with_pure_claude(message, cleaned_query)
             elif provider == "perplexity":
                 response = await self._handle_with_perplexity(message, cleaned_query)
+            elif provider == "pure-perplexity":
+                response = await self._handle_with_pure_perplexity(message, cleaned_query)
             elif provider == "crafting":
                 response = await self._handle_with_crafting(message, cleaned_query)
             else:  # groq
@@ -221,32 +225,29 @@ class AIHandler:
         return "groq"
     
     async def _handle_with_claude(self, message, query: str) -> str:
-        """Handle query using Claude search adapter and unified pipeline"""
+        """Handle query using hybrid search (Claude optimization + Perplexity analysis)"""
         try:
             from ..search.search_pipeline import SearchPipeline
-            from ..search.claude_adapter import ClaudeSearchProvider
+            from ..search.hybrid_search_provider import HybridSearchProvider
             
-            if not config.has_anthropic_api():
-                return "❌ Claude API not configured. Please contact an administrator."
-            
-            # Build context for Claude
+            # Build context for search
             context = await self.context_manager.build_full_context(
                 query, message.author.id, message.channel.id,
                 message.author.display_name, message
             )
             
-            # Create Claude provider and search pipeline
-            claude_provider = ClaudeSearchProvider()
-            pipeline = SearchPipeline(claude_provider)
+            # Create hybrid provider (Claude optimization + Perplexity analysis)
+            hybrid_provider = HybridSearchProvider()
+            pipeline = SearchPipeline(hybrid_provider)
             
-            # Execute the unified search pipeline
+            # Execute the unified search pipeline with hybrid approach
             response = await pipeline.search_and_respond(query, context)
             
             return response
             
         except Exception as e:
-            print(f"DEBUG: Claude search pipeline failed: {e}")
-            return f"❌ Error with Claude search: {str(e)}"
+            print(f"DEBUG: Hybrid search pipeline failed: {e}")
+            return f"❌ Error with hybrid search: {str(e)}"
 
     async def _handle_with_perplexity(self, message, query: str) -> str:
         """Handle query using Perplexity search adapter and unified pipeline"""
@@ -275,6 +276,62 @@ class AIHandler:
         except Exception as e:
             print(f"DEBUG: Perplexity search pipeline failed: {e}")
             return f"❌ Error with Perplexity search: {str(e)}"
+    
+    async def _handle_with_pure_claude(self, message, query: str) -> str:
+        """Handle query using pure Claude (not hybrid) search adapter"""
+        try:
+            from ..search.search_pipeline import SearchPipeline
+            from ..search.claude_adapter import ClaudeSearchProvider
+            
+            if not config.has_anthropic_api():
+                return "❌ Claude API not configured. Please contact an administrator."
+            
+            # Build context for Claude
+            context = await self.context_manager.build_full_context(
+                query, message.author.id, message.channel.id,
+                message.author.display_name, message
+            )
+            
+            # Create pure Claude provider and search pipeline
+            claude_provider = ClaudeSearchProvider()
+            pipeline = SearchPipeline(claude_provider)
+            
+            # Execute the unified search pipeline with pure Claude
+            response = await pipeline.search_and_respond(query, context)
+            
+            return response
+            
+        except Exception as e:
+            print(f"DEBUG: Pure Claude search pipeline failed: {e}")
+            return f"❌ Error with pure Claude search: {str(e)}"
+
+    async def _handle_with_pure_perplexity(self, message, query: str) -> str:
+        """Handle query using pure Perplexity (not hybrid) search adapter"""
+        try:
+            from ..search.search_pipeline import SearchPipeline
+            from ..search.perplexity_adapter import PerplexitySearchProvider
+            
+            if not config.has_perplexity_api():
+                return "❌ Perplexity API not configured. Please contact an administrator."
+            
+            # Build context for Perplexity
+            context = await self.context_manager.build_full_context(
+                query, message.author.id, message.channel.id,
+                message.author.display_name, message
+            )
+            
+            # Create pure Perplexity provider and search pipeline
+            perplexity_provider = PerplexitySearchProvider()
+            pipeline = SearchPipeline(perplexity_provider)
+            
+            # Execute the unified search pipeline with pure Perplexity
+            response = await pipeline.search_and_respond(query, context)
+            
+            return response
+            
+        except Exception as e:
+            print(f"DEBUG: Pure Perplexity search pipeline failed: {e}")
+            return f"❌ Error with pure Perplexity search: {str(e)}"
     
     async def _handle_with_groq(self, message, query: str) -> str:
         """Handle query with Groq"""

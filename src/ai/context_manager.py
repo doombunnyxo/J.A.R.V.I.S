@@ -13,13 +13,54 @@ from ..config import config
 class ContextManager:
     """Manages conversation context and permanent user data"""
     
-    def __init__(self, groq_client=None):
-        self.groq_client = groq_client
+    def __init__(self):
+        # No need for groq_client - we'll use Claude Haiku for context filtering
         
         # Unified conversation context shared between AIs
         self.unified_conversations: Dict[str, deque] = defaultdict(lambda: deque(maxlen=12))
         self.last_activity: Dict[str, datetime] = {}
         self.context_expiry_minutes = 30
+    
+    async def _call_claude_haiku(self, messages: List[dict], max_tokens: int = 300) -> str:
+        """Helper method to call Claude Haiku for context filtering"""
+        import aiohttp
+        
+        headers = {
+            "x-api-key": config.ANTHROPIC_API_KEY,
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01"
+        }
+        
+        # Convert messages to Claude format (no system role)
+        claude_messages = []
+        system_content = ""
+        
+        for msg in messages:
+            if msg["role"] == "system":
+                system_content = msg["content"]
+            else:
+                claude_messages.append(msg)
+        
+        # Include system content in first user message
+        if system_content and claude_messages:
+            claude_messages[0]["content"] = f"{system_content}\n\n{claude_messages[0]['content']}"
+        
+        payload = {
+            "model": "claude-3-5-haiku-20241022", 
+            "max_tokens": max_tokens,
+            "temperature": 0.1,
+            "messages": claude_messages
+        }
+        
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post("https://api.anthropic.com/v1/messages", 
+                                   headers=headers, json=payload) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return result["content"][0]["text"].strip()
+                else:
+                    raise Exception(f"Claude API error {response.status}: {await response.text()}")
     
     def get_conversation_key(self, user_id: int, channel_id: int) -> str:
         """Generate conversation key for tracking"""
@@ -59,9 +100,9 @@ class ContextManager:
         return list(self.unified_conversations.get(key, []))
     
     async def filter_conversation_context(self, query: str, conversation_context: List[dict], user_name: str) -> str:
-        """Filter conversation context for relevance using Groq"""
-        if not self.groq_client or not config.has_groq_api():
-            # Fallback to basic context if Groq unavailable
+        """Filter conversation context for relevance using Claude Haiku"""
+        if not config.has_anthropic_api():
+            # Fallback to basic context if Claude unavailable
             if not conversation_context:
                 return f"User: {user_name}" if user_name else ""
             
@@ -110,14 +151,8 @@ Return only the filtered previous conversation context - no explanations."""
                 }
             ]
             
-            completion = self.groq_client.chat.completions.create(
-                messages=filter_messages,
-                model=config.AI_MODEL,
-                max_tokens=300,
-                temperature=0.1
-            )
-            
-            filtered_context = completion.choices[0].message.content.strip()
+            # Use Claude Haiku for context filtering
+            filtered_context = await self._call_claude_haiku(filter_messages, max_tokens=300)
             
             # Ensure we always return at least the user name
             if not filtered_context or "no relevant context" in filtered_context.lower():
@@ -139,8 +174,8 @@ Return only the filtered previous conversation context - no explanations."""
             return "\\n\\n".join(context_parts)
     
     async def filter_permanent_context(self, query: str, permanent_context: List[str], user_name: str, message=None) -> List[str]:
-        """Filter permanent context for relevance to current query"""
-        if not self.groq_client or not config.has_groq_api() or not permanent_context:
+        """Filter permanent context for relevance to current query using Claude Haiku"""
+        if not config.has_anthropic_api() or not permanent_context:
             return permanent_context or []
         
         try:
@@ -170,14 +205,8 @@ Return only relevant permanent context items, one per line, in the exact same fo
                 }
             ]
             
-            completion = self.groq_client.chat.completions.create(
-                messages=filter_messages,
-                model=config.AI_MODEL,
-                max_tokens=400,
-                temperature=0.1
-            )
-            
-            filtered_response = completion.choices[0].message.content.strip()
+            # Use Claude Haiku for permanent context filtering
+            filtered_response = await self._call_claude_haiku(filter_messages, max_tokens=400)
             
             print(f"DEBUG: Permanent context filter for user '{user_name}' (ID: {message.author.id if message else 'unknown'})")
             print(f"DEBUG: Original items: {len(permanent_context)}")
