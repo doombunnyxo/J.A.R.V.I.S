@@ -233,8 +233,11 @@ class AIHandler:
             is_admin_command = any(keyword in query_lower for keyword in ADMIN_KEYWORDS)
             
             if is_admin_command:
+                # Admin command path - temporarily send confirmation message
+                await message.channel.send(f"🔧 **Admin Command Detected**: Routing to admin handler for: {query[:50]}...")
                 return await self._handle_admin_with_claude(message, query)
             else:
+                # Search command path  
                 return await self._handle_search_with_claude(message, query)
             
         except Exception as e:
