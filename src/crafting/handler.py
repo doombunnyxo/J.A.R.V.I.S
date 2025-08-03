@@ -54,43 +54,35 @@ RESPONSE FORMATS:
 2. Vehicle assembly: "VEHICLE_ASSEMBLY|vehicle_type|tier|modules|quantity"
 
 VEHICLE ASSEMBLY FORMAT:
-- For complete vehicles, use exact database keys instead of VEHICLE_ASSEMBLY format
-- Available vehicle assemblies:
+- For complete vehicles, return: "VEHICLE_PARTS|vehicle_type|parts_list|quantity"
+- Mix and match ANY tier parts within the same vehicle type
+- Users can upgrade specific parts while keeping others at lower tiers
 
-ASSAULT ORNITHOPTERS:
-  * "assault_ornithopter_mk5_base", "assault_ornithopter_mk6_base" (no modules)
-  * "assault_ornithopter_mk5_with_storage", "assault_ornithopter_mk5_with_rocket_launcher", "assault_ornithopter_mk5_with_thruster"
-  * "assault_ornithopter_mk5_complete" (storage + thruster)
-  * "assault_ornithopter_mk6_with_rocket_launcher", "assault_ornithopter_mk6_with_thruster"
-  * "assault_ornithopter_mk6_with_rocket_launcher_and_thruster"
+VEHICLE TYPES & PART AVAILABILITY:
 
-SCOUT ORNITHOPTERS:
-  * "scout_ornithopter_mk4_base", "scout_ornithopter_mk5_base", "scout_ornithopter_mk6_base" (no modules)
-  * "scout_ornithopter_mk4_with_storage", "scout_ornithopter_mk4_with_thruster"
-  * "scout_ornithopter_mk5_with_rocket_launcher", "scout_ornithopter_mk5_with_thruster"
-  * "scout_ornithopter_mk6_with_rocket_launcher", "scout_ornithopter_mk6_with_thruster"
+SANDBIKE (mk1-mk5 available):
+REQUIRED: engine(mk1-5), chassis(mk1-5), hull(mk1-5), psu(mk1-5), tread(mk1-5) [3x tread needed]
+OPTIONAL: backseat(mk1 only), booster(mk2-5), storage(mk2 only)
 
-CARRIER ORNITHOPTERS:
-  * "carrier_ornithopter_mk6_base" (no modules)
-  * "carrier_ornithopter_mk6_with_thruster"
+BUGGY (mk3-mk6 available):  
+REQUIRED: engine(mk3-6), chassis(mk3-6), psu(mk3-6), tread(mk3-6) [4x tread needed], rear(mk3-6) OR utility_rear(mk3-6), hull(mk4-6)
+OPTIONAL: booster(mk3-6), cutteray(mk3-6, utility_rear only), storage(mk3-6, utility_rear only)
 
-SANDBIKES:
-  * "sandbike_mk1_base", "sandbike_mk1_with_backseat"
-  * "sandbike_mk2_base", "sandbike_mk2_with_booster", "sandbike_mk2_with_storage", "sandbike_mk2_complete"
-  * "sandbike_mk3_base", "sandbike_mk3_with_booster"
-  * "sandbike_mk4_base", "sandbike_mk4_with_booster"  
-  * "sandbike_mk5_base", "sandbike_mk5_with_booster"
+SCOUT_ORNITHOPTER (mk4-mk6 available):
+REQUIRED: engine(mk4-6), chassis(mk4-6), cockpit(mk4-6), generator(mk4-6), hull(mk4-6), wing(mk4-6) [4x wing needed]
+OPTIONAL: storage(mk4 only), rocket_launcher(mk5-6), thruster(mk4-6)
 
-BUGGIES:
-  * "buggy_mk3_base_with_rear", "buggy_mk3_with_utility_rear"
-  * "buggy_mk3_with_rear_and_booster", "buggy_mk3_with_utility_rear_and_cutteray", "buggy_mk3_with_utility_rear_and_storage"
-  * "buggy_mk4_base_with_rear", "buggy_mk4_with_utility_rear"
-  * "buggy_mk5_base_with_rear", "buggy_mk5_with_utility_rear"
-  * "buggy_mk6_base_with_rear", "buggy_mk6_with_utility_rear"
+ASSAULT_ORNITHOPTER (mk5-mk6 available):
+REQUIRED: engine(mk5-6), chassis(mk5-6), cockpit(mk5-6), cabin(mk5-6), generator(mk5-6), tail(mk5-6), wing(mk5-6) [6x wing needed]
+OPTIONAL: storage(mk5 only), rocket_launcher(mk5-6), thruster(mk5-6)
 
-SANDCRAWLERS:
-  * "sandcrawler_mk6_base" (standard)
-  * "walker_sandcrawler_mk6" (walker variant)
+CARRIER_ORNITHOPTER (mk6 only):
+REQUIRED: engine(mk6), chassis(mk6), generator(mk6), main_hull(mk6), side_hull(mk6) [2x needed], tail_hull(mk6) [2x needed], wing(mk6) [8x needed]
+OPTIONAL: thruster(mk6)
+
+SANDCRAWLER (mk6 only):
+REQUIRED: engine(mk6), chassis(mk6), cabin(mk6), tread(mk6) [2x tread needed], vacuum(mk6), centrifuge(mk6), psu(mk6)
+VARIANTS: walker_engine(mk6), dampened_treads(mk6) [2x needed]
 
 KEY PATTERNS:
 - Weapons: "karpov_38", "maula_pistol", "sword" (add material tier if specified)
@@ -126,24 +118,17 @@ WEAPON TIER EXAMPLES:
 - "maula pistol iron" -> "maula_pistol_iron|1"
 - "5 karpov 38 plastanium" -> "karpov_38_plastanium|5"
 
-VEHICLE EXAMPLES:
-- "mk6 assault ornithopter without modules" -> "assault_ornithopter_mk6_base|1"
-- "assault ornithopter mk6 with no modules" -> "assault_ornithopter_mk6_base|1"
-- "assault ornithopter mk5 with storage" -> "assault_ornithopter_mk5_with_storage|1"
-- "complete assault ornithopter mk5" -> "assault_ornithopter_mk5_complete|1"
-- "scout ornithopter mk4" -> "scout_ornithopter_mk4_base|1"
-- "scout ornithopter mk6 with rocket launcher" -> "scout_ornithopter_mk6_with_rocket_launcher|1"
-- "carrier ornithopter mk6" -> "carrier_ornithopter_mk6_base|1"  
-- "carrier ornithopter mk6 with thruster" -> "carrier_ornithopter_mk6_with_thruster|1"
-- "sandbike mk1" -> "sandbike_mk1_base|1"
-- "sandbike mk1 with backseat" -> "sandbike_mk1_with_backseat|1"
-- "sandbike mk3 with booster" -> "sandbike_mk3_with_booster|1"
-- "complete sandbike mk2" -> "sandbike_mk2_complete|1"
-- "buggy mk3" -> "buggy_mk3_base_with_rear|1"
-- "buggy mk4 with utility rear" -> "buggy_mk4_with_utility_rear|1"
-- "buggy mk3 with cutteray" -> "buggy_mk3_with_utility_rear_and_cutteray|1"
-- "sandcrawler mk6" -> "sandcrawler_mk6_base|1"
-- "walker sandcrawler" -> "walker_sandcrawler_mk6|1"
+VEHICLE EXAMPLES (FLEXIBLE MIXING):
+- "sandbike mk5" -> "VEHICLE_PARTS|sandbike|engine_mk5,chassis_mk5,hull_mk5,psu_mk5,tread_mk5|1"
+- "sandbike mk5 with mk2 storage" -> "VEHICLE_PARTS|sandbike|engine_mk5,chassis_mk5,hull_mk5,psu_mk5,tread_mk5,storage_mk2|1"
+- "sandbike with mk5 engine and mk3 everything else" -> "VEHICLE_PARTS|sandbike|engine_mk5,chassis_mk3,hull_mk3,psu_mk3,tread_mk3|1"
+- "assault ornithopter mk6 without modules" -> "VEHICLE_PARTS|assault_ornithopter|engine_mk6,chassis_mk6,cockpit_mk6,cabin_mk6,generator_mk6,tail_mk6,wing_mk6|1"
+- "assault ornithopter mk6 with mk5 rocket launcher" -> "VEHICLE_PARTS|assault_ornithopter|engine_mk6,chassis_mk6,cockpit_mk6,cabin_mk6,generator_mk6,tail_mk6,wing_mk6,rocket_launcher_mk5|1"
+- "buggy mk6 with mk3 chassis and utility rear" -> "VEHICLE_PARTS|buggy|engine_mk6,chassis_mk3,hull_mk6,psu_mk6,tread_mk6,utility_rear_mk6|1"
+- "scout ornithopter mk5 with mk4 thruster" -> "VEHICLE_PARTS|scout_ornithopter|engine_mk5,chassis_mk5,cockpit_mk5,generator_mk5,hull_mk5,wing_mk5,thruster_mk4|1"
+- "carrier ornithopter mk6" -> "VEHICLE_PARTS|carrier_ornithopter|engine_mk6,chassis_mk6,generator_mk6,main_hull_mk6,side_hull_mk6,tail_hull_mk6,wing_mk6|1"
+- "sandcrawler mk6" -> "VEHICLE_PARTS|sandcrawler|engine_mk6,chassis_mk6,cabin_mk6,tread_mk6,vacuum_mk6,centrifuge_mk6,psu_mk6|1"
+- "walker sandcrawler" -> "VEHICLE_PARTS|sandcrawler|walker_engine_mk6,chassis_mk6,cabin_mk6,dampened_treads_mk6,vacuum_mk6,centrifuge_mk6,psu_mk6|1"
 
 PART EXAMPLES:
 - "sandbike engine mk3" -> "sandbike_engine_mk3|1"
@@ -170,8 +155,20 @@ Match this request to an exact database key:"""
             if '|' in result:
                 parts = result.split('|')
                 
-                # Check if this is a vehicle assembly request
-                if parts[0].strip() == 'VEHICLE_ASSEMBLY' and len(parts) >= 5:
+                # Check if this is a flexible vehicle parts request
+                if parts[0].strip() == 'VEHICLE_PARTS' and len(parts) >= 4:
+                    vehicle_type = parts[1].strip()
+                    parts_list = parts[2].strip()
+                    try:
+                        quantity = int(parts[3].strip())
+                    except (ValueError, IndexError):
+                        quantity = 1
+                    
+                    # Return special format for flexible vehicle assembly
+                    return f"VEHICLE_PARTS|{vehicle_type}|{parts_list}", quantity
+                
+                # Check if this is a legacy vehicle assembly request
+                elif parts[0].strip() == 'VEHICLE_ASSEMBLY' and len(parts) >= 5:
                     vehicle_type = parts[1].strip()
                     tier = parts[2].strip()
                     modules = parts[3].strip()
@@ -306,8 +303,12 @@ Match this request to an exact database key:"""
                 await self._handle_no_match(message, craft_query)
                 return
             
-            # Check if this is a vehicle assembly request
-            if item_name.startswith('VEHICLE_ASSEMBLY|'):
+            # Check if this is a flexible vehicle parts request
+            if item_name.startswith('VEHICLE_PARTS|'):
+                await self._handle_flexible_vehicle_parts(message, item_name, quantity, craft_query)
+                return
+            # Check if this is a legacy vehicle assembly request
+            elif item_name.startswith('VEHICLE_ASSEMBLY|'):
                 await self._handle_vehicle_assembly_with_llm(message, item_name, quantity, craft_query)
                 return
             elif await self._is_vehicle_assembly_request(craft_query, item_name):
@@ -405,6 +406,133 @@ Match this request to an exact database key:"""
         
         await message.channel.send(response)
     
+    async def _handle_flexible_vehicle_parts(self, message, parts_data: str, quantity: int, original_query: str):
+        """Handle flexible vehicle parts assembly requests"""
+        try:
+            # Parse the parts data: VEHICLE_PARTS|vehicle_type|parts_list
+            parts = parts_data.split('|')
+            if len(parts) < 3:
+                await message.channel.send("Error: Invalid vehicle parts format")
+                return
+            
+            vehicle_type = parts[1].strip()
+            parts_list_str = parts[2].strip()
+            
+            print(f"DEBUG: Flexible vehicle parts - {vehicle_type} with parts: {parts_list_str}")
+            
+            # Parse the parts list: "engine_mk6,chassis_mk3,hull_mk6,psu_mk6,tread_mk6"
+            requested_parts = [part.strip() for part in parts_list_str.split(',') if part.strip()]
+            
+            # Convert to full database keys: "engine_mk6" -> "sandbike_engine_mk6"
+            full_part_keys = []
+            missing_parts = []
+            
+            from dune_crafting import list_craftable_items
+            available_items = list_craftable_items()
+            
+            for part in requested_parts:
+                # Build the full key: vehicle_type + "_" + part
+                if part.startswith(vehicle_type + "_"):
+                    # Already has vehicle prefix
+                    full_key = part
+                else:
+                    # Add vehicle prefix
+                    full_key = f"{vehicle_type}_{part}"
+                
+                if full_key in available_items:
+                    full_part_keys.append(full_key)
+                else:
+                    print(f"DEBUG: Missing part: {full_key}")
+                    missing_parts.append(part)
+            
+            if missing_parts:
+                missing_str = ", ".join(missing_parts)
+                await message.channel.send(f"❌ **Some parts not found in database:**\n{missing_str}\n\n**Available parts found:** {len(full_part_keys)}")
+                return
+            
+            if not full_part_keys:
+                await message.channel.send("❌ No valid parts found for this vehicle configuration")
+                return
+            
+            # Calculate materials for all parts
+            from dune_crafting import calculate_materials, get_recipe_info, format_materials_list
+            
+            # Define part quantity display (for UI purposes - recipes already account for actual quantities)
+            part_display_quantities = {
+                'sandbike_tread': 3,
+                'buggy_tread': 4, 
+                'scout_ornithopter_wing': 4,
+                'assault_ornithopter_wing': 6,
+                'carrier_ornithopter_wing': 8,
+                'carrier_ornithopter_side_hull': 2,
+                'carrier_ornithopter_tail_hull': 2,
+                'sandcrawler_tread': 2,
+                'dampened_sandcrawler_treads': 2
+            }
+            
+            total_materials = {}
+            part_details = []
+            
+            for part_key in full_part_keys:
+                recipe = get_recipe_info(part_key)
+                if recipe:
+                    # Get display quantity for UI (recipes already contain correct quantities)
+                    display_multiplier = 1
+                    for part_pattern, multiplier in part_display_quantities.items():
+                        if part_pattern in part_key:
+                            display_multiplier = multiplier
+                            break
+                    
+                    # Calculate materials (recipes already account for multiple parts)
+                    part_materials, error = calculate_materials(part_key, quantity)
+                    
+                    if isinstance(part_materials, dict):
+                        for material, amount in part_materials.items():
+                            total_materials[material] = total_materials.get(material, 0) + amount
+                        part_details.append((part_key, recipe, display_multiplier))
+                    else:
+                        print(f"DEBUG: calculate_materials failed for {part_key}, returned: {part_materials}")
+                        missing_parts.append(part_key)
+                else:
+                    missing_parts.append(part_key)
+            
+            if not total_materials:
+                await message.channel.send(f"❌ Could not calculate materials for {vehicle_type} parts")
+                return
+            
+            # Format response
+            response = f"🚗 **Custom {vehicle_type.replace('_', ' ').title()} Assembly**\n\n"
+            if quantity > 1:
+                response += f"**Quantity:** {quantity}\n\n"
+            
+            # Show configuration
+            response += f"**Configuration:** Mixed-tier build\n\n"
+            
+            # List all parts with their tiers and quantities
+            response += f"**Parts Required ({len(part_details)}):**\n"
+            for part_key, recipe, part_multiplier in part_details:
+                # Extract tier from part name for display
+                part_display = part_key.replace(f"{vehicle_type}_", "").replace("_", " ").title()
+                station = recipe.get('station', 'Unknown')
+                if part_multiplier > 1:
+                    response += f"- {part_display} x{part_multiplier} (Station: {station})\n"
+                else:
+                    response += f"- {part_display} (Station: {station})\n"
+            
+            response += f"\n**📦 Total Raw Materials:**\n"
+            response += format_materials_list(total_materials)
+            
+            if quantity > 1:
+                response += f"\n💡 **Note:** Building {quantity} vehicles requires {len(part_details)} different crafting operations per vehicle."
+            
+            response += f"\n✨ **Flexibility:** You can mix and match any tier parts within the same vehicle type!"
+            
+            await message.channel.send(response)
+            
+        except Exception as e:
+            print(f"DEBUG: Flexible vehicle parts error: {e}")
+            await message.channel.send(f"Error processing flexible vehicle parts: {str(e)}")
+
     async def _handle_vehicle_assembly_with_llm(self, message, assembly_data: str, quantity: int, original_query: str):
         """Use LLM to determine exact parts needed from JSON database"""
         try:
