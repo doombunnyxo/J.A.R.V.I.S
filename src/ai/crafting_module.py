@@ -370,16 +370,54 @@ class CraftingProcessor:
             
             # Add detailed breakdown based on mode
             if full_breakdown and not by_parts:
-                # Mode 2: Full breakdown (show crafting tree format)
-                response += f"\n\n**🔧 Crafting Tree:**\n"
-                for part_key, recipe, part_multiplier in part_details:
-                    part_display = part_key.replace(f"{vehicle_type}_", "").replace("_", " ").title()
-                    if part_multiplier > 1:
-                        response += f"\n**{part_display} (x{part_multiplier}):**\n"
-                    else:
-                        response += f"\n**{part_display}:**\n"
-                    # Show the actual crafting tree for each part
-                    response += format_materials_tree(part_key, part_multiplier)
+                # Mode 2: Full breakdown - show how to craft the raw materials
+                # Build a crafting tree showing the intermediate steps
+                response += f"\n\n**🔧 Crafting Process:**\n"
+                
+                # Group materials by tier/type for better organization
+                material_tiers = {
+                    'Basic': ['Salvage', 'Scrap Metal', 'Plastic Scrap', 'Electronics Scrap'],
+                    'Ores': ['Copper Ore', 'Iron Ore', 'Carbon Ore', 'Aluminum Ore', 'Cobalt Ore', 'Nickel Ore'],
+                    'Refined': ['Copper Ingot', 'Iron Ingot', 'Steel Ingot', 'Aluminum Ingot', 'Cobalt Ingot', 'Nickel Ingot'],
+                    'Advanced': ['Plastanium', 'Duraluminum', 'Advanced Alloy', 'Carbon Fiber'],
+                    'Components': ['Servoks', 'Advanced Servoks', 'Gears', 'Springs', 'Wiring', 'Circuit Board', 'Power Cell']
+                }
+                
+                # Show which materials can be crafted from others
+                crafting_relationships = {
+                    'Copper Ingot': 'Crafted from: Copper Ore',
+                    'Iron Ingot': 'Crafted from: Iron Ore',
+                    'Steel Ingot': 'Crafted from: Iron Ingot + Carbon Ore',
+                    'Aluminum Ingot': 'Crafted from: Aluminum Ore',
+                    'Duraluminum': 'Crafted from: Aluminum Ingot + Copper Ingot',
+                    'Plastanium': 'Crafted from: Plastic Scrap + Aluminum Ingot',
+                    'Advanced Servoks': 'Crafted from: Servoks + Electronics'
+                }
+                
+                # Display materials by tier with crafting info
+                materials_shown = set()
+                for tier, tier_materials in material_tiers.items():
+                    tier_items = []
+                    for mat in tier_materials:
+                        if mat in total_materials:
+                            amount = total_materials[mat]
+                            if mat in crafting_relationships:
+                                tier_items.append(f"  - {mat}: {amount} ({crafting_relationships[mat]})")
+                            else:
+                                tier_items.append(f"  - {mat}: {amount}")
+                            materials_shown.add(mat)
+                    
+                    if tier_items:
+                        response += f"\n**{tier} Materials:**\n" + "\n".join(tier_items)
+                
+                # Show any remaining materials not in predefined tiers
+                remaining = []
+                for mat, amount in total_materials.items():
+                    if mat not in materials_shown:
+                        remaining.append(f"  - {mat}: {amount}")
+                
+                if remaining:
+                    response += f"\n**Other Materials:**\n" + "\n".join(remaining)
             
             elif by_parts:
                 # Mode 3 or 4: Show materials for each part individually

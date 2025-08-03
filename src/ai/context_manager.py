@@ -150,6 +150,8 @@ Return only the filtered previous conversation context - no explanations."""
                 if message:
                     resolved_item = await self._resolve_user_mentions(item, message)
                     resolved_context.append(resolved_item)
+                    if resolved_item != item:
+                        print(f"DEBUG: Resolved mention '{item}' -> '{resolved_item}'")
                 else:
                     resolved_context.append(item)
             
@@ -162,19 +164,20 @@ Return only the filtered previous conversation context - no explanations."""
 
 INSTRUCTIONS:
 1. Review each permanent context item carefully
-2. ONLY include items relevant to BOTH the current user AND current query  
-3. Include items about the CURRENT USER asking the query
-4. Include items with instructions for responding to the CURRENT USER
-5. EXCLUDE items about other users or instructions for other users
-6. EXCLUDE items completely unrelated to the query topic
-7. Be SELECTIVE - only include items that would help answer this specific query
-8. When an item mentions users, only include if it's about the current user
+2. You are given BOTH the resolved names AND original mentions (like <@123456>)
+3. Match users by BOTH their name AND their Discord ID when provided
+4. Include items that mention the CURRENT USER (by name OR by their Discord ID)
+5. Include items with instructions for responding to the CURRENT USER
+6. EXCLUDE items about other users UNLESS they're general rules that apply to everyone
+7. EXCLUDE items completely unrelated to the query topic
+8. Be SELECTIVE - only include items that would help answer this specific query
+9. If an item says "when UserA talks to UserB", include it ONLY if current user is UserA OR UserB
 
-Return only relevant permanent context items, one per line, in the exact same format. If no items are relevant, return "No relevant permanent context"."""
+Return only relevant permanent context items from the RESOLVED list, one per line, in the exact same format. If no items are relevant, return "No relevant permanent context"."""
                 },
                 {
                     "role": "user",
-                    "content": f"USER: {user_name}\\n\\nCURRENT QUERY: {query}\\n\\nPERMANENT CONTEXT ITEMS:\\n{context_text}\\n\\nReturn only relevant permanent context items:"
+                    "content": f"CURRENT USER: {user_name} (ID: {message.author.id if message else 'unknown'})\\n\\nCURRENT QUERY: {query}\\n\\nPERMANENT CONTEXT ITEMS (mentions resolved to names):\\n{context_text}\\n\\nORIGINAL CONTEXT ITEMS (with mentions):\\n" + "\\n".join([f"- {item}" for item in permanent_context]) + "\\n\\nReturn only relevant permanent context items:"
                 }
             ]
             
@@ -187,7 +190,13 @@ Return only relevant permanent context items, one per line, in the exact same fo
             
             filtered_response = completion.choices[0].message.content.strip()
             
+            print(f"DEBUG: Permanent context filter for user '{user_name}' (ID: {message.author.id if message else 'unknown'})")
+            print(f"DEBUG: Original items: {len(permanent_context)}")
+            print(f"DEBUG: Query: '{query}'")
+            print(f"DEBUG: Filter response: {filtered_response[:200]}...")
+            
             if "no relevant permanent context" in filtered_response.lower():
+                print(f"DEBUG: No relevant permanent context found")
                 return []
             
             # Parse response back into list
