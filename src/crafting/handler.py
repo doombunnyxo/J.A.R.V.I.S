@@ -98,11 +98,21 @@ VEHICLE MODULES:
 - Buggy: "rear"/"utility_rear", "boost", "cutteray", "storage"
 
 INTERPRETATION RULES:
-1. "complete vehicle" or "full vehicle" = all required parts + all optional modules
-2. "without modules" or "no modules" = only required parts
-3. "with X module" = required parts + specified modules
-4. Individual part requests = single item format
-5. Extract quantity (default: 1)
+1. COMPLETE VEHICLE REQUESTS (use VEHICLE_PARTS format):
+   - "assault ornithopter mk6" = complete vehicle with all required parts
+   - "assault ornithopter mk6 with thruster" = complete vehicle + thruster module
+   - "assault ornithopter mk6 with thruster and storage" = complete vehicle + both modules
+   - Keywords: "complete", "full", vehicle type + tier + "with"
+
+2. INDIVIDUAL PART REQUESTS (use single item format):
+   - "assault ornithopter thruster mk6" = just the thruster part
+   - "ornithopter wing mk5" = just the wing part
+   - Keywords: no vehicle context, just part name + tier
+
+3. MODULE RULES:
+   - "without modules" or "no modules" = only required parts
+   - "with X module" = required parts + specified modules
+   - Extract quantity (default: 1)
 
 CRITICAL: WEAPON NUMBERS ARE PART OF THE NAME, NOT QUANTITY!
 
@@ -119,16 +129,18 @@ WEAPON TIER EXAMPLES:
 - "5 karpov 38 plastanium" -> "karpov_38_plastanium|5"
 
 VEHICLE EXAMPLES (FLEXIBLE MIXING):
+COMPLETE VEHICLES:
 - "sandbike mk5" -> "VEHICLE_PARTS|sandbike|engine_mk5,chassis_mk5,hull_mk5,psu_mk5,tread_mk5|1"
-- "sandbike mk5 with mk2 storage" -> "VEHICLE_PARTS|sandbike|engine_mk5,chassis_mk5,hull_mk5,psu_mk5,tread_mk5,storage_mk2|1"
-- "sandbike with mk5 engine and mk3 everything else" -> "VEHICLE_PARTS|sandbike|engine_mk5,chassis_mk3,hull_mk3,psu_mk3,tread_mk3|1"
-- "assault ornithopter mk6 without modules" -> "VEHICLE_PARTS|assault_ornithopter|engine_mk6,chassis_mk6,cockpit_mk6,cabin_mk6,generator_mk6,tail_mk6,wing_mk6|1"
-- "assault ornithopter mk6 with mk5 rocket launcher" -> "VEHICLE_PARTS|assault_ornithopter|engine_mk6,chassis_mk6,cockpit_mk6,cabin_mk6,generator_mk6,tail_mk6,wing_mk6,rocket_launcher_mk5|1"
-- "buggy mk6 with mk3 chassis and utility rear" -> "VEHICLE_PARTS|buggy|engine_mk6,chassis_mk3,hull_mk6,psu_mk6,tread_mk6,utility_rear_mk6|1"
+- "assault ornithopter mk6" -> "VEHICLE_PARTS|assault_ornithopter|engine_mk6,chassis_mk6,cockpit_mk6,cabin_mk6,generator_mk6,tail_mk6,wing_mk6|1"
+- "assault ornithopter mk6 with thruster" -> "VEHICLE_PARTS|assault_ornithopter|engine_mk6,chassis_mk6,cockpit_mk6,cabin_mk6,generator_mk6,tail_mk6,wing_mk6,thruster_mk6|1"
+- "assault ornithopter mk6 with thruster and storage" -> "VEHICLE_PARTS|assault_ornithopter|engine_mk6,chassis_mk6,cockpit_mk6,cabin_mk6,generator_mk6,tail_mk6,wing_mk6,thruster_mk6,storage_mk5|1"
+- "buggy mk6 with utility rear and cutteray" -> "VEHICLE_PARTS|buggy|engine_mk6,chassis_mk6,hull_mk6,psu_mk6,tread_mk6,utility_rear_mk6,cutteray_mk6|1"
 - "scout ornithopter mk5 with mk4 thruster" -> "VEHICLE_PARTS|scout_ornithopter|engine_mk5,chassis_mk5,cockpit_mk5,generator_mk5,hull_mk5,wing_mk5,thruster_mk4|1"
-- "carrier ornithopter mk6" -> "VEHICLE_PARTS|carrier_ornithopter|engine_mk6,chassis_mk6,generator_mk6,main_hull_mk6,side_hull_mk6,tail_hull_mk6,wing_mk6|1"
-- "sandcrawler mk6" -> "VEHICLE_PARTS|sandcrawler|engine_mk6,chassis_mk6,cabin_mk6,tread_mk6,vacuum_mk6,centrifuge_mk6,psu_mk6|1"
-- "walker sandcrawler" -> "VEHICLE_PARTS|sandcrawler|walker_engine_mk6,chassis_mk6,cabin_mk6,dampened_treads_mk6,vacuum_mk6,centrifuge_mk6,psu_mk6|1"
+
+INDIVIDUAL PARTS:
+- "assault ornithopter thruster mk6" -> "assault_ornithopter_thruster_mk6|1"
+- "scout ornithopter wing mk5" -> "scout_ornithopter_wing_mk5|1"
+- "sandbike engine mk3" -> "sandbike_engine_mk3|1"
 
 PART EXAMPLES:
 - "sandbike engine mk3" -> "sandbike_engine_mk3|1"
@@ -145,10 +157,15 @@ Match this request to an exact database key:"""
             response = await claude.create_message(
                 system_message=system_message,
                 user_message=user_message,
-                max_tokens=50
+                max_tokens=150
             )
             
             result = response.strip()
+            # Clean up any quotes or extra formatting
+            if result.startswith('"') and result.endswith('"'):
+                result = result[1:-1]
+            elif result.startswith('"'):
+                result = result[1:]
             print(f"DEBUG: Claude recipe interpretation - '{user_query}' -> '{result}'")
             
             # Parse Claude's response
