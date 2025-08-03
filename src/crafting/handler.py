@@ -178,7 +178,6 @@ Match this request to an exact database key:"""
                 result = result[1:-1]
             elif result.startswith('"'):
                 result = result[1:]
-            print(f"DEBUG: Claude recipe interpretation - '{user_query}' -> '{result}'")
             
             # Parse Claude's response
             if '|' in result:
@@ -320,18 +319,20 @@ Match this request to an exact database key:"""
                 return
             
             # Check if user wants full breakdown
-            full_breakdown = any(keyword in craft_query.lower() for keyword in [
+            query_lower = craft_query.lower()
+            full_breakdown = any(keyword in query_lower for keyword in [
                 'full breakdown', 'complete breakdown', 'detailed breakdown', 
                 'full materials', 'raw materials', 'all materials',
                 'break down', 'breakdown'
             ])
             
             # Check if user wants materials by parts
-            by_parts = any(keyword in craft_query.lower() for keyword in [
+            by_parts = any(keyword in query_lower for keyword in [
                 'by parts', 'each part', 'part breakdown', 'per part',
                 'part by part', 'individual parts', 'materials by part',
                 'show parts', 'list parts'
             ])
+            
             
             # Handle list command
             if craft_query.lower().strip() in ["list", "show all", "what can i craft", "available items"]:
@@ -381,10 +382,8 @@ Match this request to an exact database key:"""
             
             if ai_full_breakdown:
                 full_breakdown = True
-                print(f"DEBUG: AI detected FULL_BREAKDOWN modifier")
             if ai_by_parts:
                 by_parts = True
-                print(f"DEBUG: AI detected BY_PARTS modifier")
             
             # Clean the item_name of modifiers for further processing
             # Preserve vehicle assembly formats but remove modifiers
