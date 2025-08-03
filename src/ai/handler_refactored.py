@@ -317,22 +317,29 @@ class AIHandler:
             
             system_message = """You are analyzing Discord admin commands to determine if they need internet research.
 
-Look for commands that rename/reorganize roles based on themes, movies, books, games, genres, etc.
+CRITICAL: Any command that renames/reorganizes roles based on ANY theme, franchise, show, movie, book, game, or fictional universe ALWAYS needs search.
 
-If the command mentions a specific theme that would benefit from internet research, respond with JSON:
+Look for these patterns that ALWAYS need search:
+- "rename roles to match [ANYTHING]"
+- "rename all roles to [ANYTHING]" 
+- "reorganize roles based on [ANYTHING]"
+- "make roles fit [ANYTHING]"
+- "roles like [ANYTHING]"
+
+If ANY theme/franchise is mentioned (Star Wars, Harry Potter, Anime, Winx Club, Marvel, Disney, etc.), respond with JSON:
 {
   "needs_search": true,
   "theme": "detected theme name",
   "search_query": "optimized search query for role hierarchy information"
 }
 
-If it's a standard admin command (kick, ban, timeout, etc.) that doesn't need research, respond with:
-{
-  "needs_search": false,
-  "action_type": "standard_admin"
-}
+ONLY respond with needs_search: false for basic admin commands like:
+- kick, ban, timeout, mute users
+- delete messages
+- create/delete channels
 
 Examples:
+- "rename all server roles to match factions from the winx club" → {"needs_search": true, "theme": "Winx Club", "search_query": "Winx Club factions groups hierarchy characters roles"}
 - "rename roles to Star Wars" → {"needs_search": true, "theme": "Star Wars", "search_query": "Star Wars hierarchy ranks roles imperial rebel alliance"}
 - "kick that spammer" → {"needs_search": false, "action_type": "standard_admin"}"""
             
