@@ -71,7 +71,7 @@ class EventHandlers(commands.Cog):
             # Route to crafting if we found a craft pattern
             if craft_query:
                 print(f"DEBUG: [EventHandler-{self.instance_id}] Routing to crafting system: {craft_query}")
-                await self.ai_handler.handle_ai_command(message, f"craft: {craft_query}", "crafting")
+                await self.ai_handler.handle_ai_command(message, craft_query, "crafting")
                 return
             
             # Check for groq: or g: patterns

@@ -114,6 +114,10 @@ def should_use_claude_for_search(query: str) -> bool:
     """
     query_lower = query.lower()
     
+    # Check for crafting patterns first - these should never go to web search
+    if query_lower.startswith('craft:') or query_lower.startswith('cr:'):
+        return False
+    
     # Check for admin commands - always use Groq
     if any(keyword in query_lower for keyword in ADMIN_KEYWORDS):
         return False
@@ -169,8 +173,8 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
         (r'^groq:\s*(.+)', 'groq'),
         (r'^g:\s*(.+)', 'groq'),
         (r'^claude:\s*(.+)', 'claude'),
-        (r'^perplexity:\s*(.+)', 'claude'),  # Backward compatibility
-        (r'^p:\s*(.+)', 'claude'),
+        (r'^perplexity:\s*(.+)', 'perplexity'),
+        (r'^p:\s*(.+)', 'perplexity'),
         (r'^search:\s*(.+)', 'claude'),
     ]
     

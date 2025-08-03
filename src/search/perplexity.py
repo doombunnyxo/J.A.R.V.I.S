@@ -117,7 +117,8 @@ class PerplexitySearch:
                 "max_tokens": 1000,
                 "temperature": 0.2,
                 "top_p": 0.9,
-                "search_domain_filter": ["perplexity.ai"],
+                # Remove domain filter to search all of the web
+                # "search_domain_filter": ["perplexity.ai"],
                 "return_images": False,
                 "return_related_questions": False,
                 "search_recency_filter": "month",

@@ -7,86 +7,89 @@ class HelpCommands(commands.Cog):
     
     def __init__(self, bot):
         self.bot = bot
-        self._executing_commands = set()  # Track commands being executed to prevent duplicates
     
     @commands.command(name='help', aliases=['commands', 'h'])
     async def help_command(self, ctx, category: str = None):
         """Show all available commands or commands in a specific category"""
-        # Prevent duplicate execution
-        command_key = f"help_{ctx.author.id}_{category}"
-        if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate help command detected, ignoring")
-            return
-        
-        self._executing_commands.add(command_key)
-        try:
-            if category:
-                # Show specific category
-                await self._show_category_help(ctx, category.lower())
-            else:
-                # Show main help menu
-                await self._show_main_help(ctx)
-        
-        finally:
-            # Clean up execution tracker
-            self._executing_commands.discard(command_key)
+        if category:
+            await self._show_category_help(ctx, category.lower())
+        else:
+            await self._show_main_help(ctx)
     
     async def _show_main_help(self, ctx):
         """Show the main help menu with all categories"""
         user_is_admin = is_admin(ctx.author.id)
         
         embed = discord.Embed(
-            title="🤖 Discord Bot - Hybrid AI System",
+            title="🤖 J.A.R.V.I.S Discord Bot",
             description="**Primary Interaction**: @mention the bot + your message\n" +
-                       "The bot uses **Groq + Claude** for intelligent routing of your queries.",
+                       "Hybrid AI system using Groq + Claude for intelligent query routing.",
             color=0x5865f2
         )
         
-        # Main AI Interaction
+        # AI Interaction
         embed.add_field(
-            name="🧠 AI Interaction (Primary)",
-            value="**@mention the bot** + your message\n" +
-                  "• Automatically routes to Claude (web search) or Groq (chat/admin)\n" +
-                  "• Use `!help ai` for detailed AI commands",
+            name="🧠 AI Interaction",
+            value="**@bot + message** - Auto-routes to appropriate AI\n" +
+                  "**@bot groq:** or **@bot g:** - Force Groq\n" +
+                  "**@bot claude:** - Force Claude web search\n" +
+                  "**@bot perplexity:** or **@bot p:** - Force Perplexity search\n" +
+                  "**@bot search:** - Direct Google search\n" +
+                  "**@bot craft:** or **@bot cr:** - Crafting system",
             inline=False
         )
         
-        # Force Provider Options
+        # Regular Commands
         embed.add_field(
-            name="🔀 Force Specific AI Provider",
-            value="• `@bot groq:` or `@bot g:` - Force Groq processing\n" +
-                  "• `@bot claude:` or `@bot perplexity:` - Force Claude web search\n" +
-                  "• `@bot search:` - Direct Google search\n" +
-                  "• `@bot craft:` - Dune Awakening crafting system",
+            name="📝 Commands",
+            value="`!help <category>` - Show category help\n" +
+                  "`!ping` - Check bot responsiveness\n" +
+                  "`!hello` - Greet the bot\n" +
+                  "`!search <query>` - Google search (top 3 results)",
             inline=False
         )
         
-        # Command Categories
+        # Context Commands
         embed.add_field(
-            name="📚 Command Categories",
-            value="`!help basic` - Basic utility commands\n" +
-                  "`!help context` - Permanent context management\n" +
-                  "`!help history` - Conversation history\n" +
-                  "`!help crafting` - Dune Awakening crafting system",
+            name="🔄 Context Management", 
+            value="`!remember <text>` - Add permanent context\n" +
+                  "`!memories` - View your permanent context\n" +
+                  "`!forget <number/all>` - Remove context\n" +
+                  "`!add_setting <text>` - Add unfiltered setting\n" +
+                  "`!list_settings` - View unfiltered settings\n" +
+                  "`!remove_setting <number>` - Remove setting",
+            inline=False
+        )
+        
+        # History Commands
+        embed.add_field(
+            name="📚 History & Settings",
+            value="`!clear` - Clear conversation history\n" +
+                  "`!history` - Show recent conversations\n" +
+                  "`!context [on/off]` - Toggle channel context\n" +
+                  "`!clear_settings` - Clear all unfiltered settings\n" +
+                  "`!clear_search_context` - Clear conversation context\n" +
+                  "`!search_context_info` - Show context info",
             inline=False
         )
         
         # Admin Commands (only show if user is admin)
         if user_is_admin:
             embed.add_field(
-                name="🛡️ Admin Commands",
-                value="`!help admin` - Administrative commands\n" +
-                      "• Natural language admin actions via @mention\n" +
-                      "• Reaction-based confirmations for safety",
+                name="🛡️ Admin Features",
+                value="`!admin_panel` - Show pending admin actions\n" +
+                      "`!stats` - Show bot storage statistics\n" +
+                      "`!clear_all_search_contexts` - Clear all contexts\n" +
+                      "**Natural language admin via @mention**",
                 inline=False
             )
         
         embed.add_field(
-            name="💡 Examples",
-            value="• `@bot What's the latest news about AI?` (→ Claude web search)\n" +
-                  "• `@bot Tell me a joke` (→ Groq chat)\n" +
-                  "• `@bot kick @spammer` (→ Groq admin action)\n" +
-                  "• `@bot craft: I need 5 healing kits` (→ Crafting system)",
+            name="📖 Categories",
+            value="`!help ai` - AI system details\n" +
+                  "`!help context` - Context management\n" +
+                  "`!help crafting` - Dune crafting system" +
+                  ("\n`!help admin` - Admin commands" if user_is_admin else ""),
             inline=False
         )
         
@@ -97,269 +100,171 @@ class HelpCommands(commands.Cog):
         """Show help for a specific category"""
         user_is_admin = is_admin(ctx.author.id)
         
-        if category in ['ai', 'search', 'claude', 'groq']:
+        if category in ['ai', 'bot']:
             embed = discord.Embed(
-                title="🧠 AI System - Hybrid Groq + Claude",
-                description="The bot intelligently routes your queries to the best AI provider",
+                title="🧠 AI System Details",
+                description="Hybrid AI routing between Groq and Claude",
                 color=0x00ff7f
             )
             
             embed.add_field(
                 name="🎯 Automatic Routing",
-                value="**@mention the bot + your message**\n\n" +
-                      "**Claude** (Web Search) triggers:\n" +
+                value="**Claude (Web Search):**\n" +
                       "• Current events, news, latest information\n" +
                       "• Research questions, comparisons\n" +
-                      "• \"What's the latest...\", \"Current price of...\", \"Best...\" etc.\n\n" +
-                      "**Groq** (Chat/Admin) triggers:\n" +
-                      "• Personal conversations, jokes, explanations\n" +
-                      "• Admin actions (kick, ban, timeout, roles, channels)\n" +
-                      "• General knowledge that doesn't need web search",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="🔀 Force Specific Provider",
-                value="• `@bot groq: your question` or `@bot g: question`\n" +
-                      "• `@bot claude: your question` or `@bot perplexity: question`\n" +
-                      "• `@bot search: direct google search`",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="📋 Examples by Provider",
-                value="**Claude (Web Search):**\n" +
-                      "• `@bot What are the best laptops in 2025?`\n" +
-                      "• `@bot Latest Bitcoin price`\n" +
-                      "• `@bot Current weather in New York`\n\n" +
+                      "• Questions needing web data\n\n" +
                       "**Groq (Chat/Admin):**\n" +
-                      "• `@bot Tell me a programming joke`\n" +
-                      "• `@bot Explain quantum computing`\n" +
-                      "• `@bot Ban @troublemaker for spamming`",
+                      "• Personal conversations, jokes\n" +
+                      "• Admin actions (kick, ban, etc.)\n" +
+                      "• General knowledge questions",
                 inline=False
             )
             
-            # Add Claude model switching info for admins
+            embed.add_field(
+                name="🔀 Force Provider Syntax",
+                value="• `@bot groq: message` or `@bot g: message`\n" +
+                      "• `@bot claude: message` - Claude + Google search\n" +
+                      "• `@bot perplexity: message` or `@bot p: message`\n" +
+                      "• `@bot search: query` - Direct Google search\n" +
+                      "• `@bot craft: item` or `@bot cr: item`",
+                inline=False
+            )
+            
             if user_is_admin:
                 embed.add_field(
-                    name="🔧 Claude Model Control [Admin Only]",
-                    value="**Available Models:**\n" +
-                          "• `haiku` - Fast, cost-effective (default)\n" +
-                          "• `sonnet` - Balanced performance\n" +
-                          "• `opus` - Most capable model\n\n" +
-                          "**Usage Examples:**\n" +
-                          "• `@bot use haiku to find crypto trends`\n" +
-                          "• `@bot with sonnet analyze this data`\n" +
-                          "• `@bot model: opus - comprehensive research`",
+                    name="🔧 Admin: Claude Models",
+                    value="• `@bot use haiku to...` - Fast (default)\n" +
+                          "• `@bot with sonnet...` - Balanced\n" +
+                          "• `@bot model: opus...` - Most capable",
                     inline=False
                 )
         
-        elif category in ['context', 'permanent']:
+        elif category == 'context':
             embed = discord.Embed(
-                title="🔄 Permanent Context Management",
-                description="Manage information that the AI always remembers about you",
+                title="🔄 Context Management",
+                description="Manage AI memory and settings",
                 color=0xff6b6b
             )
             
             embed.add_field(
-                name="📝 Basic Context Commands",
-                value="• `!permanent_context <text>` - Add permanent context\n" +
-                      "• `!list_permanent_context` - View your context items\n" +
-                      "• `!remove_permanent_context <index>` - Remove specific item\n" +
-                      "• `!clear_permanent_context` - Remove all context",
+                name="📝 Permanent Context",
+                value="`!remember <text>` - Add permanent context\n" +
+                      "`!memories` - View all permanent context\n" +
+                      "`!forget <number>` - Remove specific item\n" +
+                      "`!forget all` - Clear all permanent context",
                 inline=False
             )
             
             embed.add_field(
-                name="🔓 Unfiltered Context Commands",
-                value="• `!unfiltered_permanent_context <text>` - Add unfiltered context\n" +
-                      "• `!list_unfiltered_permanent_context` - View unfiltered items\n" +
-                      "• `!remove_unfiltered_permanent_context <index>` - Remove item\n" +
-                      "• `!clear_unfiltered_permanent_context` - Clear all unfiltered",
+                name="⚙️ Unfiltered Settings",
+                value="`!add_setting <text>` - Add unfiltered setting\n" +
+                      "`!list_settings` - View all settings\n" +
+                      "`!remove_setting <number>` - Remove by number\n" +
+                      "`!clear_settings` - Clear all settings",
                 inline=False
             )
             
             embed.add_field(
-                name="🔍 Context Search & Info",
-                value="• `!search_context <query>` - Search your context items\n" +
-                      "• `!clear_context` - Clear conversation context\n" +
-                      "• `!context_info` - Show context status\n" +
-                      "• `!toggle_channel_context` - Enable/disable channel context",
+                name="🔍 Conversation Context",
+                value="`!clear` - Clear conversation history\n" +
+                      "`!history` - Show recent conversations\n" +
+                      "`!context [on/off]` - Toggle channel context\n" +
+                      "`!clear_search_context` - Clear current context\n" +
+                      "`!search_context_info` - Show context info",
                 inline=False
             )
             
             embed.add_field(
                 name="💡 Context Types",
-                value="**Regular Context:** Filtered for relevance to each query\n" +
-                      "**Unfiltered Context:** Always included, never filtered\n" +
-                      "**Conversation Context:** Recent chat history (auto-expires)",
+                value="**Permanent**: Always remembered, filtered by relevance\n" +
+                      "**Unfiltered**: Always included, never filtered\n" +
+                      "**Conversation**: Recent chat (expires after 30min)",
                 inline=False
             )
         
-        elif category == 'basic':
+        elif category in ['crafting', 'craft', 'dune']:
             embed = discord.Embed(
-                title="⚙️ Basic Commands",
-                color=0x4ecdc4
-            )
-            
-            embed.add_field(
-                name="🏓 Utility Commands",
-                value="• `!ping` - Check bot responsiveness\n" +
-                      "• `!hello` - Greet the bot",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="⚙️ Settings Commands",
-                value="• `!toggle_channel_context` - Use recent channel messages as context\n" +
-                      "• `!context_info` - View your current settings",
-                inline=False
-            )
-        
-        elif category == 'history':
-            embed = discord.Embed(
-                title="📚 History Commands",
-                color=0xffb347
-            )
-            
-            embed.add_field(
-                name="📖 Conversation History",
-                value="• `!conversation_history` - View recent AI conversations\n" +
-                      "• `!export_conversation` - Export history to file\n" +
-                      "• `!clear_conversation_history` - Clear your history",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="🔄 Context Management",
-                value="• `!clear_context` - Clear active conversation context\n" +
-                      "• `!context_info` - Show current context status",
-                inline=False
-            )
-        
-        elif category in ['crafting', 'dune']:
-            embed = discord.Embed(
-                title="🔨 Dune Awakening Crafting System",
-                description="Comprehensive crafting calculator with 79+ recipes",
+                title="🔨 Dune Awakening Crafting",
+                description="Natural language crafting calculator",
                 color=0x9b59b6
             )
             
             embed.add_field(
-                name="🎯 Basic Usage",
-                value="**@bot craft: <item request>**\n\n" +
-                      "Examples:\n" +
-                      "• `@bot craft: I need 5 healing kits`\n" +
-                      "• `@bot craft: iron sword`\n" +
-                      "• `@bot craft: house karpov rifle`\n" +
-                      "• `@bot craft: list` - Show all available recipes",
+                name="🎯 Usage",
+                value="`@bot craft: <item>` or `@bot cr: <item>`\n\n" +
+                      "**Examples:**\n" +
+                      "• `@bot craft: karpov 38 plastanium`\n" +
+                      "• `@bot craft: sandbike mk3`\n" +
+                      "• `@bot craft: 5 healing kits`\n" +
+                      "• `@bot craft: list` - Show categories",
                 inline=False
             )
             
             embed.add_field(
-                name="⚔️ Weapon Categories",
-                value="**Standard Weapons (7 tiers):**\n" +
-                      "• Rifles: Karpov 38, JABAL Spitdart\n" +
-                      "• Sidearms: Maula Pistol, Disruptor M11\n" +
-                      "• Long Blades: Sword, Rapier\n" +
-                      "• Short Blades: Dirk, Kindjal\n" +
-                      "• Scatterguns: Drillshot FK7, GRDA 44\n\n" +
-                      "**Unique Weapons:** Piters Disruptor, The Tapper, Eviscerator, etc.",
+                name="📊 Database Stats",
+                value="• **232 Total Recipes**\n" +
+                      "• ~50 Weapons (7 material tiers)\n" +
+                      "• ~150 Vehicles (sandbikes, buggies, ornithopters)\n" +
+                      "• Tools, components, materials",
                 inline=False
             )
             
             embed.add_field(
-                name="🏗️ Other Categories",
-                value="• **Equipment:** Stillsuits, Spice Masks, Desert Garb\n" +
-                      "• **Healing:** Healkit series (MK2, MK4, MK6)\n" +
-                      "• **Materials:** Ingots, components, refined materials\n" +
-                      "• **Buildings:** Foundations, walls, refineries\n" +
-                      "• **Vehicles:** Ornithopter engines and parts",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="🎮 Natural Language",
-                value="The system uses AI to understand natural requests:\n" +
-                      "• \"craft me a mark 2 heal kit\" → healkit_mk2\n" +
-                      "• \"I need steel weapons\" → finds steel tier items\n" +
-                      "• \"house vulcan weapon\" → house_vulcan_gau_92",
+                name="⚔️ Material Tiers",
+                value="Salvage → Copper → Iron → Steel →\n" +
+                      "Aluminum → Duraluminum → Plastanium",
                 inline=False
             )
         
         elif category == 'admin' and user_is_admin:
             embed = discord.Embed(
                 title="🛡️ Admin Commands",
-                description="Natural language admin actions with safety confirmations",
+                description="Natural language admin with confirmations",
                 color=0xe74c3c
             )
             
             embed.add_field(
-                name="👥 User Moderation",
-                value="**@bot + natural language:**\n" +
-                      "• `@bot kick @spammer` - Remove user from server\n" +
-                      "• `@bot ban @troublemaker for harassment` - Permanent ban\n" +
-                      "• `@bot timeout @user for 1 hour` - Temporary mute\n" +
-                      "• `@bot remove timeout from @user` - Remove mute",
+                name="📊 Admin Commands",
+                value="`!admin_panel` - Show pending actions\n" +
+                      "`!stats` - Bot storage statistics\n" +
+                      "`!clear_all_search_contexts` - Clear all user contexts",
                 inline=False
             )
             
             embed.add_field(
-                name="📝 Message Management",
-                value="• `@bot delete 10 messages` - Bulk delete recent messages\n" +
-                      "• `@bot delete messages from @user` - Remove user's messages\n" +
-                      "• `@bot purge 50 messages from this channel`",
+                name="👥 Natural Language Admin",
+                value="**User Management:**\n" +
+                      "• `@bot kick @user`\n" +
+                      "• `@bot ban @user for reason`\n" +
+                      "• `@bot timeout @user for 1 hour`\n\n" +
+                      "**Messages:**\n" +
+                      "• `@bot delete 10 messages`\n" +
+                      "• `@bot delete messages from @user`\n\n" +
+                      "**Roles:**\n" +
+                      "• `@bot add role RoleName to @user`\n" +
+                      "• `@bot remove role RoleName from @user`\n" +
+                      "• `@bot rename role OldName to NewName`",
                 inline=False
             )
             
             embed.add_field(
-                name="🏷️ Role Management",
-                value="• `@bot add role Moderator to @user`\n" +
-                      "• `@bot remove role Member from @user`\n" +
-                      "• `@bot rename role Moderator to Super Mod`\n" +
-                      "• `@bot reorganize roles for gaming server`",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="📢 Channel Management",
-                value="• `@bot create text channel general-chat`\n" +
-                      "• `@bot create voice channel Voice Chat`\n" +
-                      "• `@bot delete channel old-announcements`",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="🎭 Nickname Management",
-                value="• `@bot change @user nickname to NewName`\n" +
-                      "• `@bot set my nickname to AdminName`",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="⚠️ Safety System",
-                value="All admin actions require confirmation:\n" +
-                      "• React ✅ to proceed\n" +
+                name="⚠️ Safety",
+                value="All actions require confirmation:\n" +
+                      "• React ✅ to confirm\n" +
                       "• React ❌ to cancel\n" +
-                      "• Actions auto-expire after 5 minutes",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="🎛️ Direct Admin Panel",
-                value="`!admin_panel` - Open administrative control interface",
+                      "• Auto-expires after 5 minutes",
                 inline=False
             )
         
         else:
             embed = discord.Embed(
                 title="❌ Unknown Category",
-                description=f"Category '{category}' not found.\n\n**Available categories:**\n" +
-                           "• `ai` - AI system and providers\n" +
-                           "• `context` - Permanent context management\n" +
-                           "• `basic` - Basic utility commands\n" +
-                           "• `history` - Conversation history\n" +
-                           "• `crafting` - Dune Awakening crafting\n" +
-                           ("• `admin` - Administrative commands\n" if user_is_admin else ""),
+                description=f"Category '{category}' not found.\n\n" +
+                           "**Available categories:**\n" +
+                           "• `ai` - AI system details\n" +
+                           "• `context` - Context management\n" +
+                           "• `crafting` - Dune crafting system" +
+                           ("\n• `admin` - Admin commands" if user_is_admin else ""),
                 color=0x95a5a6
             )
         

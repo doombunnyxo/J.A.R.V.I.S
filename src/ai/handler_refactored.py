@@ -160,6 +160,8 @@ class AIHandler:
             # Route to appropriate handler
             if provider == "claude":
                 response = await self._handle_with_claude(message, cleaned_query)
+            elif provider == "perplexity":
+                response = await self._handle_with_perplexity(message, cleaned_query)
             elif provider == "crafting":
                 response = await self._handle_with_crafting(message, cleaned_query)
             else:  # groq
@@ -182,8 +184,10 @@ class AIHandler:
         """Determine which provider to use and return cleaned query"""
         # Check for forced provider
         if force_provider:
-            if force_provider in ["claude", "perplexity"]:
+            if force_provider == "claude":
                 provider = "claude"
+            elif force_provider == "perplexity":
+                provider = "perplexity"
             elif force_provider == "crafting":
                 provider = "crafting"
             else:
@@ -205,8 +209,10 @@ class AIHandler:
         """Determine which AI provider to use"""
         # Check for forced provider
         if force_provider:
-            if force_provider in ["claude", "perplexity"]:
+            if force_provider == "claude":
                 provider = "claude"
+            elif force_provider == "perplexity":
+                provider = "perplexity"
             elif force_provider == "crafting":
                 provider = "crafting"
             else:
@@ -290,6 +296,36 @@ class AIHandler:
         
         except Exception as e:
             return f"Error with Claude search: {str(e)}"
+    
+    async def _handle_with_perplexity(self, message, query: str) -> str:
+        """Handle query with Perplexity (direct web search)"""
+        try:
+            if not config.has_perplexity_api():
+                return "Perplexity API not configured - web search unavailable"
+            
+            # Get user context
+            context = await self.context_manager.build_full_context(
+                query, message.author.id, message.channel.id, 
+                message.author.display_name, message
+            )
+            
+            # Import perplexity search
+            from ..search.perplexity import perplexity_search
+            
+            print(f"DEBUG: Calling Perplexity API")
+            print(f"DEBUG: Context length: {len(context)} chars")
+            
+            # Call Perplexity search
+            response = await perplexity_search.search_and_answer(
+                query, 
+                user_id=message.author.id,
+                channel_id=message.channel.id
+            )
+            
+            return self._suppress_link_previews(response)
+        
+        except Exception as e:
+            return f"Error with Perplexity search: {str(e)}"
     
     async def _handle_with_groq(self, message, query: str) -> str:
         """Handle query with Groq (chat/admin)"""
