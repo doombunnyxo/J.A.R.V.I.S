@@ -314,6 +314,9 @@ Match this request to an exact database key:"""
     async def handle_craft_command(self, message, craft_query: str):
         """Handle crafting command when mentioned with 'craft:' prefix"""
         try:
+            # Debug message to confirm we're in the crafting handler
+            await message.channel.send(f"🔧 **CRAFTING DEBUG:** Received query: '{craft_query}'")
+            
             if not craft_query.strip():
                 await message.channel.send("Please specify what to craft. Example: `@bot craft: I need 5 healing kits`")
                 return
@@ -332,6 +335,9 @@ Match this request to an exact database key:"""
                 'part by part', 'individual parts', 'materials by part',
                 'show parts', 'list parts'
             ])
+            
+            # Debug the initial detection
+            await message.channel.send(f"🔍 **DEBUG 1:** full_breakdown={full_breakdown}, by_parts={by_parts}")
             
             
             # Handle list command
@@ -384,6 +390,9 @@ Match this request to an exact database key:"""
                 full_breakdown = True
             if ai_by_parts:
                 by_parts = True
+            
+            # Debug the final values
+            await message.channel.send(f"🔍 **DEBUG 2:** After AI processing: full_breakdown={full_breakdown}, by_parts={by_parts}")
             
             # Clean the item_name of modifiers for further processing
             # Preserve vehicle assembly formats but remove modifiers
