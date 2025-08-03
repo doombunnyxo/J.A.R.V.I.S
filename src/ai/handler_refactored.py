@@ -273,14 +273,14 @@ class AIHandler:
                 await message.channel.send(f"🔧 **DEBUG**: Perplexity API not configured")
                 return "❌ Perplexity API not configured for admin commands."
             
-            # Step 1: Use Perplexity to analyze the admin command and detect if it needs research
-            await message.channel.send(f"🔧 **DEBUG**: Step 1 - Calling Perplexity to analyze admin command")
-            admin_analysis = await self._perplexity_analyze_admin_command(message, query)
+            # Step 1: Use Groq to analyze the admin command and detect if it needs research
+            await message.channel.send(f"🔧 **DEBUG**: Step 1 - Calling Groq to analyze admin command")
+            admin_analysis = await self._groq_analyze_admin_command(message, query)
             await message.channel.send(f"🔧 **DEBUG**: Step 1 Complete - Admin analysis result: {admin_analysis}")
             
             # Program-level fallback: Force search for role reorganization patterns
             force_search = self._should_force_search_for_roles(query)
-            if force_search:
+            if force_search and not admin_analysis.get('needs_search'):
                 await message.channel.send(f"🔧 **DEBUG**: Step 1 OVERRIDE - Program detected role reorganization pattern, forcing search")
                 admin_analysis = {
                     "needs_search": True,
@@ -295,7 +295,7 @@ class AIHandler:
                 search_results = await self._perform_google_search_for_admin(admin_analysis['search_query'])
                 await message.channel.send(f"🔧 **DEBUG**: Step 2 Complete - Got {len(search_results) if search_results else 0} characters of search results")
                 
-                # Step 3: Use Perplexity to process search results and generate role list
+                # Step 3: Use Perplexity to process search results and generate role list  
                 await message.channel.send(f"🔧 **DEBUG**: Step 3 - Calling Perplexity to generate role list")
                 role_list = await self._perplexity_generate_role_list(query, search_results, admin_analysis['theme'])
                 await message.channel.send(f"🔧 **DEBUG**: Step 3 Complete - Generated role list: {role_list[:100]}...")
@@ -373,6 +373,67 @@ class AIHandler:
         
         return "Custom Theme"
     
+    async def _groq_analyze_admin_command(self, message, query: str) -> dict:
+        """Use Groq to analyze admin command and detect if it needs internet search"""
+        try:
+            if not config.has_groq_api():
+                return {"needs_search": False, "action_type": "error", "error": "Groq not configured"}
+            
+            system_message = """You are analyzing Discord admin commands to determine if they need internet research.
+
+You must respond with valid JSON in one of these two formats ONLY:
+
+FORMAT 1 - For role reorganization (ALWAYS needs search):
+{
+  "needs_search": true,
+  "theme": "detected theme name",
+  "search_query": "optimized search query"
+}
+
+FORMAT 2 - For basic admin commands (no search needed):
+{
+  "needs_search": false,
+  "action_type": "standard_admin"  
+}
+
+CRITICAL RULES:
+1. ANY command about renaming/reorganizing roles = FORMAT 1 (needs_search: true)
+2. Commands with themes/franchises/shows = FORMAT 1 (needs_search: true)  
+3. Only basic commands (kick, ban, timeout) = FORMAT 2 (needs_search: false)
+
+Role reorganization keywords that ALWAYS use FORMAT 1:
+- rename, reorganize, change, update, fix + roles
+- roles + match, like, based on, fit
+- factions, characters, hierarchy
+
+Examples:
+- "rename all server roles to match factions from the winx club" → {"needs_search": true, "theme": "Winx Club", "search_query": "Winx Club factions groups hierarchy characters roles"}
+- "kick that spammer" → {"needs_search": false, "action_type": "standard_admin"}
+- "reorganize roles like Star Wars" → {"needs_search": true, "theme": "Star Wars", "search_query": "Star Wars hierarchy ranks roles imperial rebel alliance"}"""
+            
+            # Use the existing Groq client
+            completion = self.groq_client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": f"Analyze this admin command: {query}"}
+                ],
+                max_tokens=200,
+                temperature=0.1
+            )
+            
+            groq_response = completion.choices[0].message.content.strip()
+            
+            # Parse JSON response
+            import json
+            try:
+                return json.loads(groq_response)
+            except json.JSONDecodeError:
+                return {"needs_search": False, "action_type": "error", "error": f"Invalid JSON: {groq_response}"}
+                
+        except Exception as e:
+            return {"needs_search": False, "action_type": "error", "error": str(e)}
+    
     async def _perplexity_analyze_admin_command(self, message, query: str) -> dict:
         """Use Perplexity to analyze admin command and detect if it needs internet search"""
         try:
@@ -422,7 +483,7 @@ Examples:
 - "reorganize roles like Star Wars" → {"needs_search": true, "theme": "Star Wars", "search_query": "Star Wars hierarchy ranks roles imperial rebel alliance"}"""
             
             payload = {
-                "model": "llama-3.1-sonar-small-128k-online",
+                "model": "sonar",  # Correct Perplexity model name
                 "messages": [
                     {"role": "system", "content": system_message},
                     {"role": "user", "content": f"Analyze this admin command: {query}"}
@@ -502,14 +563,20 @@ etc.
 Make the roles hierarchical (from highest to lowest authority) and appropriate for Discord server management."""
             
             payload = {
-                "model": "llama-3.1-sonar-large-128k-online",
+                "model": "sonar",  # Correct Perplexity model name
                 "messages": [
                     {"role": "system", "content": system_message},
-                    {"role": "user", "content": f"Original request: {original_query}\nTheme: {theme}\n\nSearch Results:\n{search_results}\n\nGenerate role list:"}
+                    {"role": "user", "content": f"Original request: {original_query}\nTheme: {theme}\n\nSearch Results:\n{search_results[:5000]}\n\nGenerate role list:"}  # Truncate search results
                 ],
                 "max_tokens": 300,
                 "temperature": 0.2
             }
+            
+            # Debug: Check payload size
+            import json
+            payload_size = len(json.dumps(payload))
+            print(f"DEBUG: Perplexity payload size: {payload_size} characters")
+            print(f"DEBUG: Search results size: {len(search_results)} characters")
             
             timeout = aiohttp.ClientTimeout(total=20)
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -520,7 +587,13 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
                         role_list = result["choices"][0]["message"]["content"].strip()
                         return role_list
                     else:
-                        raise Exception(f"Perplexity API error {response.status}")
+                        # Get error details
+                        try:
+                            error_body = await response.text()
+                            print(f"DEBUG: Perplexity 400 error body: {error_body}")
+                        except:
+                            pass
+                        raise Exception(f"Perplexity API error {response.status}: {error_body if 'error_body' in locals() else 'Unknown error'}")
                         
         except Exception as e:
             print(f"DEBUG: Perplexity role generation failed: {e}")
