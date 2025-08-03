@@ -225,7 +225,76 @@ class AIHandler:
         return "groq"
     
     async def _handle_with_claude(self, message, query: str) -> str:
-        """Handle query using hybrid search (Claude optimization + Perplexity analysis)"""
+        """Handle query using Claude - either admin actions or hybrid search"""
+        try:
+            # Check if this is an admin command
+            from .routing import ADMIN_KEYWORDS
+            query_lower = query.lower()
+            is_admin_command = any(keyword in query_lower for keyword in ADMIN_KEYWORDS)
+            
+            if is_admin_command:
+                return await self._handle_admin_with_claude(message, query)
+            else:
+                return await self._handle_search_with_claude(message, query)
+            
+        except Exception as e:
+            print(f"DEBUG: Claude handler failed: {e}")
+            return f"❌ Error with Claude processing: {str(e)}"
+    
+    async def _handle_admin_with_claude(self, message, query: str) -> str:
+        """Handle admin commands using Claude for natural language processing"""
+        try:
+            if not config.has_anthropic_api():
+                return "❌ Claude API not configured. Please contact an administrator."
+            
+            # Build context for admin processing
+            context = await self.context_manager.build_full_context(
+                query, message.author.id, message.channel.id,
+                message.author.display_name, message
+            )
+            
+            # Use Claude Haiku for admin command processing
+            import aiohttp
+            
+            headers = {
+                "x-api-key": config.ANTHROPIC_API_KEY,
+                "Content-Type": "application/json",
+                "anthropic-version": "2023-06-01"
+            }
+            
+            system_message = self._build_claude_admin_system_message(context, message.author.id)
+            
+            payload = {
+                "model": "claude-3-5-haiku-20241022",
+                "max_tokens": 1000,
+                "temperature": 0.2,
+                "messages": [
+                    {"role": "user", "content": f"{system_message}\n\nUser request: {query}"}
+                ]
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=15)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post("https://api.anthropic.com/v1/messages", 
+                                       headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        claude_response = result["content"][0]["text"].strip()
+                    else:
+                        raise Exception(f"Claude API error {response.status}: {await response.text()}")
+            
+            # Handle admin actions if detected
+            if await self._handle_admin_actions(message, query, claude_response):
+                return ""  # Admin action handled, no additional response needed
+            
+            return claude_response
+            
+        except Exception as e:
+            print(f"DEBUG: Claude admin processing failed: {e}")
+            return f"❌ Error with Claude admin processing: {str(e)}"
+    
+    async def _handle_search_with_claude(self, message, query: str) -> str:
+        """Handle search queries using hybrid search (Claude optimization + Perplexity analysis)"""
         try:
             from ..search.search_pipeline import SearchPipeline
             from ..search.hybrid_search_provider import HybridSearchProvider
@@ -408,6 +477,52 @@ class AIHandler:
             parts.append("=" * 50)
         
         core_instructions = """You are a helpful AI assistant with the following capabilities:
+
+1. **General Knowledge**: Answer questions using your training data and any relevant context provided above.
+
+2. **Discord Server Management** (Admin only): Help with server administration including user moderation, role management, channel management, and message cleanup.
+
+The relevant context section above contains only information pertinent to the current query. Use this context to provide more personalized and informed responses."""
+
+        parts.append(core_instructions)
+        
+        # Add admin capabilities if user is admin
+        if is_admin(user_id):
+            admin_instructions = """Additional admin capabilities:
+
+- User moderation (kick, ban, timeout/mute users)
+- Role management (add/remove roles from users, rename roles)  
+- Channel management (create/delete channels)
+- Message cleanup (bulk delete messages, including from specific users)
+- Nickname changes
+
+When you detect an administrative request, respond by clearly stating what action you understood. DO NOT ask for text-based confirmation. The system will automatically handle confirmation.
+
+Use this format:
+I understand you want to [ACTION]. [Brief description of what will happen]
+
+Examples:
+- "kick that spammer" → I understand you want to kick [user]. They will be removed from the server.
+- "delete John's messages" → I understand you want to delete messages from John. I'll remove their recent messages.
+- "rename role Moderator to Super Mod" → I understand you want to rename the Moderator role to Super Mod.
+
+Be concise and clear about what the action will do."""
+
+            parts.append(admin_instructions)
+        
+        return "\\n\\n".join(parts)
+    
+    def _build_claude_admin_system_message(self, context: str, user_id: int) -> str:
+        """Build system message for Claude admin processing"""
+        parts = []
+        
+        if context:
+            parts.append(f"RELEVANT CONTEXT:\\n{context}")
+            parts.append("=" * 50)
+        
+        core_instructions = """You are Claude, an AI assistant specialized in Discord server administration and general helpfulness.
+
+Your capabilities include:
 
 1. **General Knowledge**: Answer questions using your training data and any relevant context provided above.
 

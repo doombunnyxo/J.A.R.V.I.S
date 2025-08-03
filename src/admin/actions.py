@@ -308,13 +308,12 @@ class AdminActionHandler:
         
         # Import here to avoid circular imports
         from ..config import config
-        from groq import Groq
+        import aiohttp
         
-        if not config.has_groq_api():
-            return "❌ **Error**: Groq API not available for role analysis."
+        if not config.has_anthropic_api():
+            return "❌ **Error**: Claude API not available for role analysis."
         
         try:
-            groq_client = Groq(api_key=config.GROQ_API_KEY)
             
             # Prepare role analysis prompt
             role_list = [f"- {role.name}" for role in roles_to_analyze]
@@ -352,20 +351,36 @@ OLD_NAME → NEW_NAME
 For roles that are already appropriate for the context, don't include them.
 Do not include any other text, explanations, or formatting beyond the rename pairs."""
 
-            print(f"DEBUG: Sending flexible prompt to Groq with context: '{context_description}'")
+            print(f"DEBUG: Sending flexible prompt to Claude with context: '{context_description}'")
             
-            # Make API call to Groq
-            completion = groq_client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": "You are a Discord server management expert who creates appropriate role names based on specific server contexts and descriptions. Always follow the exact output format requested."},
-                    {"role": "user", "content": prompt}
-                ],
-                model=config.AI_MODEL,
-                max_tokens=800,
-                temperature=0.3  # Slightly higher for more creative names based on custom context
-            )
+            # Make API call to Claude Haiku
+            headers = {
+                "x-api-key": config.ANTHROPIC_API_KEY,
+                "Content-Type": "application/json",
+                "anthropic-version": "2023-06-01"
+            }
             
-            suggestions = completion.choices[0].message.content.strip()
+            system_content = "You are a Discord server management expert who creates appropriate role names based on specific server contexts and descriptions. Always follow the exact output format requested."
+            
+            payload = {
+                "model": "claude-3-5-haiku-20241022",
+                "max_tokens": 800,
+                "temperature": 0.3,
+                "messages": [
+                    {"role": "user", "content": f"{system_content}\n\n{prompt}"}
+                ]
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=15)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post("https://api.anthropic.com/v1/messages", 
+                                       headers=headers, json=payload) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        suggestions = result["content"][0]["text"].strip()
+                    else:
+                        error_text = await response.text()
+                        raise Exception(f"Claude API error {response.status}: {error_text}")
             print(f"DEBUG: AI suggestions received: {suggestions}")
             
             if not suggestions:

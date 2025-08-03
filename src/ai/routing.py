@@ -118,9 +118,9 @@ def should_use_claude_for_search(query: str) -> bool:
     if query_lower.startswith('craft:') or query_lower.startswith('cr:'):
         return False
     
-    # Check for admin commands - always use Groq
+    # Check for admin commands - always use Claude
     if any(keyword in query_lower for keyword in ADMIN_KEYWORDS):
-        return False
+        return True
     
     # Check for personal interactions - use Groq for short personal queries
     if any(keyword in query_lower for keyword in PERSONAL_KEYWORDS):

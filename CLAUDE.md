@@ -32,8 +32,8 @@ This is a Discord bot with hybrid AI functionality that combines Groq and Claude
 
 #### AI Handler (handler_refactored.py)
 **Core functionality**: Hybrid AI routing system with intelligent query distribution
-- **Claude**: Used for web search queries, current events, comparisons, research
-- **Groq**: Used for admin commands, chat processing, personal interactions, explanations
+- **Claude**: Used for web search queries, current events, comparisons, research, and admin commands
+- **Groq**: Used for general chat processing, personal interactions, explanations
 - **Rate Limiting**: 10 requests per 60 seconds per user
 - **Context Management**: Unified conversation context shared between both AIs
 - **Admin Action Detection**: Parses admin intents and handles confirmations
@@ -41,7 +41,7 @@ This is a Discord bot with hybrid AI functionality that combines Groq and Claude
 #### Routing System (routing.py)
 **Core functionality**: Intelligent query routing logic
 - **Search Indicators**: Keywords that trigger Claude routing (current, latest, news, etc.)
-- **Admin Keywords**: Commands that trigger Groq routing (kick, ban, timeout, etc.)
+- **Admin Keywords**: Commands that trigger Claude routing (kick, ban, timeout, etc.)
 - **Force Provider Syntax**: 
   - `groq:` or `g:` - Force Groq processing
   - `claude:` or `perplexity:` - Force Claude processing
@@ -196,15 +196,16 @@ discord-bot/
 **Main Usage**: `@mention the bot + your message`
 
 #### Automatic Routing
-- **Claude (Web Search)** triggers:
+- **Claude (Search/Admin)** triggers:
+  - Admin commands (kick, ban, timeout, role management)
   - Current events, news, latest information
   - Research questions, comparisons ("vs", "better")
   - Questions ("what are", "how much", "when will")
   - Current topics (crypto, tech, gaming, etc.)
-- **Groq (Chat/Admin)** triggers:
-  - Admin commands (kick, ban, timeout, role management)
+- **Groq (Chat)** triggers:
   - Personal conversations, jokes, explanations
   - Short greetings and interactions
+  - General Q&A and casual chat
 
 #### Force Specific Provider
 - `@bot groq: your question` or `@bot g: question` - Force Groq
@@ -296,11 +297,11 @@ discord-bot/
 - **Discord Optimization**: Responses formatted for Discord markdown
 
 ### Recent Major Updates
-1. **Claude-Powered Context Filtering**: Migrated context filtering from Groq to Claude Haiku for better quality and consistency
-2. **Hybrid Search Optimization**: Claude for query optimization + Perplexity for analysis (optimal cost/quality)
-3. **Multi-Provider Options**: Hybrid (default), pure-claude, pure-perplexity modes available
-4. **Unified Search Pipeline**: Generic search architecture with provider adapters
-5. **Cost Optimization**: Minimizes expensive operations while maximizing response quality
+1. **Claude-Powered Admin Actions**: Migrated admin command processing from Groq to Claude for better natural language understanding
+2. **Claude-Powered Context Filtering**: Migrated context filtering from Groq to Claude Haiku for better quality and consistency
+3. **Hybrid Search Optimization**: Claude for query optimization + Perplexity for analysis (optimal cost/quality)
+4. **Multi-Provider Options**: Hybrid (default), pure-claude, pure-perplexity modes available
+5. **Unified Search Pipeline**: Generic search architecture with provider adapters
 6. **Code Cleanup**: Removed old handler.py, consolidated to handler_refactored.py only
 
 ### Security Features

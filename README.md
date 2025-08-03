@@ -9,7 +9,7 @@ A sophisticated Discord bot with hybrid AI functionality that intelligently rout
 ## ✨ Key Features
 
 ### 🤖 **Hybrid AI System**
-- **Intelligent Routing**: Automatically routes queries between Groq (chat/admin) and hybrid search (Claude + Perplexity)
+- **Intelligent Routing**: Automatically routes queries between Groq (chat) and Claude (admin + hybrid search)
 - **Hybrid Search**: Claude for fast query optimization, Perplexity for high-quality result analysis
 - **Unified Search Pipeline**: Generic search architecture with provider adapters
 - **Cross-AI Context**: Unified conversation context shared between all AI providers
