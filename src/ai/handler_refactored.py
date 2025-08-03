@@ -385,31 +385,41 @@ class AIHandler:
             
             system_message = """You are analyzing Discord admin commands to determine if they need internet research.
 
-CRITICAL: Any command that renames/reorganizes roles based on ANY theme, franchise, show, movie, book, game, or fictional universe ALWAYS needs search.
+You must respond with valid JSON in one of these two formats ONLY:
 
-Look for these patterns that ALWAYS need search:
-- "rename roles to match [ANYTHING]"
-- "rename all roles to [ANYTHING]" 
-- "reorganize roles based on [ANYTHING]"
-- "make roles fit [ANYTHING]"
-- "roles like [ANYTHING]"
-
-If ANY theme/franchise is mentioned (Star Wars, Harry Potter, Anime, Winx Club, Marvel, Disney, etc.), respond with JSON:
+FORMAT 1 - For role reorganization (ALWAYS needs search):
 {
   "needs_search": true,
   "theme": "detected theme name",
-  "search_query": "optimized search query for role hierarchy information"
+  "search_query": "optimized search query"
 }
 
-ONLY respond with needs_search: false for basic admin commands like:
-- kick, ban, timeout, mute users
-- delete messages
-- create/delete channels
+FORMAT 2 - For basic admin commands (no search needed):
+{
+  "needs_search": false,
+  "action_type": "standard_admin"  
+}
+
+CRITICAL RULES:
+1. ANY command about renaming/reorganizing roles = FORMAT 1 (needs_search: true)
+2. Commands with themes/franchises/shows = FORMAT 1 (needs_search: true)  
+3. Only basic commands (kick, ban, timeout) = FORMAT 2 (needs_search: false)
+
+Role reorganization keywords that ALWAYS use FORMAT 1:
+- rename, reorganize, change, update, fix + roles
+- roles + match, like, based on, fit
+- factions, characters, hierarchy
+
+Valid admin actions include:
+- Role management (rename, reorganize, add, remove roles)
+- User moderation (kick, ban, timeout, mute)
+- Message management (delete, purge, clear)
+- Channel management (create, delete channels)
 
 Examples:
 - "rename all server roles to match factions from the winx club" → {"needs_search": true, "theme": "Winx Club", "search_query": "Winx Club factions groups hierarchy characters roles"}
-- "rename roles to Star Wars" → {"needs_search": true, "theme": "Star Wars", "search_query": "Star Wars hierarchy ranks roles imperial rebel alliance"}
-- "kick that spammer" → {"needs_search": false, "action_type": "standard_admin"}"""
+- "kick that spammer" → {"needs_search": false, "action_type": "standard_admin"}
+- "reorganize roles like Star Wars" → {"needs_search": true, "theme": "Star Wars", "search_query": "Star Wars hierarchy ranks roles imperial rebel alliance"}"""
             
             payload = {
                 "model": "llama-3.1-sonar-small-128k-online",
