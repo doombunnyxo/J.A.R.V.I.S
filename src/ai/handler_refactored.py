@@ -274,21 +274,30 @@ class AIHandler:
                 return "❌ Perplexity API not configured for admin commands."
             
             # Step 1: Use Perplexity to analyze the admin command and detect if it needs research
+            await message.channel.send(f"🔧 **DEBUG**: Step 1 - Calling Perplexity to analyze admin command")
             admin_analysis = await self._perplexity_analyze_admin_command(message, query)
+            await message.channel.send(f"🔧 **DEBUG**: Step 1 Complete - Admin analysis result: {admin_analysis}")
             
             if admin_analysis.get('needs_search'):
+                await message.channel.send(f"🔧 **DEBUG**: Step 2 - Command needs search, getting Google results")
                 # Step 2: If it needs research, get search results
                 search_results = await self._perform_google_search_for_admin(admin_analysis['search_query'])
+                await message.channel.send(f"🔧 **DEBUG**: Step 2 Complete - Got {len(search_results) if search_results else 0} characters of search results")
                 
                 # Step 3: Use Perplexity to process search results and generate role list
+                await message.channel.send(f"🔧 **DEBUG**: Step 3 - Calling Perplexity to generate role list")
                 role_list = await self._perplexity_generate_role_list(query, search_results, admin_analysis['theme'])
+                await message.channel.send(f"🔧 **DEBUG**: Step 3 Complete - Generated role list: {role_list[:100]}...")
                 
                 if role_list and not role_list.startswith("❌"):
                     # Step 4: Create confirmation message with the role list
+                    await message.channel.send(f"🔧 **DEBUG**: Step 4 - Creating confirmation message")
                     return await self._create_admin_confirmation_with_roles(message, query, role_list, admin_analysis)
                 else:
+                    await message.channel.send(f"🔧 **DEBUG**: Step 4 ERROR - Role list generation failed")
                     return role_list or "❌ Failed to generate role list"
             else:
+                await message.channel.send(f"🔧 **DEBUG**: Command doesn't need search, using standard admin handler")
                 # Handle non-search admin commands through existing system
                 return await self._handle_standard_admin_command(message, query)
                 
