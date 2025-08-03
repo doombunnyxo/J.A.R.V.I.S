@@ -14,18 +14,19 @@ class ClaudeSearchProvider:
     def _get_model_display_name(self, model: str) -> str:
         """Get display name for the model"""
         model_names = {
-            "haiku": "Claude Haiku",
-            "sonnet": "Claude Sonnet", 
-            "opus": "Claude Opus"
+            "haiku": "Claude 3.5 Haiku",
+            "sonnet": "Claude Sonnet 4", 
+            "opus": "Claude Opus 4",
+            "sonnet-3.7": "Claude 3.7 Sonnet"
         }
         return model_names.get(model, "Claude")
     
     async def optimize_query(self, query: str, context: str) -> str:
         """Use Claude to optimize the search query"""
-        return await claude_optimize_search_query(query, context)
+        return await claude_optimize_search_query(query, context, self.model)
     
     async def analyze_results(self, query: str, search_results: str, context: str) -> str:
         """Use Claude to analyze search results"""
-        response = await claude_search_analysis(query, search_results, context)
+        response = await claude_search_analysis(query, search_results, context, self.model)
         # Prepend model name to response
         return f"**{self.model_name}:** {response}"

@@ -12,10 +12,17 @@ from ..config import config
 class AnthropicAPI:
     """Async client for Anthropic Claude API"""
     
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, model: str = "haiku"):
         self.api_key = api_key
         self.base_url = "https://api.anthropic.com/v1/messages"
-        self.model = "claude-3-5-haiku-20241022"
+        # Map model names to API model IDs (using latest 2025 models)
+        model_map = {
+            "haiku": "claude-3-5-haiku-20241022",  # Still the latest Haiku variant
+            "sonnet": "claude-sonnet-4-20250514",  # Claude Sonnet 4 (May 2025)
+            "opus": "claude-opus-4-20250522",      # Claude Opus 4 (May 2025)
+            "sonnet-3.7": "claude-3-7-sonnet-20250219"  # Claude 3.7 Sonnet (Feb 2025)
+        }
+        self.model = model_map.get(model, "claude-3-5-haiku-20241022")
         
     async def create_message(self, system_message: str, user_message: str, max_tokens: int = 1000) -> str:
         """Create a message using Claude 3.5 Haiku"""
@@ -47,16 +54,16 @@ class AnthropicAPI:
                     error_text = await response.text()
                     raise Exception(f"Claude API error {response.status}: {error_text}")
 
-async def claude_optimize_search_query(user_query: str, filtered_context: str = "") -> str:
+async def claude_optimize_search_query(user_query: str, filtered_context: str = "", model: str = "haiku") -> str:
     """
-    Use Claude 3.5 Haiku to optimize a search query for better Google Search results
+    Use Claude to optimize a search query for better Google Search results
     """
     if not config.has_anthropic_api():
         return user_query  # Fallback to original query
     
     try:
-        # Create Claude client
-        claude = AnthropicAPI(config.ANTHROPIC_API_KEY)
+        # Create Claude client with specified model
+        claude = AnthropicAPI(config.ANTHROPIC_API_KEY, model)
         
         # Build system message for search query optimization
         system_message = """You are a search query optimizer. Your job is to transform user questions into optimized Google search queries that will return the most relevant and current results. The results will be processed and formatted for Discord chat.
@@ -108,17 +115,16 @@ Use this context to make the search query more specific and personalized."""
         print(f"DEBUG: Claude search query optimization failed: {e}")
         return user_query  # Fallback to original query
 
-async def claude_search_analysis(user_query: str, search_results: str, filtered_context: str = "") -> str:
+async def claude_search_analysis(user_query: str, search_results: str, filtered_context: str = "", model: str = "haiku") -> str:
     """
-    Use Claude 3.5 Haiku to analyze search results and provide a comprehensive answer
-    Replaces Perplexity for more cost-effective processing
+    Use Claude to analyze search results and provide a comprehensive answer
     """
     if not config.has_anthropic_api():
         return "Claude API not configured - cannot process search results"
     
     try:
-        # Create Claude client
-        claude = AnthropicAPI(config.ANTHROPIC_API_KEY)
+        # Create Claude client with specified model
+        claude = AnthropicAPI(config.ANTHROPIC_API_KEY, model)
         
         # Build system message for search result analysis
         system_message = """You are an AI assistant that analyzes web search results to provide comprehensive, accurate answers to user questions. You are responding in a Discord chat environment.

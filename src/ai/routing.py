@@ -205,7 +205,7 @@ def extract_claude_model(query: str, user_id: int) -> tuple[str, str]:
     if not is_admin(user_id):
         return "haiku", query
     
-    # Available Claude models for search processing
+    # Available Claude models for search processing (2025 models)
     claude_models = {
         'haiku': 'haiku',
         'claude-haiku': 'haiku',
@@ -215,13 +215,19 @@ def extract_claude_model(query: str, user_id: int) -> tuple[str, str]:
         'quick': 'haiku',
         'sonnet': 'sonnet',
         'claude-sonnet': 'sonnet',
-        '3.5-sonnet': 'sonnet',
-        'claude-3.5-sonnet': 'sonnet',
+        'sonnet-4': 'sonnet',
+        'claude-sonnet-4': 'sonnet',
+        '4-sonnet': 'sonnet',
         'balanced': 'sonnet',
+        'sonnet-3.7': 'sonnet-3.7',
+        'claude-3.7-sonnet': 'sonnet-3.7',
+        '3.7-sonnet': 'sonnet-3.7',
+        'thinking': 'sonnet-3.7',
         'opus': 'opus',
         'claude-opus': 'opus',
-        '3-opus': 'opus',
-        'claude-3-opus': 'opus',
+        'opus-4': 'opus',
+        'claude-opus-4': 'opus',
+        '4-opus': 'opus',
         'powerful': 'opus',
         'best': 'opus'
     }

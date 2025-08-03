@@ -388,7 +388,11 @@ class AIHandler:
                 from dune_crafting import calculate_materials, get_recipe_info, format_materials_list, format_materials_tree, list_craftable_items
                 
                 try:
-                    # Get the recipe information
+                    # Check if this is a vehicle assembly request
+                    if item_name.startswith('VEHICLE_ASSEMBLY|'):
+                        return await self._handle_vehicle_assembly_request(item_name, quantity, query)
+                    
+                    # Get the recipe information for individual items
                     recipe_info = get_recipe_info(item_name)
                     if not recipe_info:
                         return f"❌ **Recipe not found for:** {item_name}\n\nThe LLM should have matched this to a valid recipe. Use `@bot craft: list` to see available categories.\n\n**Debug:** Interpreted query '{query}' as item '{item_name}'"
@@ -549,6 +553,123 @@ class AIHandler:
         except Exception as e:
             return f"Error generating category list: {str(e)}"
     
+    async def _handle_vehicle_assembly_request(self, assembly_request: str, quantity: int, original_query: str) -> str:
+        """Handle vehicle assembly requests by providing parts breakdown"""
+        try:
+            # Parse the assembly request: VEHICLE_ASSEMBLY|vehicle_type|tier|modules
+            parts = assembly_request.split('|')
+            if len(parts) != 4:
+                return f"❌ **Invalid vehicle assembly format:** {assembly_request}"
+            
+            _, vehicle_type, tier, modules = parts
+            
+            # Import crafting functions
+            from dune_crafting import get_recipe_info, calculate_materials, list_craftable_items
+            
+            # Map vehicle types and get required parts
+            vehicle_parts_map = {
+                "assault_ornithopter": {
+                    "required": ["cabin", "chassis", "cockpit", "engine", "generator", "tail", "wing"],
+                    "optional_competing": ["storage", "rocket_launcher"], 
+                    "optional_standalone": ["thruster"],
+                    "wing_count": 6,
+                    "description": "Assault Ornithopter - 6-wing combat vehicle"
+                },
+                "scout_ornithopter": {
+                    "required": ["chassis", "cockpit", "engine", "generator", "tail", "wing"],
+                    "optional": ["storage"],
+                    "wing_count": 4,
+                    "description": "Scout Ornithopter - 4-wing reconnaissance vehicle"
+                },
+                "carrier_ornithopter": {
+                    "required": ["chassis", "engine", "generator", "main_hull", "side_hull", "tail_hull", "wing"],
+                    "optional": ["thruster"],
+                    "wing_count": 8,
+                    "description": "Carrier Ornithopter - 8-wing heavy transport"
+                },
+                "sandbike": {
+                    "required": ["chassis", "hull", "psu", "tread", "engine"],
+                    "optional_mk1": ["backseat"],
+                    "optional_mk2plus": ["booster", "storage"],
+                    "description": "Sandbike - Fast ground vehicle"
+                },
+                "buggy": {
+                    "required": ["engine", "chassis", "psu", "tread"],
+                    "rear_choice": ["buggy_rear", "utility_rear"],
+                    "optional_with_rear": ["booster"],
+                    "optional_with_utility": ["cutteray", "storage"],
+                    "description": "Buggy - Heavy ground vehicle"
+                },
+                "sandcrawler": {
+                    "required": ["chassis", "engine", "cabin", "tread", "vacuum", "centrifuge", "psu"],
+                    "variants": ["walker_engine", "dampened_treads"],
+                    "description": "Sandcrawler - Spice harvesting vehicle"
+                }
+            }
+            
+            if vehicle_type not in vehicle_parts_map:
+                return f"❌ **Unknown vehicle type:** {vehicle_type}\n\nSupported vehicles: {', '.join(vehicle_parts_map.keys())}"
+            
+            vehicle_info = vehicle_parts_map[vehicle_type]
+            
+            # Build response
+            response = f"🚗 **Vehicle Assembly: {vehicle_info['description']} {tier.upper()}**\n\n"
+            
+            if quantity > 1:
+                response += f"**Quantity:** {quantity} vehicles\n\n"
+            
+            response += f"**Required Parts:**\n"
+            
+            # Calculate total materials for all required parts
+            total_materials = {}
+            parts_list = []
+            
+            for part in vehicle_info["required"]:
+                part_key = f"{vehicle_type}_{part}_{tier.lower()}"
+                
+                # Special handling for wings
+                if part == "wing" and "wing_count" in vehicle_info:
+                    wing_count = vehicle_info["wing_count"]
+                    part_quantity = wing_count * quantity
+                    parts_list.append(f"• {wing_count}x {part_key} (per vehicle)")
+                else:
+                    part_quantity = quantity
+                    parts_list.append(f"• 1x {part_key}")
+                
+                # Try to get recipe info and calculate materials
+                recipe_info = get_recipe_info(part_key)
+                if recipe_info:
+                    part_materials = calculate_materials(part_key, part_quantity)
+                    for material, amount in part_materials.items():
+                        total_materials[material] = total_materials.get(material, 0) + amount
+            
+            response += "\n".join(parts_list)
+            
+            # Add optional parts info
+            if "optional_competing" in vehicle_info:
+                response += f"\n\n**Optional (Choose One):**\n"
+                for part in vehicle_info["optional_competing"]:
+                    part_key = f"{vehicle_type}_{part}_{tier.lower()}"
+                    response += f"• 1x {part_key}\n"
+            
+            if "optional_standalone" in vehicle_info:
+                response += f"\n**Optional (Standalone):**\n"
+                for part in vehicle_info["optional_standalone"]:
+                    part_key = f"{vehicle_type}_{part}_{tier.lower()}"
+                    response += f"• 1x {part_key}\n"
+            
+            # Add materials summary if we found any
+            if total_materials:
+                response += f"\n\n**Total Base Materials (Required Parts Only):**\n"
+                for material, amount in sorted(total_materials.items()):
+                    response += f"• {amount}x {material}\n"
+            
+            response += f"\n**Note:** Use individual part names for detailed recipes (e.g., `@bot craft: {vehicle_type}_engine_{tier.lower()}`)"
+            
+            return response
+            
+        except Exception as e:
+            return f"❌ **Error processing vehicle assembly:** {str(e)}\n\n**Original request:** {original_query}"
     
     async def _build_groq_context(self, message, query: str) -> str:
         """Build context for Groq queries"""
