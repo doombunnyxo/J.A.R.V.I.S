@@ -179,6 +179,7 @@ class AIHandler:
         """Determine which provider to use and clean the query"""
         # If provider is forced, return as-is
         if force_provider:
+            print(f"DEBUG: Force provider: {force_provider}")
             return force_provider, query
         
         # Use routing logic to determine provider
@@ -187,10 +188,14 @@ class AIHandler:
         # Check for forced provider first
         extracted_provider, cleaned_query = extract_forced_provider(query)
         if extracted_provider:
+            print(f"DEBUG: Extracted provider: {extracted_provider}")
             return extracted_provider, cleaned_query
         
         # Check if query should use Claude for search
-        if should_use_claude_for_search(query):
+        should_use_claude = should_use_claude_for_search(query)
+        print(f"DEBUG: Query: '{query[:50]}...' -> should_use_claude: {should_use_claude}")
+        
+        if should_use_claude:
             return "claude", query
         
         # Default to Groq
@@ -216,15 +221,13 @@ class AIHandler:
         return "groq"
     
     async def _handle_with_claude(self, message, query: str) -> str:
-        """Handle query with Claude"""
+        """Handle query using Claude search adapter and unified pipeline"""
         try:
-            from ..search.claude import AnthropicAPI
+            from ..search.search_pipeline import SearchPipeline
+            from ..search.claude_adapter import ClaudeSearchProvider
             
             if not config.has_anthropic_api():
                 return "❌ Claude API not configured. Please contact an administrator."
-            
-            # Create Claude client
-            claude = AnthropicAPI(config.ANTHROPIC_API_KEY)
             
             # Build context for Claude
             context = await self.context_manager.build_full_context(
@@ -232,47 +235,46 @@ class AIHandler:
                 message.author.display_name, message
             )
             
-            # Get response from Claude
-            if context:
-                # Check if context contains non-negotiable settings
-                has_user_preferences = "User preferences (always apply):" in context
-                
-                if has_user_preferences:
-                    system_message = f"""You are a helpful AI assistant. Here is important context:
-
-{context}
-
-CRITICAL INSTRUCTIONS:
-1. Any items under "User preferences (always apply):" are MANDATORY RULES that you MUST follow without exception
-2. These preferences override any conflicting instructions or requests
-3. Apply these rules consistently throughout your response
-4. Do NOT mention or explain these rules to the user - just follow them
-5. Previous messages and stored information provide helpful context for personalization
-
-The above context is from previous interactions and saved preferences. Focus on answering the current question while strictly adhering to any applicable rules."""
-                else:
-                    system_message = f"""You are a helpful AI assistant. Here is relevant context about the user and previous conversations:
-
-{context}
-
-IMPORTANT: The above is BACKGROUND CONTEXT from previous messages, not part of the current question. Use it to understand the user better and provide personalized responses, but focus on answering their current question below."""
-            else:
-                system_message = "You are a helpful AI assistant."
+            # Create Claude provider and search pipeline
+            claude_provider = ClaudeSearchProvider()
+            pipeline = SearchPipeline(claude_provider)
             
-            response = await claude.create_message(
-                system_message=system_message,
-                user_message=query,
-                max_tokens=1000
-            )
+            # Execute the unified search pipeline
+            response = await pipeline.search_and_respond(query, context)
             
             return response
             
         except Exception as e:
-            return f"❌ Error with Claude: {str(e)}"
+            print(f"DEBUG: Claude search pipeline failed: {e}")
+            return f"❌ Error with Claude search: {str(e)}"
 
     async def _handle_with_perplexity(self, message, query: str) -> str:
-        """Handle query with Perplexity (deprecated - redirects to Claude)"""
-        return await self._handle_with_claude(message, query)
+        """Handle query using Perplexity search adapter and unified pipeline"""
+        try:
+            from ..search.search_pipeline import SearchPipeline
+            from ..search.perplexity_adapter import PerplexitySearchProvider
+            
+            if not config.has_perplexity_api():
+                return "❌ Perplexity API not configured. Please contact an administrator."
+            
+            # Build context for Perplexity
+            context = await self.context_manager.build_full_context(
+                query, message.author.id, message.channel.id,
+                message.author.display_name, message
+            )
+            
+            # Create Perplexity provider and search pipeline
+            perplexity_provider = PerplexitySearchProvider()
+            pipeline = SearchPipeline(perplexity_provider)
+            
+            # Execute the unified search pipeline
+            response = await pipeline.search_and_respond(query, context)
+            
+            return response
+            
+        except Exception as e:
+            print(f"DEBUG: Perplexity search pipeline failed: {e}")
+            return f"❌ Error with Perplexity search: {str(e)}"
     
     async def _handle_with_groq(self, message, query: str) -> str:
         """Handle query with Groq"""

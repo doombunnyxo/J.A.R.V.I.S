@@ -179,7 +179,7 @@ class AdminCommands(commands.Cog):
             return
         
         # This will be populated by the AI handler's pending actions
-        from ..ai.handler import AIHandler
+        from ..ai.handler_refactored import AIHandler
         ai_handler = getattr(self.bot, '_ai_handler', None)
         
         if not ai_handler or not ai_handler.pending_admin_actions:
