@@ -313,10 +313,9 @@ Match this request to an exact database key:"""
     
     async def handle_craft_command(self, message, craft_query: str):
         """Handle crafting command when mentioned with 'craft:' prefix"""
+        await message.channel.send(f"🔧 **CRAFTING DEBUG:** Starting with query: '{craft_query}'")
+        
         try:
-            # Debug message to confirm we're in the crafting handler
-            await message.channel.send(f"🔧 **CRAFTING DEBUG:** Received query: '{craft_query}'")
-            
             if not craft_query.strip():
                 await message.channel.send("Please specify what to craft. Example: `@bot craft: I need 5 healing kits`")
                 return
@@ -444,7 +443,9 @@ Match this request to an exact database key:"""
             
         except Exception as e:
             print(f"DEBUG: Crafting handler error: {e}")
-            await message.channel.send(f'❌ Crafting calculation failed: {str(e)}')
+            import traceback
+            traceback.print_exc()
+            await message.channel.send(f'❌ Crafting calculation failed: {str(e)}\n\nFull traceback printed to console.')
     
     async def _is_vehicle_assembly_request(self, query: str, matched_item: str) -> bool:
         """Check if user wants complete vehicle assembly vs individual part"""
