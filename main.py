@@ -59,7 +59,6 @@ async def setup_bot():
             'src.commands.search_context',
             'src.commands.help',
             'src.search.google',
-            'src.crafting.handler',
             'src.events.handlers'
         ]
         
@@ -73,10 +72,9 @@ async def setup_bot():
         # Set up event handler references
         event_handler = bot.get_cog('EventHandlers')
         search_handler = bot.get_cog('GoogleSearch')
-        crafting_handler = bot.get_cog('CraftingHandler')
         
         if event_handler:
-            event_handler.set_handlers(ai_handler, search_handler, crafting_handler)
+            event_handler.set_handlers(ai_handler, search_handler, None)
         
         return bot
         
