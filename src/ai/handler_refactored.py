@@ -182,11 +182,8 @@ class AIHandler:
     
     async def _determine_provider_and_query(self, message, query: str, force_provider: str) -> tuple[str, str]:
         """Determine which provider to use and clean the query"""
-        await message.channel.send(f"🔧 **DEBUG**: ENTERING _determine_provider_and_query with query: '{query}', force_provider: {force_provider}")
-        
         # If provider is forced, return as-is
         if force_provider:
-            await message.channel.send(f"🔧 **DEBUG**: Force provider: {force_provider}")
             return force_provider, query
         
         # Use routing logic to determine provider
@@ -195,19 +192,15 @@ class AIHandler:
         # Check for forced provider first
         extracted_provider, cleaned_query = extract_forced_provider(query)
         if extracted_provider:
-            await message.channel.send(f"🔧 **DEBUG**: Extracted provider: {extracted_provider}")
             return extracted_provider, cleaned_query
         
         # Check if query should use Claude for search
         should_use_claude = should_use_claude_for_search(query)
-        await message.channel.send(f"🔧 **DEBUG**: Query: '{query[:50]}...' -> should_use_claude: {should_use_claude}")
         
         if should_use_claude:
-            await message.channel.send(f"🔧 **DEBUG**: Routing to Claude")
             return "claude", query
         
         # Default to Groq
-        await message.channel.send(f"🔧 **DEBUG**: Routing to Groq (default)")
         return "groq", query
     
     async def _determine_provider(self, message, query: str, force_provider: str) -> str:
@@ -232,18 +225,12 @@ class AIHandler:
     async def _handle_with_claude(self, message, query: str) -> str:
         """Handle query using Claude - either admin actions or hybrid search"""
         try:
-            await message.channel.send(f"🔧 **DEBUG**: ENTERING _handle_with_claude with query: '{query}'")
-            
             # Check if this is an admin command
             from .routing import ADMIN_KEYWORDS
             query_lower = query.lower()
             is_admin_command = any(keyword in query_lower for keyword in ADMIN_KEYWORDS)
             
-            await message.channel.send(f"🔧 **DEBUG**: Admin keywords check - query_lower: '{query_lower}'")
-            await message.channel.send(f"🔧 **DEBUG**: is_admin_command: {is_admin_command}")
-            
             if is_admin_command:
-                await message.channel.send(f"🔧 **DEBUG**: Taking admin command path")
                 # Admin command path - route to Perplexity-based admin handler
                 return await self._handle_admin_with_claude(message, query)
             else:
@@ -267,48 +254,34 @@ class AIHandler:
     async def _handle_admin_with_perplexity(self, message, query: str) -> str:
         """Handle admin commands using Perplexity for analysis and execution"""
         try:
-            await message.channel.send(f"🔧 **DEBUG**: ENTERING _handle_admin_with_perplexity with query: '{query}'")
-            
             if not config.has_perplexity_api():
-                await message.channel.send(f"🔧 **DEBUG**: Perplexity API not configured")
                 return "❌ Perplexity API not configured for admin commands."
             
             # Step 1: Use Groq to analyze the admin command and detect if it needs research
-            await message.channel.send(f"🔧 **DEBUG**: Step 1 - Calling Groq to analyze admin command")
             admin_analysis = await self._groq_analyze_admin_command(message, query)
-            await message.channel.send(f"🔧 **DEBUG**: Step 1 Complete - Admin analysis result: {admin_analysis}")
             
             # Program-level fallback: Force search for role reorganization patterns
             force_search = self._should_force_search_for_roles(query)
             if force_search and not admin_analysis.get('needs_search'):
-                await message.channel.send(f"🔧 **DEBUG**: Step 1 OVERRIDE - Program detected role reorganization pattern, forcing search")
                 admin_analysis = {
                     "needs_search": True,
                     "theme": self._extract_theme_from_query(query),
                     "search_query": f"{self._extract_theme_from_query(query)} hierarchy factions groups roles characters"
                 }
-                await message.channel.send(f"🔧 **DEBUG**: Step 1 OVERRIDE Complete - Forced analysis: {admin_analysis}")
             
             if admin_analysis.get('needs_search'):
-                await message.channel.send(f"🔧 **DEBUG**: Step 2 - Command needs search, getting Google results")
                 # Step 2: If it needs research, get search results
                 search_results = await self._perform_google_search_for_admin(admin_analysis['search_query'])
-                await message.channel.send(f"🔧 **DEBUG**: Step 2 Complete - Got {len(search_results) if search_results else 0} characters of search results")
                 
                 # Step 3: Use Perplexity to process search results and generate role list  
-                await message.channel.send(f"🔧 **DEBUG**: Step 3 - Calling Perplexity to generate role list")
                 role_list = await self._perplexity_generate_role_list(query, search_results, admin_analysis['theme'])
-                await message.channel.send(f"🔧 **DEBUG**: Step 3 Complete - Generated role list: {role_list[:100]}...")
                 
                 if role_list and not role_list.startswith("❌"):
                     # Step 4: Create confirmation message with the role list
-                    await message.channel.send(f"🔧 **DEBUG**: Step 4 - Creating confirmation message")
                     return await self._create_admin_confirmation_with_roles(message, query, role_list, admin_analysis)
                 else:
-                    await message.channel.send(f"🔧 **DEBUG**: Step 4 ERROR - Role list generation failed")
                     return role_list or "❌ Failed to generate role list"
             else:
-                await message.channel.send(f"🔧 **DEBUG**: Command doesn't need search, using standard admin handler")
                 # Handle non-search admin commands through existing system
                 return await self._handle_standard_admin_command(message, query)
                 
@@ -630,10 +603,8 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
             
             # Send confirmation message
             confirmation_msg = await message.channel.send(confirmation_text)
-            print(f"DEBUG: Step 1 - Sent confirmation message with role list (ID: {action_id})")
             await confirmation_msg.add_reaction("✅")
             await confirmation_msg.add_reaction("❌")
-            print(f"DEBUG: Step 2 - Added ✅/❌ reactions to confirmation message")
             
             return ""  # No additional response needed
             
@@ -642,10 +613,27 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
             return f"❌ Error creating admin confirmation: {str(e)}"
     
     async def _handle_standard_admin_command(self, message, query: str) -> str:
-        """Handle non-search admin commands through existing system"""
+        """Handle non-search admin commands through admin parser"""
         try:
-            # Route to existing Groq-based admin system for standard commands
-            return await self._handle_single_step_admin_action_with_groq(message, query)
+            # Use admin parser to interpret command and extract parameters
+            from ..admin.parser import AdminIntentParser
+            from ..admin.actions import AdminActionHandler
+            
+            parser = AdminIntentParser(self.bot)
+            executor = AdminActionHandler(self.bot)
+            
+            # Parse the admin command
+            action_type, parameters = await parser.parse_admin_intent(
+                query, message.guild, message.author
+            )
+            
+            if action_type:
+                # Execute the admin action directly (no confirmation for simple actions)
+                result = await executor.execute_admin_action(message, action_type, parameters)
+                return f"✅ **Action completed:** {result}"
+            else:
+                return "❌ **Command not recognized as admin action**"
+                
         except Exception as e:
             return f"❌ Error with standard admin command: {str(e)}"
     
@@ -1083,150 +1071,6 @@ Respond with ONLY the specific admin command, nothing else."""
             return f"❌ Error generating admin commands: {str(e)}"
     
     
-    async def _handle_single_step_admin_action_with_groq(self, message, query: str) -> str:
-        """Handle single-step admin actions - Claude interprets, Groq executes"""
-        try:
-            print(f"DEBUG: Single-step admin action - Claude interprets, Groq executes")
-            
-            # Step 1: Use Claude to interpret and generate specific admin command
-            admin_command = await self._claude_interpret_admin_request(message, query)
-            
-            if not admin_command or admin_command.startswith("❌"):
-                return admin_command or "❌ Failed to interpret admin request"
-            
-            print(f"DEBUG: Claude interpreted command: {admin_command}")
-            
-            # Step 2: Use Groq to execute the admin command
-            return await self._groq_execute_admin_command(message, admin_command)
-            
-        except Exception as e:
-            print(f"DEBUG: Single-step admin processing failed: {e}")
-            return f"❌ Error with single-step admin processing: {str(e)}"
-    
-    async def _claude_interpret_admin_request(self, message, query: str) -> str:
-        """Use Claude to interpret admin requests and convert to specific commands"""
-        try:
-            if not config.has_anthropic_api():
-                return "❌ Claude API not configured"
-            
-            # Build context for Claude's interpretation
-            user_context = await self.context_manager.build_full_context(
-                query, message.author.id, message.channel.id,
-                message.author.display_name, message
-            )
-            
-            import aiohttp
-            
-            headers = {
-                "x-api-key": config.ANTHROPIC_API_KEY,
-                "Content-Type": "application/json",
-                "anthropic-version": "2023-06-01"
-            }
-            
-            # System message for interpreting admin requests
-            system_message = f"""You are Claude, an AI assistant that interprets Discord admin requests and converts them to specific commands.
-
-USER CONTEXT:
-{user_context}
-
-Your task is to interpret the user's admin request and convert it to a clear, specific command that can be executed.
-
-INSTRUCTIONS:
-1. Identify the admin action type from the user's request
-2. Convert to a simple, direct command using exact parser keywords
-3. Keep commands short and use the exact trigger phrases
-
-COMMAND PATTERNS (use these exactly):
-- "kick [target]" for removing users
-- "ban [target]" for banning users  
-- "timeout [target]" for muting users
-- "delete messages" for message cleanup
-- "rename role [old] to [new]" for single role renames
-- "reorganize roles [theme]" for bulk role reorganization
-
-EXAMPLES:
-- "kick that spammer" → "kick spammer"
-- "delete John's messages" → "delete messages from John"
-- "rename moderator role to super mod" → "rename role Moderator to Super Mod"
-- "reorganize all roles for Star Wars" → "reorganize roles Star Wars theme"
-
-Respond with ONLY the specific admin command, nothing else."""
-            
-            payload = {
-                "model": "claude-3-5-haiku-20241022",
-                "max_tokens": 150,
-                "temperature": 0.1,
-                "messages": [
-                    {"role": "user", "content": f"Admin request to interpret: {query}"}
-                ]
-            }
-            
-            timeout = aiohttp.ClientTimeout(total=15)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post("https://api.anthropic.com/v1/messages", 
-                                       headers=headers, json=payload) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        command = result["content"][0]["text"].strip()
-                        return command
-                    else:
-                        raise Exception(f"Claude API error {response.status}: {await response.text()}")
-                        
-        except Exception as e:
-            print(f"DEBUG: Claude admin interpretation failed: {e}")
-            return f"❌ Error interpreting admin request: {str(e)}"
-    
-    async def _groq_execute_admin_command(self, message, admin_command: str, research_context: str = None) -> str:
-        """Use Groq to execute admin commands (single method for both simple and research-enhanced)"""
-        try:
-            if not self.groq_client:
-                return "❌ Groq API not configured"
-            
-            # Build context for Groq
-            user_context = await self.context_manager.build_full_context(
-                admin_command, message.author.id, message.channel.id,
-                message.author.display_name, message
-            )
-            
-            # Add research context if provided
-            if research_context:
-                enhanced_context = f"{user_context}\n\nRESEARCH CONTEXT FOR ROLE REORGANIZATION:\n{research_context}"
-                print(f"DEBUG: Using enhanced context with research for Groq")
-            else:
-                enhanced_context = user_context
-                print(f"DEBUG: Using standard context for Groq")
-            
-            # Build system message for Groq admin execution
-            system_message = self._build_groq_system_message(enhanced_context, message.author.id)
-            
-            # Get response from Groq
-            completion = self.groq_client.chat.completions.create(
-                model=config.AI_MODEL,
-                messages=[
-                    {"role": "system", "content": system_message},
-                    {"role": "user", "content": admin_command}
-                ],
-                max_tokens=1000,
-                temperature=0.7
-            )
-            
-            response = completion.choices[0].message.content.strip()
-            
-            print(f"DEBUG: Groq admin response: {response}")
-            
-            # Handle admin actions using the existing Groq system (which works)
-            print(f"DEBUG: About to call _handle_admin_actions with command: '{admin_command}'")
-            if await self._handle_admin_actions(message, admin_command, response, research_context):
-                print(f"DEBUG: Admin action WAS detected and handled")
-                return ""  # Admin action handled, no additional response needed
-            else:
-                print(f"DEBUG: Admin action was NOT detected - returning response to user")
-            
-            return response
-            
-        except Exception as e:
-            print(f"DEBUG: Groq admin execution failed: {e}")
-            return f"❌ Error executing admin command with Groq: {str(e)}"
     
     async def _handle_search_with_claude(self, message, query: str) -> str:
         """Handle search queries using the existing hybrid search pipeline"""
@@ -1624,29 +1468,21 @@ Be concise and clear about what the action will do."""
     
     async def handle_admin_reaction(self, reaction, user):
         """Handle admin action confirmation reactions"""
-        await reaction.message.channel.send(f"🔧 **DEBUG**: Admin reaction received from user {user.id}")
-        
         if not is_admin(user.id):
-            await reaction.message.channel.send(f"🔧 **DEBUG**: User {user.id} is not admin, ignoring reaction")
             return
         
         # Extract action ID from message
         message_content = reaction.message.content
-        await reaction.message.channel.send(f"🔧 **DEBUG**: Looking for Action ID in message content")
-        
         if "*Action ID:" not in message_content:
-            await reaction.message.channel.send(f"🔧 **DEBUG**: No Action ID found in message")
             return
         
         action_id = message_content.split("*Action ID: ")[1].split("*")[0].strip()
-        await reaction.message.channel.send(f"🔧 **DEBUG**: Extracted Action ID: {action_id}")
         
         if action_id not in self.admin_actions:
             await reaction.message.channel.send("❌ **Admin action expired or not found.**")
             return
         
         action_data = self.admin_actions[action_id]
-        await reaction.message.channel.send(f"🔧 **DEBUG**: Found action data: {action_data.get('action_type')}")
         executor = action_data.get('executor')
         intent = action_data.get('intent')  # Optional for new Perplexity flow
         
@@ -1659,11 +1495,9 @@ Be concise and clear about what the action will do."""
                     guild = action_data['message'].guild
                     
                     if role_list and guild:
-                        print(f"DEBUG: Step 3 - User reacted ✅, starting role reorganization with {len(role_list)} roles")
                         await self._execute_role_list_reorganization(reaction.message, guild, role_list, action_data.get('theme', 'Custom Theme'))
                     else:
                         await reaction.message.channel.send("❌ **Error:** No role list or guild found")
-                        print(f"DEBUG: Step 3 ERROR - No role list or guild found")
                     return
                 
                 # Check if this is a research-enhanced action that needs final command generation
@@ -1720,7 +1554,6 @@ Be concise and clear about what the action will do."""
                 await reaction.message.channel.send(f"❌ **Action failed:** {str(e)}")
         elif str(reaction.emoji) == "❌":
             await reaction.message.channel.send("❌ **Admin action cancelled.**")
-            print(f"DEBUG: Step 3 ALT - User reacted ❌, admin action cancelled")
         
         # Clean up
         del self.admin_actions[action_id]
@@ -1760,7 +1593,6 @@ Be concise and clear about what the action will do."""
             # Start the renaming process
             progress_msg = await message.channel.send(f"🔄 **Starting role reorganization for {theme}**\n"
                                                     f"Renaming {min(len(server_roles), len(cleaned_roles))} roles...")
-            print(f"DEBUG: Step 4 - Sent progress start message, beginning to rename {min(len(server_roles), len(cleaned_roles))} roles")
             
             renamed_count = 0
             errors = []
@@ -1782,7 +1614,6 @@ Be concise and clear about what the action will do."""
                         await progress_msg.edit(content=f"🔄 **Role Reorganization Progress**\n"
                                               f"Renamed {renamed_count}/{min(len(server_roles), len(cleaned_roles))} roles\n"
                                               f"Latest: `{old_name}` → `{new_name}`")
-                        print(f"DEBUG: Step 5 - Updated progress message: {renamed_count}/{min(len(server_roles), len(cleaned_roles))} roles renamed")
                     
                     # Brief delay to avoid rate limits
                     await asyncio.sleep(0.5)
@@ -1806,11 +1637,9 @@ Be concise and clear about what the action will do."""
                         status_msg += f"\n• ... and {len(errors) - 3} more"
                 
                 await progress_msg.edit(content=status_msg)
-                print(f"DEBUG: Step 6 - Sent final completion message: {renamed_count} roles successfully renamed")
             else:
                 await progress_msg.edit(content=f"❌ **Role reorganization failed**: No roles could be renamed\n"
                                               f"**Errors**: {len(errors)}")
-                print(f"DEBUG: Step 6 ERROR - Sent failure message: No roles could be renamed, {len(errors)} errors")
                 
         except Exception as e:
             await message.channel.send(f"❌ **Role reorganization failed**: {str(e)}")
