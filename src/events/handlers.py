@@ -26,6 +26,10 @@ class EventHandlers(commands.Cog):
     async def on_ready(self):
         """Called when the bot is ready"""
         print(f'{self.bot.user} has connected to Discord!')
+        
+        # Initialize channel context from recent messages
+        if self.ai_handler and hasattr(self.ai_handler, 'context_manager'):
+            await self._initialize_channel_contexts()
     
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
@@ -130,6 +134,49 @@ class EventHandlers(commands.Cog):
         
         # Process commands
         await self.bot.process_commands(message)
+    
+    async def _initialize_channel_contexts(self):
+        """Initialize channel context from recent messages on startup"""
+        try:
+            print("DEBUG: Initializing channel contexts...")
+            context_manager = self.ai_handler.context_manager
+            channels_initialized = 0
+            
+            # Iterate through all text channels the bot can see
+            for guild in self.bot.guilds:
+                for channel in guild.text_channels:
+                    try:
+                        # Check if bot has permission to read message history
+                        permissions = channel.permissions_for(guild.me)
+                        if not permissions.read_message_history:
+                            continue
+                        
+                        # Fetch last 50 messages and add to context
+                        messages_added = 0
+                        async for message in channel.history(limit=50):
+                            # Skip bot messages and empty messages
+                            if message.author.bot or not message.content.strip():
+                                continue
+                            
+                            context_manager.add_channel_message(
+                                channel.id,
+                                message.author.display_name,
+                                message.content
+                            )
+                            messages_added += 1
+                        
+                        if messages_added > 0:
+                            channels_initialized += 1
+                            print(f"DEBUG: Initialized {messages_added} messages for #{channel.name}")
+                            
+                    except Exception as e:
+                        print(f"DEBUG: Failed to initialize context for #{channel.name}: {e}")
+                        continue
+            
+            print(f"DEBUG: Channel context initialization complete - {channels_initialized} channels initialized")
+            
+        except Exception as e:
+            print(f"ERROR: Failed to initialize channel contexts: {e}")
 
 async def setup(bot):
     await bot.add_cog(EventHandlers(bot))

@@ -120,9 +120,9 @@ class HistoryCommands(commands.Cog):
                 except Exception as e:
                     print(f"DEBUG: Failed to resolve mention <@{user_id}>: {e}")
             
-            data_manager.add_unfiltered_permanent_context(user_key, resolved_text)
+            data_manager.add_unfiltered_permanent_context(resolved_text)
             await data_manager.save_unfiltered_permanent_context()
-            await ctx.send(f'✅ **Unfiltered setting added!** This will apply to ALL AI queries:\n> {resolved_text}')
+            await ctx.send(f'✅ **Global setting added!** This will apply to ALL users and queries:\n> {resolved_text}')
         finally:
             self._executing_commands.discard(command_key)
     
@@ -136,14 +136,13 @@ class HistoryCommands(commands.Cog):
         
         self._executing_commands.add(command_key)
         try:
-            user_key = data_manager.get_user_key(ctx.author)
-            settings = data_manager.get_unfiltered_permanent_context(user_key)
+            settings = data_manager.get_unfiltered_permanent_context()
             
             if not settings:
-                await ctx.send('No unfiltered permanent settings found.')
+                await ctx.send('No global settings found.')
                 return
             
-            response = "**Your unfiltered permanent settings** (applied to ALL queries):\n"
+            response = "**Global settings** (applied to ALL users and queries):\n"
             for i, setting in enumerate(settings, 1):
                 # Truncate long settings for display
                 display_setting = setting[:150] + "..." if len(setting) > 150 else setting
@@ -163,15 +162,14 @@ class HistoryCommands(commands.Cog):
         
         self._executing_commands.add(command_key)
         try:
-            user_key = data_manager.get_user_key(ctx.author)
             # Convert to 0-based index
-            removed_setting = data_manager.remove_unfiltered_permanent_context(user_key, index - 1)
+            removed_setting = data_manager.remove_unfiltered_permanent_context(index - 1)
             
             if removed_setting:
                 await data_manager.save_unfiltered_permanent_context()
                 # Truncate long settings for display
                 display_setting = removed_setting[:100] + "..." if len(removed_setting) > 100 else removed_setting
-                await ctx.send(f'✅ **Unfiltered setting removed:**\n> {display_setting}')
+                await ctx.send(f'✅ **Global setting removed:**\n> {display_setting}')
             else:
                 await ctx.send(f'❌ Invalid setting number: {index}. Use `!list_settings` to see valid numbers.')
         finally:
@@ -187,14 +185,13 @@ class HistoryCommands(commands.Cog):
         
         self._executing_commands.add(command_key)
         try:
-            user_key = data_manager.get_user_key(ctx.author)
-            count = data_manager.clear_unfiltered_permanent_context(user_key)
+            count = data_manager.clear_unfiltered_permanent_context()
             
             if count > 0:
                 await data_manager.save_unfiltered_permanent_context()
-                await ctx.send(f'✅ **Cleared {count} unfiltered permanent setting(s)!**')
+                await ctx.send(f'✅ **Cleared {count} global setting(s)!**')
             else:
-                await ctx.send('No unfiltered permanent settings to clear.')
+                await ctx.send('No global settings to clear.')
         finally:
             self._executing_commands.discard(command_key)
 
