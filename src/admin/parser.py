@@ -128,11 +128,23 @@ class AdminIntentParser:
             await self.debug_channel.send(debug_msg)
         
         # Find the user to rename (use original_content to preserve mentions)
-        user = await self._find_user(original_content, guild, message_author)
-        debug_msg = f"DEBUG: Found user in nickname extraction: {user}"
+        debug_msg = f"DEBUG: About to call _find_user with: '{original_content}'"
         print(debug_msg)
         if self.debug_channel:
             await self.debug_channel.send(debug_msg)
+            
+        try:
+            user = await self._find_user(original_content, guild, message_author)
+            debug_msg = f"DEBUG: _find_user returned: {user}"
+            print(debug_msg)
+            if self.debug_channel:
+                await self.debug_channel.send(debug_msg)
+        except Exception as e:
+            debug_msg = f"DEBUG: _find_user threw exception: {e}"
+            print(debug_msg)
+            if self.debug_channel:
+                await self.debug_channel.send(debug_msg)
+            user = None
             
         if not user:
             debug_msg = f"DEBUG: No user found, returning None from nickname extraction"
