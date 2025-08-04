@@ -141,7 +141,15 @@ class AdminIntentParser:
         }
         
         extractor = extractor_map.get(action_type)
+        
+        from ..utils.logging import get_logger
+        logger = get_logger(__name__)
+        logger.info(f"🔧 EXTRACTOR LOOKUP: action_type='{action_type}', extractor_found={extractor is not None}")
+        
         if extractor:
-            return await extractor(content, original_content, guild, message_author)
+            logger.info(f"🔧 CALLING EXTRACTOR: {extractor.__name__}")
+            result = await extractor(content, original_content, guild, message_author)
+            logger.info(f"🔧 EXTRACTOR RETURNED: {result}")
+            return result
         
         return None
