@@ -205,9 +205,6 @@ class AdminActionHandler:
                 if deleted_count >= limit:
                     break
                 
-                # Debug: Show message details
-                if user_filter:
-                
                 # If we have a user filter and this message isn't from that user, skip it
                 if user_filter and msg.author.id != user_filter.id:
                     continue
