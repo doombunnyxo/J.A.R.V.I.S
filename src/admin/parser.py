@@ -4,8 +4,9 @@ from typing import Optional, Tuple, Dict, Any
 class AdminIntentParser:
     """Parses user messages to detect admin intentions and extract parameters"""
     
-    def __init__(self, bot):
+    def __init__(self, bot, debug_channel=None):
         self.bot = bot
+        self.debug_channel = debug_channel
     
     async def parse_admin_intent(self, message_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         """Parse user message to detect admin intentions and extract parameters"""
@@ -26,11 +27,29 @@ class AdminIntentParser:
         ]
         
         for parser in parsers:
+            parser_name = parser.__name__
+            debug_msg = f"DEBUG: Trying parser: {parser_name}"
+            print(debug_msg)
+            if self.debug_channel:
+                await self.debug_channel.send(debug_msg)
+            
             result = await parser(content, message_content, guild, message_author)
+            debug_msg = f"DEBUG: Parser {parser_name} result: {result}"
+            print(debug_msg)
+            if self.debug_channel:
+                await self.debug_channel.send(debug_msg)
+                
             if result[0]:  # If action_type is not None
+                debug_msg = f"DEBUG: Found action via {parser_name}: {result}"
+                print(debug_msg)
+                if self.debug_channel:
+                    await self.debug_channel.send(debug_msg)
                 return result
         
-        print(f"DEBUG: No admin action detected")
+        debug_msg = f"DEBUG: No admin action detected - all parsers returned None"
+        print(debug_msg)
+        if self.debug_channel:
+            await self.debug_channel.send(debug_msg)
         return None, None
     
     async def _find_user(self, text: str, guild, message_author=None) -> Optional:

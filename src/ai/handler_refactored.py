@@ -621,7 +621,7 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
             # Use admin parser to interpret command and extract parameters
             from ..admin.parser import AdminIntentParser
             
-            parser = AdminIntentParser(self.bot)
+            parser = AdminIntentParser(self.bot, message.channel)
             
             # Parse the admin command
             action_type, parameters = await parser.parse_admin_intent(
