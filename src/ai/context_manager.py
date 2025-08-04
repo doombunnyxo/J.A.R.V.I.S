@@ -3,14 +3,22 @@ Context management for AI conversations
 Handles permanent context, conversation history, and context filtering
 """
 
+import math
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, NamedTuple
 from collections import defaultdict, deque
 from ..data.persistence import data_manager
 from ..config import config
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class ChannelMessage(NamedTuple):
+    """Structure for storing channel messages with timestamps"""
+    content: str
+    timestamp: datetime
+    user_name: str
 
 
 class ContextManager:
@@ -24,9 +32,14 @@ class ContextManager:
         self.last_activity: Dict[str, datetime] = {}
         self.context_expiry_minutes = 30
         
-        # Channel conversation storage - keyed by channel_id
-        self.channel_conversations: Dict[int, deque] = defaultdict(lambda: deque(maxlen=50))
+        # Channel conversation storage - keyed by channel_id (store more for intelligent selection)
+        self.channel_conversations: Dict[int, deque] = defaultdict(lambda: deque(maxlen=75))  # Store more than we show
         self.channel_last_activity: Dict[int, datetime] = {}
+        
+        # Thread conversation storage - unlimited storage for active threads
+        self.thread_conversations: Dict[int, deque] = defaultdict(lambda: deque())  # No maxlen for threads
+        self.thread_last_activity: Dict[int, datetime] = {}
+        self.thread_parent_map: Dict[int, int] = {}  # thread_id -> parent_channel_id
     
     async def _call_openai_gpt4o_mini(self, messages: List[dict], max_tokens: int = 300) -> str:
         """Helper method to call OpenAI GPT-4o mini for context filtering"""
@@ -83,22 +96,105 @@ class ContextManager:
         self.unified_conversations.pop(key, None)
         self.last_activity.pop(key, None)
     
-    def add_channel_message(self, channel_id: int, user_name: str, message_content: str):
+    def add_channel_message(self, channel_id: int, user_name: str, message_content: str, channel=None):
         """Add message to channel conversation history"""
-        channel_messages = self.channel_conversations[channel_id]
+        # Check if this is a thread
+        is_thread = False
+        parent_channel_id = None
         
-        # Format message as "Username: content"
-        formatted_message = f"{user_name}: {message_content[:100]}"
-        channel_messages.append(formatted_message)
-        self.channel_last_activity[channel_id] = datetime.now()
+        if channel and hasattr(channel, 'type'):
+            channel_type = str(channel.type)
+            if channel_type in ['public_thread', 'private_thread']:
+                is_thread = True
+                parent_channel_id = channel.parent_id if hasattr(channel, 'parent_id') else None
+        
+        # Create message object with timestamp
+        message_obj = ChannelMessage(
+            content=f"{user_name}: {message_content[:100]}",
+            timestamp=datetime.now(),
+            user_name=user_name
+        )
+        
+        if is_thread:
+            # Check if this is a new thread we haven't seen before
+            is_new_thread = channel_id not in self.thread_conversations or len(self.thread_conversations[channel_id]) == 0
+            
+            # Store in thread-specific storage (unlimited)
+            thread_messages = self.thread_conversations[channel_id]
+            
+            # If this is a new thread, inherit parent channel context first
+            if is_new_thread and parent_channel_id:
+                parent_context = self.get_smart_channel_context(parent_channel_id, limit=35)
+                if parent_context:
+                    # Add parent context with a marker (preserve original timestamps)
+                    for parent_msg in parent_context:
+                        parent_msg_obj = ChannelMessage(
+                            content=f"[Parent] {parent_msg}",
+                            timestamp=datetime.now() - timedelta(minutes=1),  # Slightly older than current
+                            user_name="system"
+                        )
+                        thread_messages.append(parent_msg_obj)
+                
+                # Map thread to parent channel
+                self.thread_parent_map[channel_id] = parent_channel_id
+            
+            thread_messages.append(message_obj)
+            self.thread_last_activity[channel_id] = datetime.now()
+        else:
+            # Store in regular channel storage
+            channel_messages = self.channel_conversations[channel_id]
+            channel_messages.append(message_obj)
+            self.channel_last_activity[channel_id] = datetime.now()
     
     def get_channel_context(self, channel_id: int, limit: int = 35) -> List[str]:
-        """Get recent channel messages for context"""
+        """Get recent channel messages for context (legacy method for compatibility)"""
+        return self.get_smart_channel_context(channel_id, limit)
+    
+    def get_smart_channel_context(self, channel_id: int, limit: int = 35, include_weights: bool = False) -> List[str]:
+        """Get channel messages using recency decay scoring"""
         channel_messages = self.channel_conversations.get(channel_id, deque())
         
-        # Return most recent messages up to limit
-        recent_messages = list(channel_messages)[-limit:] if len(channel_messages) > limit else list(channel_messages)
-        return recent_messages
+        if not channel_messages:
+            return []
+        
+        # Calculate recency scores for all messages
+        now = datetime.now()
+        scored_messages = []
+        
+        for msg in channel_messages:
+            # Calculate how many hours old the message is
+            hours_old = (now - msg.timestamp).total_seconds() / 3600
+            
+            # Exponential decay: newer messages get higher scores
+            # Decay factor: message loses half importance every 12 hours
+            recency_score = math.exp(-hours_old / 12)
+            
+            scored_messages.append((msg, recency_score))
+        
+        # Sort by recency score (highest first) and take top messages
+        scored_messages.sort(key=lambda x: x[1], reverse=True)
+        top_messages = scored_messages[:limit]
+        
+        # Sort selected messages by original timestamp (chronological order)
+        top_messages.sort(key=lambda x: x[0].timestamp)
+        
+        # Return content strings with optional weight information
+        if include_weights:
+            result = []
+            for msg, score in top_messages:
+                # Convert score to percentage for readability
+                weight_percent = int(score * 100)
+                # Format: [Weight: 85%] Username: message content
+                result.append(f"[Weight: {weight_percent}%] {msg.content}")
+            return result
+        else:
+            # Return just the content strings (backward compatibility)
+            return [msg.content for msg, score in top_messages]
+    
+    def get_thread_context(self, thread_id: int) -> List[str]:
+        """Get thread messages (parent context already inherited when thread was first seen)"""
+        thread_messages = self.thread_conversations.get(thread_id, deque())
+        return [msg.content for msg in thread_messages]
     
     def get_conversation_context(self, user_id: int, channel_id: int) -> List[dict]:
         """Get conversation context if fresh"""
@@ -273,12 +369,24 @@ Return only relevant permanent context items, one per line, in the exact same fo
                             mentioned_context_text = "\n".join(mentioned_messages)
                             context_parts.append(f"Recent discussion in #{mentioned_channel.name}:\n{mentioned_context_text}")
                 else:
-                    # No channels mentioned, use current channel context
-                    channel_messages = self.get_channel_context(channel_id, limit=35)
-                    if channel_messages:
-                        channel_context_text = "\n".join(channel_messages)
-                        current_channel_name = message.channel.name if message and hasattr(message.channel, 'name') else "current channel"
-                        context_parts.append(f"Recent discussion in #{current_channel_name}:\n{channel_context_text}")
+                    # Check if current channel is a thread
+                    is_current_thread = (message and hasattr(message.channel, 'type') and 
+                                       str(message.channel.type) in ['public_thread', 'private_thread'])
+                    
+                    if is_current_thread:
+                        # Use thread context (parent context already inherited when thread was created)
+                        thread_messages = self.get_thread_context(channel_id)
+                        if thread_messages:
+                            thread_context_text = "\n".join(thread_messages)
+                            thread_name = message.channel.name if hasattr(message.channel, 'name') else "current thread"
+                            context_parts.append(f"Thread discussion in {thread_name}:\n{thread_context_text}")
+                    else:
+                        # No channels mentioned, use current channel context with weights
+                        channel_messages = self.get_smart_channel_context(channel_id, limit=35, include_weights=True)
+                        if channel_messages:
+                            channel_context_text = "\n".join(channel_messages)
+                            current_channel_name = message.channel.name if message and hasattr(message.channel, 'name') else "current channel"
+                            context_parts.append(f"Recent discussion in #{current_channel_name} (with recency weights):\n{channel_context_text}")
         
         # Get ALL permanent context without filtering
         if user_key:
@@ -329,12 +437,24 @@ Return only relevant permanent context items, one per line, in the exact same fo
                             mentioned_context_text = "\n".join(mentioned_messages)
                             context_parts.append(f"Recent discussion in #{mentioned_channel.name}:\n{mentioned_context_text}")
                 else:
-                    # No channels mentioned, use current channel context
-                    channel_messages = self.get_channel_context(channel_id, limit=35)
-                    if channel_messages:
-                        channel_context_text = "\n".join(channel_messages)
-                        current_channel_name = message.channel.name if message and hasattr(message.channel, 'name') else "current channel"
-                        context_parts.append(f"Recent discussion in #{current_channel_name}:\n{channel_context_text}")
+                    # Check if current channel is a thread
+                    is_current_thread = (message and hasattr(message.channel, 'type') and 
+                                       str(message.channel.type) in ['public_thread', 'private_thread'])
+                    
+                    if is_current_thread:
+                        # Use thread context (parent context already inherited when thread was created)
+                        thread_messages = self.get_thread_context(channel_id)
+                        if thread_messages:
+                            thread_context_text = "\n".join(thread_messages)
+                            thread_name = message.channel.name if hasattr(message.channel, 'name') else "current thread"
+                            context_parts.append(f"Thread discussion in {thread_name}:\n{thread_context_text}")
+                    else:
+                        # No channels mentioned, use current channel context with weights
+                        channel_messages = self.get_smart_channel_context(channel_id, limit=35, include_weights=True)
+                        if channel_messages:
+                            channel_context_text = "\n".join(channel_messages)
+                            current_channel_name = message.channel.name if message and hasattr(message.channel, 'name') else "current channel"
+                            context_parts.append(f"Recent discussion in #{current_channel_name} (with recency weights):\n{channel_context_text}")
         
         # Get permanent context
         if user_key:

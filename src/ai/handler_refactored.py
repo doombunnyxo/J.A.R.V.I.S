@@ -288,7 +288,7 @@ class AIHandler:
             client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
             
             messages = [
-                {"role": "system", "content": f"You are a helpful AI assistant. Carefully review the provided context and use it to inform your response to the user's query. The context includes conversation history, recent channel activity, and stored user information that should guide your answer.\n\nContext:\n{context}"},
+                {"role": "system", "content": f"You are a helpful AI assistant. Carefully review the provided context and use it to inform your response to the user's query. The context includes conversation history, recent channel activity, and stored user information that should guide your answer.\n\nIMPORTANT: Some messages include recency weights like [Weight: 85%]. Higher percentages indicate more recent/relevant messages. Use these weights to prioritize information - messages with higher weights are more current and likely more relevant to the conversation.\n\nContext:\n{context}"},
                 {"role": "user", "content": query}
             ]
             

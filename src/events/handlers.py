@@ -57,7 +57,8 @@ class EventHandlers(commands.Cog):
             self.ai_handler.context_manager.add_channel_message(
                 message.channel.id, 
                 message.author.display_name, 
-                message.content
+                message.content,
+                message.channel  # Pass channel object for thread detection
             )
         
         # Check if this is a reply to the bot, in a thread, or a direct mention
@@ -168,7 +169,8 @@ class EventHandlers(commands.Cog):
                             context_manager.add_channel_message(
                                 channel.id,
                                 message.author.display_name,
-                                message.content
+                                message.content,
+                                channel  # Pass channel object for thread detection
                             )
                             messages_added += 1
                         
