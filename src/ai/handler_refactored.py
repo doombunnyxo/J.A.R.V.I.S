@@ -288,7 +288,7 @@ class AIHandler:
             client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
             
             messages = [
-                {"role": "system", "content": f"You are a helpful AI assistant. Use this context if relevant: {context}"},
+                {"role": "system", "content": f"You are a helpful AI assistant. Carefully review the provided context and use it to inform your response to the user's query. The context includes conversation history, recent channel activity, and stored user information that should guide your answer.\n\nContext:\n{context}"},
                 {"role": "user", "content": query}
             ]
             
@@ -296,7 +296,7 @@ class AIHandler:
                 model="gpt-4o-mini",
                 messages=messages,
                 max_tokens=1000,
-                temperature=0.7
+                temperature=0.8  # Higher temperature for more creative, fun conversation
             )
             
             return completion.choices[0].message.content.strip()
