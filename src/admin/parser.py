@@ -11,46 +11,225 @@ class AdminIntentParser:
     async def parse_admin_intent(self, message_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         """Parse user message to detect admin intentions and extract parameters"""
         content = message_content.lower()
-        print(f"DEBUG: Parsing admin intent for: '{message_content}'")
         
-        # Try each action type parser (order matters - more specific parsers first)
-        parsers = [
-            self._parse_kick_action,
-            self._parse_ban_action,
-            self._parse_unban_action,
-            self._parse_timeout_action,
-            self._parse_remove_timeout_action,
-            self._parse_role_actions,  # Role actions before nickname to prevent conflicts
-            self._parse_bulk_delete_action,
-            self._parse_channel_actions,
-            self._parse_nickname_action,  # Nickname last to avoid catching role "rename" commands
-        ]
+        debug_msg = f"DEBUG: Parsing admin intent for: '{message_content}'"
+        print(debug_msg)
+        if self.debug_channel:
+            await self.debug_channel.send(debug_msg)
         
-        for parser in parsers:
-            parser_name = parser.__name__
-            debug_msg = f"DEBUG: Trying parser: {parser_name}"
+        # Phase 1: Quickly identify action type
+        action_type = self._identify_action_type(content)
+        debug_msg = f"DEBUG: Identified action type: {action_type}"
+        print(debug_msg)
+        if self.debug_channel:
+            await self.debug_channel.send(debug_msg)
+        
+        if not action_type:
+            return None, None
+        
+        # Phase 2: Extract parameters for the specific action type
+        try:
+            parameters = await self._extract_parameters(action_type, content, message_content, guild, message_author)
+            debug_msg = f"DEBUG: Extracted parameters: {parameters}"
             print(debug_msg)
             if self.debug_channel:
                 await self.debug_channel.send(debug_msg)
             
-            result = await parser(content, message_content, guild, message_author)
-            debug_msg = f"DEBUG: Parser {parser_name} result: {result}"
-            print(debug_msg)
-            if self.debug_channel:
-                await self.debug_channel.send(debug_msg)
-                
-            if result[0]:  # If action_type is not None
-                debug_msg = f"DEBUG: Found action via {parser_name}: {result}"
+            if parameters is not None:
+                return action_type, parameters
+            else:
+                debug_msg = f"DEBUG: Failed to extract parameters for {action_type}"
                 print(debug_msg)
                 if self.debug_channel:
                     await self.debug_channel.send(debug_msg)
-                return result
+                return None, None
+                
+        except Exception as e:
+            debug_msg = f"DEBUG: Error extracting parameters for {action_type}: {e}"
+            print(debug_msg)
+            if self.debug_channel:
+                await self.debug_channel.send(debug_msg)
+            return None, None
+    
+    def _identify_action_type(self, content: str) -> Optional[str]:
+        """Phase 1: Quickly identify what type of admin action this is"""
         
-        debug_msg = f"DEBUG: No admin action detected - all parsers returned None"
-        print(debug_msg)
-        if self.debug_channel:
-            await self.debug_channel.send(debug_msg)
-        return None, None
+        # Check for specific action keywords (order matters - more specific first)
+        action_patterns = {
+            # User moderation
+            'kick_user': ['kick', 'boot', 'eject'],
+            'ban_user': ['ban'],
+            'unban_user': ['unban'],
+            'timeout_user': ['timeout', 'mute', 'silence', 'quiet', 'shush'],
+            'remove_timeout': ['remove timeout', 'unmute', 'unsilence'],
+            
+            # Nickname changes
+            'change_nickname': ['nickname', 'rename user', 'rename member', 'change name of'],
+            
+            # Role management
+            'add_role': ['add role', 'give role'],
+            'remove_role': ['remove role', 'take role'],
+            'rename_role': ['rename role', 'change role name', 'update role name'],
+            'reorganize_roles': ['reorganize roles', 'fix role names', 'improve role names', 'clean up roles'],
+            
+            # Message management
+            'bulk_delete': ['delete', 'remove', 'purge', 'clear', 'clean', 'wipe'],
+            
+            # Channel management
+            'create_channel': ['create channel'],
+            'delete_channel': ['delete channel'],
+        }
+        
+        # Check each action type
+        for action_type, keywords in action_patterns.items():
+            for keyword in keywords:
+                if keyword in content:
+                    # Additional validation for some ambiguous cases
+                    if action_type == 'ban_user' and 'unban' in content:
+                        continue  # This is actually an unban
+                    if action_type == 'bulk_delete' and not any(msg_word in content for msg_word in ['message', 'messages', 'msg', 'msgs']):
+                        continue  # Delete without message context might not be bulk delete
+                    
+                    return action_type
+        
+        return None
+    
+    async def _extract_parameters(self, action_type: str, content: str, original_content: str, guild, message_author) -> Optional[Dict[str, Any]]:
+        """Phase 2: Extract parameters for the specific action type"""
+        
+        parameter_extractors = {
+            'kick_user': self._extract_kick_params,
+            'ban_user': self._extract_ban_params,
+            'unban_user': self._extract_unban_params,
+            'timeout_user': self._extract_timeout_params,
+            'remove_timeout': self._extract_remove_timeout_params,
+            'change_nickname': self._extract_nickname_params,
+            'add_role': self._extract_add_role_params,
+            'remove_role': self._extract_remove_role_params,
+            'rename_role': self._extract_rename_role_params,
+            'reorganize_roles': self._extract_reorganize_roles_params,
+            'bulk_delete': self._extract_bulk_delete_params,
+            'create_channel': self._extract_create_channel_params,
+            'delete_channel': self._extract_delete_channel_params,
+        }
+        
+        extractor = parameter_extractors.get(action_type)
+        if extractor:
+            return await extractor(content, original_content, guild, message_author)
+        
+        return None
+    
+    async def _extract_nickname_params(self, content: str, original_content: str, guild, message_author) -> Optional[Dict[str, Any]]:
+        """Extract parameters for nickname change action"""
+        
+        # Find the user to rename
+        user = await self._find_user(content, guild, message_author)
+        if not user:
+            return None
+        
+        # Extract the new nickname
+        nickname = None
+        
+        # Try to find nickname in quotes first
+        import re
+        nick_match = re.search(r'["\']([^"\']+)["\']', original_content)
+        if nick_match:
+            nickname = nick_match.group(1)
+        else:
+            # Try to extract nickname after "to" keyword
+            to_match = re.search(r'\bto\s+(\w+)', content, re.IGNORECASE)
+            if to_match:
+                nickname = to_match.group(1)
+        
+        return {"user": user, "nickname": nickname}
+    
+    # TODO: Add other parameter extractors for different action types
+    async def _extract_kick_params(self, content, original_content, guild, message_author):
+        """Extract parameters for kick action"""
+        user = await self._find_user(content, guild, message_author)
+        if user:
+            return {"user": user, "reason": "Requested via AI"}
+        return None
+    
+    async def _extract_ban_params(self, content, original_content, guild, message_author):
+        """Extract parameters for ban action"""
+        user = await self._find_user(content, guild, message_author)
+        if user:
+            delete_days = 1 if any(phrase in content for phrase in ['delete messages', 'clean']) else 0
+            return {"user": user, "reason": "Requested via AI", "delete_days": delete_days}
+        return None
+    
+    async def _extract_timeout_params(self, content, original_content, guild, message_author):
+        """Extract parameters for timeout action"""
+        user = await self._find_user(content, guild, message_author)
+        if user:
+            duration = 60  # default
+            duration_match = re.search(r'(\d+)\s*(min|hour|day)', content)
+            if duration_match:
+                num, unit = duration_match.groups()
+                if unit.startswith('hour'):
+                    duration = int(num) * 60
+                elif unit.startswith('day'):
+                    duration = int(num) * 60 * 24
+                else:
+                    duration = int(num)
+            return {"user": user, "duration": duration, "reason": "Requested via AI"}
+        return None
+    
+    async def _extract_remove_timeout_params(self, content, original_content, guild, message_author):
+        """Extract parameters for remove timeout action"""
+        user = await self._find_user(content, guild, message_author)
+        if user:
+            return {"user": user}
+        return None
+    
+    async def _extract_unban_params(self, content, original_content, guild, message_author):
+        """Extract parameters for unban action"""
+        user_ids = re.findall(r'\d{15,20}', original_content)
+        if user_ids:
+            return {"user_id": int(user_ids[0])}
+        return None
+    
+    async def _extract_add_role_params(self, content, original_content, guild, message_author):
+        """Extract parameters for add role action"""
+        user = await self._find_user(content, guild, message_author)
+        role = self._find_role(content, guild)
+        if user and role:
+            return {"user": user, "role": role}
+        return None
+    
+    async def _extract_remove_role_params(self, content, original_content, guild, message_author):
+        """Extract parameters for remove role action"""
+        user = await self._find_user(content, guild, message_author)
+        role = self._find_role(content, guild)
+        if user and role:
+            return {"user": user, "role": role}
+        return None
+    
+    async def _extract_rename_role_params(self, content, original_content, guild, message_author):
+        """Extract parameters for rename role action"""
+        # TODO: Implement role renaming parameter extraction
+        return None
+    
+    async def _extract_reorganize_roles_params(self, content, original_content, guild, message_author):
+        """Extract parameters for reorganize roles action"""
+        # TODO: Implement role reorganization parameter extraction
+        return None
+    
+    async def _extract_bulk_delete_params(self, content, original_content, guild, message_author):
+        """Extract parameters for bulk delete action"""
+        # TODO: Implement bulk delete parameter extraction
+        return None
+    
+    async def _extract_create_channel_params(self, content, original_content, guild, message_author):
+        """Extract parameters for create channel action"""
+        # TODO: Implement create channel parameter extraction
+        return None
+    
+    async def _extract_delete_channel_params(self, content, original_content, guild, message_author):
+        """Extract parameters for delete channel action"""
+        # TODO: Implement delete channel parameter extraction
+        return None
     
     async def _find_user(self, text: str, guild, message_author=None) -> Optional:
         """Helper function to find user mentions or names"""
@@ -225,410 +404,3 @@ class AdminIntentParser:
         
         print(f"DEBUG: No channel found in: {text}")
         return None
-    
-    async def _parse_kick_action(self, content: str, original_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict]]:
-        """Parse kick action"""
-        kick_keywords = ['kick', 'boot', 'eject']
-        if any(word in content for word in kick_keywords) and not any(word in content for word in ['ban', 'timeout', 'role']):
-            user = await self._find_user(content, guild, message_author)
-            if user:
-                print(f"DEBUG: Detected kick action for user: {user}")
-                return "kick_user", {"user": user, "reason": "Requested via AI"}
-        return None, None
-    
-    async def _parse_ban_action(self, content: str, original_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict]]:
-        """Parse ban action"""
-        if 'ban' in content and 'unban' not in content:
-            user = await self._find_user(content, guild, message_author)
-            if user:
-                delete_days = 1 if 'delete messages' in content or 'clean' in content else 0
-                print(f"DEBUG: Detected ban action for user: {user}")
-                return "ban_user", {"user": user, "reason": "Requested via AI", "delete_days": delete_days}
-        return None, None
-    
-    async def _parse_unban_action(self, content: str, original_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict]]:
-        """Parse unban action"""
-        if 'unban' in content:
-            user_ids = re.findall(r'\d{15,20}', original_content)
-            if user_ids:
-                return "unban_user", {"user_id": int(user_ids[0])}
-        return None, None
-    
-    async def _parse_timeout_action(self, content: str, original_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict]]:
-        """Parse timeout action"""
-        timeout_keywords = ['timeout', 'mute', 'silence', 'quiet', 'shush']
-        if any(word in content for word in timeout_keywords):
-            user = await self._find_user(content, guild, message_author)
-            if user:
-                duration = 60  # default
-                duration_match = re.search(r'(\d+)\s*(min|hour|day)', content)
-                if duration_match:
-                    num, unit = duration_match.groups()
-                    if unit.startswith('hour'):
-                        duration = int(num) * 60
-                    elif unit.startswith('day'):
-                        duration = int(num) * 60 * 24
-                    else:
-                        duration = int(num)
-                print(f"DEBUG: Detected timeout action for user: {user}, duration: {duration}")
-                return "timeout_user", {"user": user, "duration": duration, "reason": "Requested via AI"}
-        return None, None
-    
-    async def _parse_remove_timeout_action(self, content: str, original_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict]]:
-        """Parse remove timeout action"""
-        if any(phrase in content for phrase in ['remove timeout', 'unmute', 'unsilence']):
-            user = await self._find_user(content, guild, message_author)
-            if user:
-                return "remove_timeout", {"user": user}
-        return None, None
-    
-    async def _parse_role_actions(self, content: str, original_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict]]:
-        """Parse role management actions"""
-        if 'add role' in content or 'give role' in content:
-            user = await self._find_user(content, guild, message_author)
-            role = self._find_role(content, guild)
-            if user and role:
-                return "add_role", {"user": user, "role": role}
-        
-        if 'remove role' in content or 'take role' in content:
-            user = await self._find_user(content, guild, message_author)
-            role = self._find_role(content, guild)
-            if user and role:
-                return "remove_role", {"user": user, "role": role}
-        
-        # Parse role renaming
-        rename_keywords = ['rename role', 'change role name', 'update role name', 'rename the role']
-        if any(keyword in content for keyword in rename_keywords):
-            role = self._find_role(content, guild)
-            new_name = self._extract_new_role_name(content, original_content)
-            if role and new_name:
-                return "rename_role", {"role": role, "new_name": new_name}
-        
-        # Parse intelligent role reorganization
-        reorganize_keywords = [
-            'reorganize roles', 'fix role names', 'improve role names', 
-            'make roles make sense', 'better role names', 'clean up roles',
-            'rename roles to make sense', 'update all role names',
-            'organize the roles better', 'fix our role structure',
-            'update roles based on', 'organize roles like', 'make roles fit'
-        ]
-        if any(keyword in content for keyword in reorganize_keywords):
-            # Extract custom context/description from user input
-            context_description = self._extract_role_context_description(content, original_content)
-            parameters = {"context": context_description, "guild": guild}
-            
-            # Check if this might be a multi-step action that will provide research context
-            # The AI handler will determine if research is needed and add research_context later
-            return "reorganize_roles", parameters
-        
-        return None, None
-    
-    async def _parse_bulk_delete_action(self, content: str, original_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict]]:
-        """Parse bulk delete action"""
-        delete_keywords = ['delete', 'remove', 'purge', 'clear', 'clean', 'wipe']
-        message_keywords = ['message', 'messages', 'msg', 'msgs']
-        
-        has_delete = any(word in content for word in delete_keywords)
-        has_message = any(word in content for word in message_keywords)
-        
-        if has_delete and has_message:
-            parameters = {}
-            
-            # Check if the command specifically targets a user
-            user_targeting_phrases = [
-                # Direct user keywords
-                'from', 'by', 'sent by', 'posted by', 'written by',
-                # Bot-targeting phrases
-                'your messages', 'your msg', 'you sent', 'delete you', 'purge you',
-                # Pronoun indicators that suggest user targeting
-                'my messages', 'my msg', 'i sent'
-            ]
-            
-            # Check for user mentions (excluding the initial bot mention for the command)
-            user_mentions = re.findall(r'<@!?(\d+)>', content)
-            bot_mention_count = user_mentions.count(str(self.bot.user.id))
-            has_other_user_mentions = len(user_mentions) > bot_mention_count
-            has_multiple_bot_mentions = bot_mention_count > 1  # Bot mentioned more than once
-            
-            print(f"DEBUG: Bulk delete mention analysis:")
-            print(f"DEBUG: - All mentions: {user_mentions}")
-            print(f"DEBUG: - Bot ID: {self.bot.user.id}")
-            print(f"DEBUG: - Bot mentioned {bot_mention_count} times")
-            print(f"DEBUG: - Has other user mentions: {has_other_user_mentions}")
-            print(f"DEBUG: - Has multiple bot mentions: {has_multiple_bot_mentions}")
-            
-            has_targeting_phrase = any(phrase in content for phrase in user_targeting_phrases)
-            has_pronouns = any(pronoun in content.split() for pronoun in ['you', 'your', 'yours', 'my', 'mine', 'i'])
-            
-            # Only apply user filtering if there's clear indication of targeting a specific user:
-            # - Multiple bot mentions (command trigger + target)
-            # - Other user mentions
-            # - Targeting phrases or pronouns
-            if has_multiple_bot_mentions or has_other_user_mentions or has_targeting_phrase or has_pronouns:
-                user_filter = await self._find_user(content, guild, message_author)
-                if user_filter:
-                    print(f"DEBUG: Set user_filter to {user_filter.name} (ID: {user_filter.id}) for bulk delete")
-                    parameters["user_filter"] = user_filter
-                else:
-                    print(f"DEBUG: User targeting detected but no user found - will delete all messages")
-            else:
-                print(f"DEBUG: No user targeting detected - will delete all messages")
-            
-            # Look for specific channel ONLY if explicitly mentioned with context indicators
-            channel_indicators = ['in #', 'in channel', 'from #', 'from channel']
-            has_channel_indicator = any(indicator in content for indicator in channel_indicators)
-            has_channel_mention = '#' in content
-            
-            if has_channel_indicator or has_channel_mention:
-                channel = self._find_channel(content, guild)
-                if channel:
-                    print(f"DEBUG: Set channel to {channel.name} for bulk delete")
-                    parameters["channel"] = channel
-                else:
-                    print(f"DEBUG: Channel indicator found but no channel matched")
-            else:
-                print(f"DEBUG: No channel specified - using current channel")
-            
-            # Extract number of messages (avoid user IDs which are typically 15+ digits)
-            # Look for reasonable message counts (1-1000) and avoid user IDs
-            number_matches = re.findall(r'\b(\d+)\b', content)
-            limit = 1  # default
-            
-            for match in number_matches:
-                num = int(match)
-                # Filter out user IDs (typically 15-20 digits) and keep reasonable message counts
-                if 1 <= num <= 1000:
-                    limit = num
-                    break  # Use the first reasonable number found
-            
-            print(f"DEBUG: Found numbers in content: {number_matches}, selected limit: {limit}")
-            parameters["limit"] = limit
-            
-            print(f"DEBUG: Detected bulk_delete action - limit: {limit}, parameters: {parameters}")
-            return "bulk_delete", parameters
-        
-        return None, None
-    
-    async def _parse_channel_actions(self, content: str, original_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict]]:
-        """Parse channel management actions"""
-        if 'create channel' in content:
-            name_match = re.search(r'create.*channel.*["\']([^"\']+)["\']', content)
-            if not name_match:
-                name_match = re.search(r'channel.*called.*(\w+)', content)
-            if name_match:
-                name = name_match.group(1)
-                channel_type = "voice" if "voice" in content else "text"
-                return "create_channel", {"name": name, "type": channel_type}
-        
-        if 'delete channel' in content:
-            channel = self._find_channel(content, guild)
-            if channel:
-                return "delete_channel", {"channel": channel}
-        
-        return None, None
-    
-    async def _parse_nickname_action(self, content: str, original_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict]]:
-        """Parse nickname change action"""
-        debug_msg = f"DEBUG: _parse_nickname_action called with content: '{content}'"
-        print(debug_msg)
-        if self.debug_channel:
-            await self.debug_channel.send(debug_msg)
-            
-        # Exclude role-related commands to prevent conflicts
-        role_words = ['role', 'roles']
-        role_found = [word for word in role_words if word in content]
-        if role_found:
-            debug_msg = f"DEBUG: Nickname parser excluded due to role words: {role_found}"
-            print(debug_msg)
-            if self.debug_channel:
-                await self.debug_channel.send(debug_msg)
-            return None, None
-            
-        # Check for nickname patterns with regex to handle mentions in between
-        import re
-        nickname_patterns = [
-            r'change\s+.*?\'?s?\s+nickname',  # "change @user nickname" or "change @user's nickname"
-            r'set\s+.*?\'?s?\s+nickname',     # "set @user nickname" or "set @user's nickname"
-            r'nickname\s+to',                 # "nickname to ..."
-            r'rename\s+.*?\s+to',            # "rename @user to newname"
-            'change nickname', 'set nickname', 
-            'rename user', 'rename member', 'change name of',
-            'set user\'s nickname', 'set users nickname', 'user\'s nickname to'
-        ]
-        
-        # Check both literal strings and regex patterns
-        has_nickname_pattern = False
-        print(f"DEBUG: Checking nickname patterns against: '{content}'")
-        for pattern in nickname_patterns:
-            if pattern.startswith('r\'') or '\\s+' in pattern:
-                # Regex pattern
-                match_result = re.search(pattern, content, re.IGNORECASE)
-                print(f"DEBUG: Regex pattern '{pattern}' match: {match_result}")
-                if match_result:
-                    has_nickname_pattern = True
-                    print(f"DEBUG: MATCHED regex pattern: '{pattern}'")
-                    break
-            else:
-                # Literal string
-                literal_match = pattern in content
-                print(f"DEBUG: Literal pattern '{pattern}' in content: {literal_match}")
-                if literal_match:
-                    has_nickname_pattern = True
-                    print(f"DEBUG: MATCHED literal pattern: '{pattern}'")
-                    break
-        
-        if has_nickname_pattern:
-            user = await self._find_user(content, guild, message_author)
-            if user:
-                # Try to find nickname in quotes first
-                nick_match = re.search(r'["\']([^"\']+)["\']', content)
-                if nick_match:
-                    nickname = nick_match.group(1)
-                else:
-                    # Try to extract nickname after "to" keyword
-                    to_match = re.search(r'\bto\s+(\w+)', content, re.IGNORECASE)
-                    nickname = to_match.group(1) if to_match else None
-                
-                return "change_nickname", {"user": user, "nickname": nickname}
-        
-        return None, None
-    
-    def _extract_new_role_name(self, content: str, original_content: str) -> Optional[str]:
-        """Extract new role name from rename role command, preserving original capitalization"""
-        print(f"DEBUG: Extracting new role name from: '{original_content}'")
-        
-        # Look for quoted strings for the new name (most reliable) - preserves exact capitalization
-        quoted_matches = re.findall(r'["\']([^"\']+)["\']', original_content)
-        if quoted_matches:
-            # If multiple quoted strings, take the last one (likely the new name)
-            new_name = quoted_matches[-1].strip()
-            print(f"DEBUG: Found quoted new role name: '{new_name}'")
-            return new_name
-        
-        # Look for patterns like "rename role X to Y" or "change role X to Y"
-        # Use original_content (not lowercased content) to preserve capitalization
-        to_patterns = [
-            r'rename.*?role.*?to\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s*$|[.!?])',
-            r'change.*?role.*?to\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s*$|[.!?])',
-            r'update.*?role.*?to\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s*$|[.!?])',
-            r'role.*?to\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s*$|[.!?])'
-        ]
-        
-        for pattern in to_patterns:
-            match = re.search(pattern, original_content, re.IGNORECASE)
-            if match:
-                new_name = match.group(1).strip()
-                # Remove trailing punctuation if present
-                new_name = re.sub(r'[.!?]+$', '', new_name).strip()
-                print(f"DEBUG: Found new role name via 'to' pattern: '{new_name}'")
-                return new_name
-        
-        # Look for "called" pattern like "rename role X called Y"
-        called_patterns = [
-            r'rename.*?role.*?called\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s*$|[.!?])',
-            r'role.*?called\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s*$|[.!?])'
-        ]
-        
-        for pattern in called_patterns:
-            match = re.search(pattern, original_content, re.IGNORECASE)
-            if match:
-                new_name = match.group(1).strip()
-                # Remove trailing punctuation if present
-                new_name = re.sub(r'[.!?]+$', '', new_name).strip()
-                print(f"DEBUG: Found new role name via 'called' pattern: '{new_name}'")
-                return new_name
-        
-        print(f"DEBUG: No new role name found in: '{original_content}'")
-        return None
-    
-    def _extract_role_context_description(self, content: str, original_content: str) -> str:
-        """Extract custom context description for role reorganization"""
-        print(f"DEBUG: Extracting role context description from: '{original_content}'")
-        
-        # Look for patterns that indicate custom context descriptions
-        context_description_patterns = [
-            # "organize roles based on [description]"
-            r'(?:organize|fix|update|rename).*?roles.*?(?:based\s+on|according\s+to|using|with)\s+(.+?)(?:\.|$)',
-            # "make roles like [description]" 
-            r'(?:make|organize).*?roles.*?like\s+(.+?)(?:\.|$)',
-            # "roles for [description]"
-            r'roles.*?for\s+(.+?)(?:\.|$)',
-            # "context: [description]" or "context is [description]"
-            r'context(?:\s+is)?[:\s]+(.+?)(?:\.|$)',
-            # Direct descriptions after reorganize keywords
-            r'(?:reorganize|fix|improve|clean\s+up).*?roles[,\s]+(.+?)(?:\.|$)',
-            # "based on what I found: [description]"
-            r'based\s+on\s+(?:what\s+)?(?:i\s+)?(?:found|searched|learned)[:\s]+(.+?)(?:\.|$)',
-            # "according to [description]"
-            r'according\s+to\s+(.+?)(?:\.|$)',
-            # After "using" or "with" keywords
-            r'(?:using|with)\s+(?:the\s+)?(?:following\s+)?(?:info|information|context|description)[:\s]+(.+?)(?:\.|$)',
-        ]
-        
-        # Try to extract custom context description
-        for pattern in context_description_patterns:
-            match = re.search(pattern, original_content, re.IGNORECASE | re.DOTALL)
-            if match:
-                description = match.group(1).strip()
-                # Clean up the description
-                description = re.sub(r'\s+', ' ', description)  # Normalize whitespace
-                description = description.rstrip('.,!?')  # Remove trailing punctuation
-                
-                # Filter out very short or generic descriptions
-                if len(description) > 10 and not self._is_generic_description(description):
-                    print(f"DEBUG: Found custom context description: '{description}'")
-                    return description
-        
-        # If no custom context found, look for quoted strings that might be context
-        quoted_descriptions = re.findall(r'["\']([^"\']{15,})["\']', original_content)
-        for desc in quoted_descriptions:
-            if not self._is_generic_description(desc):
-                print(f"DEBUG: Found quoted context description: '{desc}'")
-                return desc
-        
-        # Look for longer descriptive phrases that follow reorganize keywords
-        reorganize_pattern = r'(?:reorganize|fix|improve|clean\s+up|update|organize).*?roles(?:\s+to)?\s+(.{20,}?)(?:\.|$|\?|!)'
-        match = re.search(reorganize_pattern, original_content, re.IGNORECASE | re.DOTALL)
-        if match:
-            description = match.group(1).strip()
-            description = re.sub(r'\s+', ' ', description)
-            if not self._is_generic_description(description):
-                print(f"DEBUG: Found descriptive context: '{description}'")
-                return description
-        
-        # Fallback: return the entire message if it seems descriptive enough
-        if len(original_content) > 50 and ' ' in original_content:
-            # Remove the reorganize command part and use the rest as context
-            cleaned_content = original_content
-            for keyword in ['reorganize roles', 'fix role names', 'improve role names', 'clean up roles']:
-                cleaned_content = re.sub(rf'{re.escape(keyword)}\s*', '', cleaned_content, flags=re.IGNORECASE)
-            
-            if len(cleaned_content.strip()) > 20:
-                print(f"DEBUG: Using remaining message as context: '{cleaned_content.strip()}'")
-                return cleaned_content.strip()
-        
-        print(f"DEBUG: No specific context description found, using 'general community server'")
-        return "general community server"
-    
-    def _is_generic_description(self, description: str) -> bool:
-        """Check if a description is too generic to be useful"""
-        generic_phrases = [
-            'make sense', 'better', 'good', 'appropriate', 'nice', 'proper', 'correct',
-            'organized', 'clean', 'professional', 'clear', 'simple', 'basic'
-        ]
-        description_lower = description.lower()
-        
-        # Too short
-        if len(description) < 10:
-            return True
-        
-        # Only contains generic phrases
-        if any(phrase in description_lower for phrase in generic_phrases) and len(description) < 30:
-            return True
-        
-        # Only contains common words
-        common_words = description_lower.split()
-        if len(common_words) < 3:
-            return True
-        
-        return False
