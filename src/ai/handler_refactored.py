@@ -21,6 +21,7 @@ from src.config import config
 from src.data.persistence import data_manager
 from src.admin.permissions import is_admin
 from src.ai.context_manager import ContextManager
+from . import routing
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -163,8 +164,6 @@ class AIHandler:
                 response = await self._handle_with_perplexity(message, cleaned_query)
             elif provider == "pure-perplexity":
                 response = await self._handle_with_pure_perplexity(message, cleaned_query)
-            elif provider == "direct-perplexity-search":
-                response = await self._handle_direct_perplexity_search(message, cleaned_query)
             elif provider == "crafting":
                 response = await self._handle_with_crafting(message, cleaned_query)
             else:  # groq
@@ -1157,27 +1156,52 @@ Respond with ONLY the specific admin command, nothing else."""
     async def _handle_search_with_openai(self, message, query: str) -> str:
         """Handle search queries using the existing hybrid search pipeline"""
         try:
-            from ..search.search_pipeline import SearchPipeline
-            from ..search.hybrid_search_provider import HybridSearchProvider
+            # Check if this is a search: command that should use GPT-4o mini for summarization
+            original_query = query
+            forced_provider, _ = routing.extract_forced_provider(message.content)
             
-            # Build context for search
-            context = await self.context_manager.build_full_context(
-                query, message.author.id, message.channel.id,
-                message.author.display_name, message
-            )
-            
-            # Use the existing hybrid provider (OpenAI optimization + Perplexity analysis)
-            hybrid_provider = HybridSearchProvider()
-            pipeline = SearchPipeline(hybrid_provider)
-            
-            # Execute the existing unified search pipeline
-            response = await pipeline.search_and_respond(query, context)
-            
-            return response
+            if forced_provider == "openai" and message.content.lower().startswith("search:"):
+                # Use pure OpenAI for both optimization and summarization
+                from ..search.search_pipeline import SearchPipeline
+                from ..search.openai_adapter import OpenAISearchProvider
+                
+                # Build context for search
+                context = await self.context_manager.build_full_context(
+                    query, message.author.id, message.channel.id,
+                    message.author.display_name, message
+                )
+                
+                # Use pure OpenAI provider with gpt-4o-mini
+                openai_provider = OpenAISearchProvider(model="gpt-4o-mini")
+                pipeline = SearchPipeline(openai_provider)
+                
+                # Execute search pipeline with OpenAI only
+                response = await pipeline.search_and_respond(query, context)
+                
+                return response
+            else:
+                # Regular hybrid search (OpenAI optimization + Perplexity analysis)
+                from ..search.search_pipeline import SearchPipeline
+                from ..search.hybrid_search_provider import HybridSearchProvider
+                
+                # Build context for search
+                context = await self.context_manager.build_full_context(
+                    query, message.author.id, message.channel.id,
+                    message.author.display_name, message
+                )
+                
+                # Use the existing hybrid provider
+                hybrid_provider = HybridSearchProvider()
+                pipeline = SearchPipeline(hybrid_provider)
+                
+                # Execute the existing unified search pipeline
+                response = await pipeline.search_and_respond(query, context)
+                
+                return response
             
         except Exception as e:
-            logger.debug(f"Hybrid search pipeline failed: {e}")
-            return f"❌ Error with hybrid search: {str(e)}"
+            logger.debug(f"Search pipeline failed: {e}")
+            return f"❌ Error with search: {str(e)}"
 
     async def _handle_with_perplexity(self, message, query: str) -> str:
         """Handle query using Perplexity search adapter and unified pipeline"""
@@ -1294,81 +1318,6 @@ Respond with ONLY the specific admin command, nothing else."""
         
         except Exception as e:
             return f"Error processing with Groq: {str(e)}"
-    
-    async def _handle_direct_perplexity_search(self, message, query: str) -> str:
-        """Handle direct web search using Perplexity's search capabilities"""
-        try:
-            if not config.has_perplexity_api():
-                return "❌ Perplexity API not configured for search functionality."
-            
-            # Direct web search with custom Perplexity implementation
-            import aiohttp
-            from ..config import config
-            
-            # Build custom system prompt for filtering and summarizing
-            system_prompt = """You are a helpful search assistant that synthesizes web search results into clear, concise answers.
-
-CRITICAL: DO NOT list search results. Instead, SYNTHESIZE and SUMMARIZE the information into a coherent response.
-
-INSTRUCTIONS:
-1. Read through all search results and extract the key information
-2. Combine and synthesize findings into a unified, well-written answer
-3. Write in a natural, conversational tone - NOT as a list of sources
-4. Focus on directly answering what the user asked
-5. Only cite sources inline when mentioning specific facts (e.g., "According to [source]...")
-6. If there are conflicting viewpoints, synthesize them into your response naturally
-
-NEVER say things like "Here are the search results" or "I found these sources". Instead, directly answer the question using the information you found."""
-            
-            # Build messages for Perplexity
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": query}
-            ]
-            
-            # Perplexity API payload
-            payload = {
-                "model": "sonar",
-                "messages": messages,
-                "max_tokens": 1000,
-                "temperature": 0.2,  # Lower temperature for more focused responses
-                "top_p": 0.9,
-                "return_images": False,
-                "return_related_questions": False,
-                "search_recency_filter": "month",
-                "top_k": 0,
-                "stream": False,
-                "presence_penalty": 0,
-                "frequency_penalty": 1
-            }
-            
-            # Make direct API call
-            headers = {
-                "Authorization": f"Bearer {config.PERPLEXITY_API_KEY}",
-                "Content-Type": "application/json"
-            }
-            
-            timeout = aiohttp.ClientTimeout(total=30)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    "https://api.perplexity.ai/chat/completions",
-                    headers=headers,
-                    json=payload
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        return f"❌ Perplexity API error ({response.status}): {error_text}"
-                    
-                    result = await response.json()
-                    
-                    if 'choices' in result and len(result['choices']) > 0:
-                        return result['choices'][0]['message']['content']
-                    else:
-                        return "❌ No response from Perplexity search."
-            
-        except Exception as e:
-            logger.error(f"Direct Perplexity search failed: {e}")
-            return f"❌ Error performing web search: {str(e)}"
     
     async def _handle_with_crafting(self, message, query: str) -> str:
         """Handle query with crafting system using the dedicated crafting module"""
