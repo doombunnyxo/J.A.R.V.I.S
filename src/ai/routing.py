@@ -182,7 +182,6 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
         (r'^hybrid:\s*(.+)', 'openai'),  # Explicitly hybrid
         (r'^perplexity:\s*(.+)', 'perplexity'),
         (r'^p:\s*(.+)', 'perplexity'),
-        (r'^search:\s*(.+)', 'openai'),
     ]
     
     for pattern, provider in force_patterns:
