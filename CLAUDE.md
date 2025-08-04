@@ -1,174 +1,292 @@
-# Discord Bot - CLAUDE.md
+# Discord Bot - Development Context
 
-## Project Overview
-This is a Discord bot with hybrid AI functionality that combines Groq, Claude, and Perplexity APIs for intelligent routing of queries. The bot provides chat capabilities, web search integration, comprehensive admin tools with natural language processing, Dune Awakening crafting system, and conversation context management.
+## Project Architecture
 
-**📅 Last Updated**: January 2025
-
-## Architecture Overview
-
-### Core Components
-- **Hybrid AI Routing**: Groq (chat) + Claude (admin/optimization) + Perplexity (search analysis)
-- **Admin System**: Two-phase parsing with natural language processing for 13 action types
-- **Crafting System**: 250+ recipes from Dune Awakening with material calculation
-- **Context Management**: Claude Haiku-powered filtering with multiple context types
-- **Centralized Logging**: Professional logging system throughout codebase
+### Core System
+- **Entry Point**: `main.py` - Bot initialization, cog loading, logging setup
+- **Command Prefix**: `!` for slash commands
+- **AI Routing**: Hybrid system using Groq (chat) + Claude (admin/optimization) + Perplexity (search analysis)
+- **Context Management**: Claude Haiku-powered filtering across multiple context types
 
 ### File Structure
 ```
+main.py                        # Entry point with bot setup
+dune_crafting.py              # Standalone crafting module
+data/dune_recipes.json        # 250+ recipes database (v6.3)
 src/
-├── config.py                 # Configuration management
-├── admin/                    # Admin system (refactored 2025)
-│   ├── parser.py            # Two-phase parsing orchestrator
-│   ├── extractors.py        # Parameter extractors for 13 admin actions
-│   ├── utils.py             # Utility functions
+├── config.py                 # Configuration with environment validation
+├── admin/                    # Admin system (2-phase parsing)
+│   ├── parser.py            # Action identification orchestrator  
+│   ├── extractors.py        # 13 parameter extractors
+│   ├── utils.py             # User/role/channel finding utilities
 │   ├── actions.py           # Admin action execution
-│   └── permissions.py       # Permission checking
+│   └── permissions.py       # Admin permission checking
 ├── ai/
-│   ├── handler_refactored.py # Main AI handler
-│   ├── context_manager.py   # Context management with Claude filtering
-│   ├── routing.py           # Query routing logic
+│   ├── handler_refactored.py # Main AI routing and processing
+│   ├── context_manager.py   # Context filtering with Claude Haiku
+│   ├── routing.py           # Query routing keywords and logic
 │   └── crafting_module.py   # Crafting system integration
 ├── commands/                # Discord slash commands
-│   ├── admin.py
-│   ├── basic.py
-│   ├── help.py
-│   ├── history.py
-│   └── search_context.py
+│   ├── basic.py            # hello, ping
+│   ├── history.py          # Context management commands  
+│   ├── admin.py            # Admin panel commands
+│   ├── help.py             # Help system
+│   └── search_context.py   # Context search utilities
 ├── events/
-│   └── handlers.py          # Discord event handlers
-├── search/                  # Search architecture
-│   ├── search_pipeline.py   # Generic search pipeline
+│   └── handlers.py         # Discord event processing
+├── search/                 # Search system architecture
+│   ├── search_pipeline.py  # Generic search interface
 │   ├── hybrid_search_provider.py # Claude+Perplexity (default)
-│   ├── claude_adapter.py    # Pure Claude search provider
-│   ├── perplexity_adapter.py # Pure Perplexity search provider
-│   ├── claude.py            # Legacy Claude functions
-│   ├── perplexity.py        # Legacy Perplexity functions
-│   └── google.py            # Google Custom Search
+│   ├── claude_adapter.py   # Pure Claude search
+│   ├── perplexity_adapter.py # Pure Perplexity search
+│   ├── claude.py           # Legacy Claude functions
+│   ├── perplexity.py       # Legacy Perplexity functions
+│   └── google.py           # Google Custom Search
 ├── data/
-│   └── persistence.py       # Data storage management
-├── utils/
-│   ├── logging.py           # Centralized logging system  
-│   └── message_utils.py     # Message handling utilities
-└── scraping/
-    └── web_scraper.py       # Web scraping utilities
+│   └── persistence.py      # JSON data storage with async locks
+└── utils/
+    ├── logging.py          # Centralized logging system
+    └── message_utils.py    # Message handling utilities
 ```
 
 ## Configuration
 
 ### Required Environment Variables
-- `DISCORD_TOKEN` - Discord bot token (required)
-- `AUTHORIZED_USER_ID` - Admin user ID (required)
+```
+DISCORD_TOKEN               # Discord bot token
+AUTHORIZED_USER_ID          # Admin user ID (integer)
+```
 
 ### Optional API Keys
-- `GROQ_API_KEY` - Groq API key for chat functionality
-- `ANTHROPIC_API_KEY` - Claude API key for admin/search
-- `PERPLEXITY_API_KEY` - Perplexity API key for search analysis
-- `GOOGLE_API_KEY` - Google Search API key
-- `GOOGLE_SEARCH_ENGINE_ID` - Google Custom Search Engine ID
+```
+GROQ_API_KEY               # For chat functionality
+ANTHROPIC_API_KEY          # For admin commands and search optimization  
+PERPLEXITY_API_KEY         # For search result analysis
+GOOGLE_API_KEY             # For web search
+GOOGLE_SEARCH_ENGINE_ID    # Google Custom Search Engine ID
+```
 
-### Required Discord Intents
-- **Message Content Intent** - Required for reading message content
-- **Guild Members Intent** - Required for admin commands (user lookup, nickname changes)
+### AI Configuration Defaults
+```python
+AI_MODEL = "llama-3.1-8b-instant"  # Groq model
+AI_MAX_TOKENS = 1000
+AI_TEMPERATURE = 0.7                # Groq temperature
+AI_RATE_LIMIT_REQUESTS = 10         # Per user per minute
+AI_RATE_LIMIT_WINDOW = 60           # Seconds
+CHANNEL_CONTEXT_LIMIT = 50          # Messages stored per channel
+CHANNEL_CONTEXT_DISPLAY = 35        # Messages shown to AI
+```
 
-## AI Models Used
-- **Groq**: llama-3.1-8b-instant
-- **Claude**: claude-3-5-haiku-20241022 (default), claude-3-5-sonnet, claude-3-opus
-- **Perplexity**: sonar
+### Discord Intents Currently Set
+```python
+intents = discord.Intents.default()
+intents.message_content = True
+# NOTE: Guild Members Intent NOT set in code but required for admin commands
+```
+
+## AI Models and Temperatures
+
+### Groq Configuration
+- **Model**: `llama-3.1-8b-instant`
+- **Temperature**: 0.7 (configurable via AI_TEMPERATURE)
+- **Max Tokens**: 1000
+- **Use**: General chat, conversations
+
+### Claude Configuration  
+- **Models**: `claude-3-5-haiku-20241022` (default), `claude-3-5-sonnet`, `claude-3-opus`
+- **Temperature**: 0.2 (hardcoded for search tasks)
+- **Use**: Admin commands, search optimization, context filtering
+
+### Perplexity Configuration
+- **Model**: `sonar`
+- **Temperature**: 0.1-0.2 (varies by function)
+- **Use**: Search result analysis and summarization
 
 ## Admin System Architecture
 
 ### 13 Admin Action Types
-1. `kick_user` - Remove user from server
-2. `ban_user` - Permanently ban user
-3. `unban_user` - Unban user by ID
-4. `timeout_user` - Temporarily mute user
-5. `remove_timeout` - Remove user timeout
-6. `change_nickname` - Change user nicknames
-7. `add_role` - Give role to user
-8. `remove_role` - Remove role from user
-9. `rename_role` - Rename existing role
-10. `reorganize_roles` - AI-powered role organization
-11. `bulk_delete` - Delete messages with user filtering
-12. `create_channel` - Create text/voice channels
-13. `delete_channel` - Delete existing channels
+```python
+extractor_map = {
+    'kick_user': extract_kick_params,
+    'ban_user': extract_ban_params, 
+    'unban_user': extract_unban_params,
+    'timeout_user': extract_timeout_params,
+    'remove_timeout': extract_remove_timeout_params,
+    'change_nickname': extract_nickname_params,
+    'add_role': extract_add_role_params,
+    'remove_role': extract_remove_role_params,
+    'rename_role': extract_rename_role_params,
+    'reorganize_roles': extract_reorganize_roles_params,
+    'bulk_delete': extract_bulk_delete_params,
+    'create_channel': extract_create_channel_params,
+    'delete_channel': extract_delete_channel_params,
+}
+```
 
-### Two-Phase Parsing
-- **Phase 1**: Action identification (`_identify_action_type`)
-- **Phase 2**: Parameter extraction (`_extract_parameters` via extractors.py)
+### Two-Phase Parsing Process
+1. **Action Identification** (`parser.py`): Determines which admin action type
+2. **Parameter Extraction** (`extractors.py`): Extracts specific parameters for that action
 
-## Context Management
+### Admin Permission System
+- Checks user ID against `AUTHORIZED_USER_ID` in config
+- All admin actions require reaction-based confirmation (✅/❌)
+
+## Context Management System
+
+### Context Storage Limits
+```python
+# Conversation context (shared between all AIs)
+unified_conversations: deque(maxlen=12)  # 6 exchanges (user+assistant pairs)
+context_expiry_minutes = 30
+
+# Channel context (for situational awareness)  
+channel_conversations: deque(maxlen=50)  # 50 messages per channel
+# Displayed to AI: 35 messages (CHANNEL_CONTEXT_DISPLAY)
+```
 
 ### Context Types
-1. **Conversation Context**: 12 message exchanges per user/channel, 30-minute expiry
-2. **Channel Context**: 50 messages per channel (loaded from Discord history on startup)
-3. **Permanent Context**: User-specific information, filtered per query
-4. **Settings**: Unfiltered global preferences (commands: `!add_setting`, `!list_settings`, `!remove_setting`, `!clear_settings`)
+1. **Conversation Context**: Recent AI interactions per user/channel (12 messages, 30min expiry)
+2. **Channel Context**: General channel messages (50 stored, 35 shown, loaded from Discord history on startup)
+3. **Permanent Context**: User-specific info, filtered per query by Claude Haiku
+4. **Settings (Unfiltered)**: Global preferences, bypass all filtering
 
 ### Context Filtering
-- All context filtering uses Claude Haiku for relevance determination
-- Separate filtering for conversation, permanent, and channel context
-- Settings bypass all filtering and appear in every query
+- **All filtering uses Claude Haiku** (`claude-3-5-haiku-20241022`)
+- **Temperature**: 0.1 for context filtering tasks
+- **Max Tokens**: 300-600 depending on task
+- **Filtering Types**: Conversation, permanent, and unified context filtering
+
+## Search System Architecture
+
+### Hybrid Search (Default)
+```python
+class HybridSearchProvider:
+    # Claude Haiku: Fast, cost-effective query optimization
+    # Perplexity Sonar: High-quality result analysis
+```
+
+### Search Routing Keywords
+**Triggers Claude/Perplexity search:**
+- Current events: `current`, `latest`, `recent`, `today`, `2025`
+- Questions: `what is`, `who is`, `how to`, `when will`
+- Comparisons: `vs`, `versus`, `better`, `compare`
+- Research: `search for`, `find`, `tell me about`
+
+### Force Provider Syntax
+- `groq:` or `g:` - Force Groq
+- `claude:` - Hybrid search (default)
+- `pure-claude:` - Claude only
+- `perplexity:` or `p:` - Perplexity only  
+- `search:` - Direct Google search
+
+## Command System
+
+### Slash Commands Available
+```python
+# Basic Commands (basic.py)
+!hello                        # Greeting
+!ping                         # Response time check
+
+# Context Management (history.py)  
+!add_setting <text>          # Add unfiltered setting
+!list_settings               # View all settings
+!remove_setting <index>      # Remove specific setting
+!clear_settings              # Clear all settings
+!history                     # Show conversation history
+!context                     # Show context information
+
+# Admin Commands (admin.py)
+!admin_panel                 # Administrative interface
+!stats                       # Bot statistics
+!remember <text>             # Add permanent context  
+!memories                    # List permanent context
+!forget <index>              # Remove permanent context
+
+# Search Context (search_context.py)
+!clear_search_context        # Clear context
+!search_context_info         # Context status
+!clear_all_search_contexts   # Admin: clear all contexts
+
+# Help System (help.py)
+!help [category]             # Comprehensive help
+```
+
+### Primary Interface: @mentions
+- Main bot interaction through Discord mentions
+- Natural language admin commands with AI parsing
+- Crafting requests: `@bot craft: <request>`
+
+## Data Persistence
+
+### JSON Files
+```python
+# File locations (configurable)
+SETTINGS_FILE = 'data/user_settings.json'
+PERMANENT_CONTEXT_FILE = 'data/permanent_context.json' 
+UNFILTERED_PERMANENT_CONTEXT_FILE = 'data/unfiltered_permanent_context.json'
+HISTORY_FILE = 'data/conversation_history.json'
+```
+
+### Data Structure
+- **Conversation History**: Per-user conversation tracking
+- **User Settings**: Individual preferences  
+- **Permanent Context**: User-specific information, filtered per query
+- **Unfiltered Context**: Global settings, always applied
+- **Thread Safety**: Async locks for concurrent access
 
 ## Crafting System
 
 ### Database Details
-- **250+ recipes** in `data/dune_recipes.json` (version 6.3)
-- **Material tiers**: Copper → Iron → Steel → Aluminum → Duraluminum → Plastanium
-- **Vehicle types**: Ornithopters, Sandbikes, Buggies, Sandcrawlers
-- **Weapon series**: Karpov 38, Maula Pistol, Disruptor M11, Sword, Rapier, JABAL Spitdart, etc.
+- **File**: `data/dune_recipes.json` 
+- **Version**: 6.3 (last updated 2025-01-03)
+- **Total Recipes**: 250+
+- **Material Tiers**: Copper → Iron → Steel → Aluminum → Duraluminum → Plastanium
+- **Categories**: Weapons, vehicles, tools, equipment
 
-### Capabilities
-- Natural language processing for complex requests
-- Material calculation and breakdown
-- Mixed component tier support
-- Optional parts handling
-
-## Search Architecture
-
-### Hybrid Search (Default)
-- Claude Haiku for query optimization (fast, cost-effective)
-- Perplexity for result analysis (high-quality)
-- Fallback to pure Claude if Perplexity unavailable
-
-### Force Provider Options
-- `groq:` or `g:` - Force Groq
-- `claude:` - Hybrid search (default)
-- `pure-claude:` or `claude-only:` - Pure Claude
-- `perplexity:` or `p:` - Pure Perplexity
-- `search:` - Direct Google search
+### Integration
+- **Module**: `dune_crafting.py` (standalone)
+- **AI Integration**: `src/ai/crafting_module.py`
+- **Natural Language**: AI-powered request interpretation
+- **Functions**: Material calculation, recipe lookup, crafting trees
 
 ## Rate Limiting
-- 10 requests per 60 seconds per user across all AI providers
+- **Global Limit**: 10 requests per 60 seconds per user
+- **Applies To**: All AI providers (Groq, Claude, Perplexity)
+- **Reset**: Automatic after window expires
 
-## Common Issues & Solutions
+## Common Development Issues
 
 ### "Command not recognized as admin action"
-- **Cause**: Missing Guild Members Intent
-- **Solution**: Enable "Server Members Intent" in Discord Developer Portal and restart bot
+- **Cause**: Missing Guild Members Intent in Discord Developer Portal
+- **Code Issue**: Bot can only see itself in `guild.members`
+- **Solution**: Enable "Server Members Intent" in Discord portal + restart bot
 
-### Admin commands failing
-- Verify bot has necessary Discord permissions
-- Check that `AUTHORIZED_USER_ID` is set correctly
-- Ensure user is in the authorized user list
+### Missing Admin Functionality  
+- **Required Intent**: Guild Members Intent (not set in code)
+- **Current Code**: Only sets `message_content = True`
+- **Impact**: Admin commands requiring user lookup will fail
 
-### Search not working
-- Verify API keys are configured for Claude/Perplexity/Google
-- Check rate limiting (10 requests/60 seconds per user)
+### Context Filtering Failures
+- **Dependency**: Requires `ANTHROPIC_API_KEY` for Claude Haiku
+- **Fallback**: Basic context without filtering if Claude unavailable
+- **Debug**: Check API key configuration and rate limits
+
+### Search System Issues
+- **Hybrid Search**: Requires both Claude and Perplexity API keys for optimal function
+- **Fallbacks**: Pure Claude if Perplexity unavailable
+- **Google Search**: Requires both `GOOGLE_API_KEY` and `GOOGLE_SEARCH_ENGINE_ID`
 
 ## Development Notes
 
-### Recent Major Changes (January 2025)
-- Split monolithic admin parser (532 lines) into focused modules
-- Migrated context filtering from Groq to Claude Haiku
-- Expanded crafting database from 79+ to 250+ recipes
-- Added Guild Members Intent requirement for admin commands
-- Renamed settings commands from `unfiltered_permanent_context` to `add_setting` etc.
-- Removed debug print statements from admin system
+### Recent Architecture Changes
+- **Admin System**: Split from monolithic parser to modular 2-phase system
+- **Context Filtering**: Migrated from Groq to Claude Haiku for consistency
+- **Crafting Database**: Expanded from 79+ to 250+ recipes
+- **Command Naming**: Settings commands changed from `unfiltered_permanent_context` to `add_setting` etc.
 
-### Key Architectural Decisions
-- Two-phase admin parsing for better maintainability and performance
-- Claude Haiku for all context filtering (consistent, cost-effective)
-- Hybrid search combining Claude optimization with Perplexity analysis
-- Unified conversation context shared between all AI providers
-- Graceful fallback when API keys are unavailable
+### Code Quality
+- **Logging**: Centralized system with proper levels
+- **Type Hints**: Comprehensive annotations  
+- **Async**: Full async/await implementation
+- **Error Handling**: Graceful fallbacks and user-friendly messages
+- **Debug Cleanup**: Print statements removed from admin system
