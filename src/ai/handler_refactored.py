@@ -1301,17 +1301,68 @@ Respond with ONLY the specific admin command, nothing else."""
             if not config.has_perplexity_api():
                 return "❌ Perplexity API not configured for search functionality."
             
-            # Direct web search with Perplexity - no context, no filtering, just search
-            from ..search.perplexity import perplexity_search
+            # Direct web search with custom Perplexity implementation
+            import aiohttp
+            from ..config import config
             
-            # Call Perplexity's search_and_answer directly with minimal context
-            result = await perplexity_search.search_and_answer(
-                query, 
-                user_id=message.author.id,
-                channel_id=message.channel.id
-            )
+            # Build custom system prompt for filtering and summarizing
+            system_prompt = """You are a helpful search assistant that provides comprehensive, accurate answers using current information from the web.
+
+IMPORTANT INSTRUCTIONS:
+1. Filter through all search results to find the most relevant and credible information
+2. Summarize the key findings concisely while maintaining accuracy
+3. Focus on directly answering the user's query
+4. Cite sources when providing specific facts or claims
+5. If multiple perspectives exist, briefly mention the main viewpoints
+6. Prioritize recent and authoritative sources
+
+Your response should be well-structured and easy to understand."""
             
-            return result
+            # Build messages for Perplexity
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": query}
+            ]
+            
+            # Perplexity API payload
+            payload = {
+                "model": "sonar",
+                "messages": messages,
+                "max_tokens": 1000,
+                "temperature": 0.1,  # Lower temperature for more focused responses
+                "top_p": 0.9,
+                "return_images": False,
+                "return_related_questions": False,
+                "search_recency_filter": "month",
+                "top_k": 0,
+                "stream": False,
+                "presence_penalty": 0,
+                "frequency_penalty": 1
+            }
+            
+            # Make direct API call
+            headers = {
+                "Authorization": f"Bearer {config.PERPLEXITY_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    "https://api.perplexity.ai/chat/completions",
+                    headers=headers,
+                    json=payload
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        return f"❌ Perplexity API error ({response.status}): {error_text}"
+                    
+                    result = await response.json()
+                    
+                    if 'choices' in result and len(result['choices']) > 0:
+                        return result['choices'][0]['message']['content']
+                    else:
+                        return "❌ No response from Perplexity search."
             
         except Exception as e:
             logger.error(f"Direct Perplexity search failed: {e}")
