@@ -205,7 +205,7 @@ class AdminCommands(commands.Cog):
                     try:
                         message_link = f"https://discord.com/channels/{conf_msg.guild.id}/{conf_msg.channel.id}/{conf_msg.id}"
                         response += f"[Jump to confirmation message]({message_link})\n"
-                    except:
+                    except Exception:
                         pass
                 
                 response += "\n"

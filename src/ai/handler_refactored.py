@@ -9,9 +9,9 @@ to a separate module for better organization.
 import asyncio
 import re
 import time
+import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Set, Tuple
-import uuid
 
 from discord.ext import commands
 import discord
@@ -21,6 +21,9 @@ from src.config import config
 from src.data.persistence import data_manager
 from src.admin.permissions import is_admin
 from src.ai.context_manager import ContextManager
+from ..utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class RateLimiter:
@@ -83,13 +86,13 @@ class AIHandler:
         
         # Instance ID for debugging
         self.instance_id = str(uuid.uuid4())[:8]
-        print(f"[OK] AIHandler initialized with ID: {self.instance_id}")
+        logger.info(f"AIHandler initialized with ID: {self.instance_id}")
     
     def _initialize_groq(self) -> Optional[Groq]:
         """Initialize Groq client if API key is available"""
         if config.has_groq_api():
             return Groq(api_key=config.GROQ_API_KEY)
-        print("[WARN] No Groq API key found - Groq functionality disabled")
+        logger.warning("No Groq API key found - Groq functionality disabled")
         return None
     
     async def _cleanup_processed_messages(self):
@@ -135,7 +138,7 @@ class AIHandler:
         try:
             # Prevent duplicate processing
             if message.id in self.processed_messages:
-                print(f"DEBUG: Message {message.id} already processed")
+                logger.debug(f"Message {message.id} already processed")
                 return
             
             self.processed_messages.add(message.id)
@@ -176,7 +179,7 @@ class AIHandler:
                 await self._send_response(message, response)
         
         except Exception as e:
-            print(f"ERROR: [AIHandler-{self.instance_id}] handle_ai_command failed: {e}")
+            logger.error(f"[AIHandler-{self.instance_id}] handle_ai_command failed: {e}")
             error_msg = f"❌ An error occurred processing your request: {str(e)}"
             await message.channel.send(error_msg)
     
@@ -238,7 +241,7 @@ class AIHandler:
                 return await self._handle_search_with_claude(message, query)
             
         except Exception as e:
-            print(f"DEBUG: Claude handler failed: {e}")
+            logger.debug(f"Claude handler failed: {e}")
             return f"❌ Error with Claude processing: {str(e)}"
     
     async def _handle_admin_with_claude(self, message, query: str) -> str:
@@ -248,7 +251,7 @@ class AIHandler:
             return await self._handle_admin_with_perplexity(message, query)
                 
         except Exception as e:
-            print(f"DEBUG: Admin processing failed: {e}")
+            logger.debug(f"Admin processing failed: {e}")
             return f"❌ Error with admin processing: {str(e)}"
     
     async def _handle_admin_with_perplexity(self, message, query: str) -> str:
@@ -286,7 +289,7 @@ class AIHandler:
                 return await self._handle_standard_admin_command(message, query)
                 
         except Exception as e:
-            print(f"DEBUG: Perplexity admin processing failed: {e}")
+            logger.debug(f"Perplexity admin processing failed: {e}")
             return f"❌ Error with Perplexity admin processing: {str(e)}"
     
     def _should_force_search_for_roles(self, query: str) -> bool:
@@ -483,7 +486,7 @@ Examples:
                         raise Exception(f"Perplexity API error {response.status}")
                         
         except Exception as e:
-            print(f"DEBUG: Perplexity admin analysis failed: {e}")
+            logger.debug(f"Perplexity admin analysis failed: {e}")
             return {"needs_search": False, "action_type": "error"}
     
     async def _perform_google_search_for_admin(self, search_query: str) -> str:
@@ -548,8 +551,8 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
             # Debug: Check payload size
             import json
             payload_size = len(json.dumps(payload))
-            print(f"DEBUG: Perplexity payload size: {payload_size} characters")
-            print(f"DEBUG: Search results size: {len(search_results)} characters")
+            logger.debug(f"Perplexity payload size: {payload_size} characters")
+            logger.debug(f"Search results size: {len(search_results)} characters")
             
             timeout = aiohttp.ClientTimeout(total=20)
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -563,13 +566,13 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
                         # Get error details
                         try:
                             error_body = await response.text()
-                            print(f"DEBUG: Perplexity 400 error body: {error_body}")
-                        except:
+                            logger.debug(f"Perplexity 400 error body: {error_body}")
+                        except Exception:
                             pass
                         raise Exception(f"Perplexity API error {response.status}: {error_body if 'error_body' in locals() else 'Unknown error'}")
                         
         except Exception as e:
-            print(f"DEBUG: Perplexity role generation failed: {e}")
+            logger.debug(f"Perplexity role generation failed: {e}")
             return f"❌ Error generating role list: {str(e)}"
     
     async def _create_admin_confirmation_with_roles(self, message, original_query: str, role_list: str, admin_analysis: dict) -> str:
@@ -609,7 +612,7 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
             return ""  # No additional response needed
             
         except Exception as e:
-            print(f"DEBUG: Admin confirmation creation failed: {e}")
+            logger.debug(f"Admin confirmation creation failed: {e}")
             return f"❌ Error creating admin confirmation: {str(e)}"
     
     async def _handle_standard_admin_command(self, message, query: str) -> str:
@@ -757,28 +760,28 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
         
         needs_research = (has_role_command and (has_research_indicator or has_theme_mention))
         
-        print(f"DEBUG: Research detection - has_role_command: {has_role_command}, has_research_indicator: {has_research_indicator}, has_theme_mention: {has_theme_mention}, needs_research: {needs_research}")
+        logger.debug(f"Research detection - has_role_command: {has_role_command}, has_research_indicator: {has_research_indicator}, has_theme_mention: {has_theme_mention}, needs_research: {needs_research}")
         
         return needs_research
     
     async def _handle_multi_step_admin_action(self, message, query: str) -> str:
         """Handle multi-step admin actions that require research"""
         try:
-            print(f"DEBUG: Handling multi-step admin action: {query}")
+            logger.debug(f"Handling multi-step admin action: {query}")
             
             # Step 1: Extract the theme/context that needs research
             research_query = self._extract_research_query(query)
-            print(f"DEBUG: Extracted research query: {research_query}")
+            logger.debug(f"Extracted research query: {research_query}")
             
             # Step 2: Use the search pipeline to gather information
             research_context = await self._perform_research(message, research_query)
-            print(f"DEBUG: Research context length: {len(research_context) if research_context else 0}")
+            logger.debug(f"Research context length: {len(research_context) if research_context else 0}")
             
             # Step 3: Process the original admin command with the research context
             return await self._execute_admin_with_research(message, query, research_context)
             
         except Exception as e:
-            print(f"DEBUG: Multi-step admin action failed: {e}")
+            logger.debug(f"Multi-step admin action failed: {e}")
             return f"❌ Error with multi-step admin processing: {str(e)}"
     
     def _extract_research_query(self, query: str) -> str:
@@ -828,7 +831,7 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
             from ..search.search_pipeline import SearchPipeline
             from ..search.hybrid_search_provider import HybridSearchProvider
             
-            print(f"DEBUG: Performing admin research using hybrid search for: {research_query}")
+            logger.debug(f"Performing admin research using hybrid search for: {research_query}")
             
             # Build admin-specific research context (simpler than user context)
             admin_research_context = f"""ADMIN RESEARCH CONTEXT:
@@ -843,17 +846,17 @@ The goal is to find authentic terminology and structure that can be adapted for 
             # Execute search using the existing hybrid pipeline
             research_results = await pipeline.search_and_respond(research_query, admin_research_context)
             
-            print(f"DEBUG: Admin research completed using hybrid search, results length: {len(research_results) if research_results else 0}")
+            logger.debug(f"Admin research completed using hybrid search, results length: {len(research_results) if research_results else 0}")
             return research_results
             
         except Exception as e:
-            print(f"DEBUG: Admin research via hybrid search failed: {e}")
+            logger.debug(f"Admin research via hybrid search failed: {e}")
             return f"Error researching {research_query}: {str(e)}"
     
     async def _execute_admin_with_research(self, message, original_query: str, research_context: str) -> str:
         """Execute the admin command with research context - direct confirmation approach"""
         try:
-            print(f"DEBUG: Using direct confirmation approach for research-enhanced admin action")
+            logger.debug(f"Using direct confirmation approach for research-enhanced admin action")
             
             # Step 1: Use Claude to analyze research and create confirmation message
             confirmation_info = await self._claude_analyze_research_for_confirmation(message, original_query, research_context)
@@ -861,13 +864,13 @@ The goal is to find authentic terminology and structure that can be adapted for 
             if not confirmation_info or confirmation_info.get('error'):
                 return confirmation_info.get('error', "❌ Failed to analyze research for confirmation")
             
-            print(f"DEBUG: Claude analyzed research, creating direct confirmation")
+            logger.debug(f"Claude analyzed research, creating direct confirmation")
             
             # Step 2: Send confirmation message directly to Discord (no LLM generation)
             return await self._send_direct_admin_confirmation(message, original_query, confirmation_info, research_context)
             
         except Exception as e:
-            print(f"DEBUG: Direct confirmation admin execution failed: {e}")
+            logger.debug(f"Direct confirmation admin execution failed: {e}")
             return f"❌ Error with direct confirmation admin processing: {str(e)}"
     
     async def _claude_analyze_research_for_confirmation(self, message, original_query: str, research_context: str) -> dict:
@@ -949,7 +952,7 @@ Respond with ONLY the JSON, no other text."""
                         raise Exception(f"Claude API error {response.status}: {await response.text()}")
                         
         except Exception as e:
-            print(f"DEBUG: Claude research analysis failed: {e}")
+            logger.debug(f"Claude research analysis failed: {e}")
             return {"error": f"❌ Error analyzing research: {str(e)}"}
     
     async def _send_direct_admin_confirmation(self, message, original_query: str, confirmation_info: dict, research_context: str) -> str:
@@ -999,7 +1002,7 @@ Respond with ONLY the JSON, no other text."""
             return ""  # No additional response needed
             
         except Exception as e:
-            print(f"DEBUG: Direct confirmation sending failed: {e}")
+            logger.debug(f"Direct confirmation sending failed: {e}")
             return f"❌ Error sending confirmation: {str(e)}"
     
     async def _claude_generate_specific_admin_command(self, message, original_query: str, research_context: str) -> str:
@@ -1068,7 +1071,7 @@ Respond with ONLY the specific command, no other text."""
                         raise Exception(f"Claude API error {response.status}: {await response.text()}")
                         
         except Exception as e:
-            print(f"DEBUG: Claude command generation failed: {e}")
+            logger.debug(f"Claude command generation failed: {e}")
             return f"❌ Error generating command: {str(e)}"
     
     async def _claude_generate_admin_commands(self, message, original_query: str, research_context: str) -> str:
@@ -1142,7 +1145,7 @@ Respond with ONLY the specific admin command, nothing else."""
                         raise Exception(f"Claude API error {response.status}: {await response.text()}")
                         
         except Exception as e:
-            print(f"DEBUG: Claude command generation failed: {e}")
+            logger.debug(f"Claude command generation failed: {e}")
             return f"❌ Error generating admin commands: {str(e)}"
     
     
@@ -1169,7 +1172,7 @@ Respond with ONLY the specific admin command, nothing else."""
             return response
             
         except Exception as e:
-            print(f"DEBUG: Hybrid search pipeline failed: {e}")
+            logger.debug(f"Hybrid search pipeline failed: {e}")
             return f"❌ Error with hybrid search: {str(e)}"
 
     async def _handle_with_perplexity(self, message, query: str) -> str:
@@ -1197,7 +1200,7 @@ Respond with ONLY the specific admin command, nothing else."""
             return response
             
         except Exception as e:
-            print(f"DEBUG: Perplexity search pipeline failed: {e}")
+            logger.debug(f"Perplexity search pipeline failed: {e}")
             return f"❌ Error with Perplexity search: {str(e)}"
     
     async def _handle_with_pure_claude(self, message, query: str) -> str:
@@ -1225,7 +1228,7 @@ Respond with ONLY the specific admin command, nothing else."""
             return response
             
         except Exception as e:
-            print(f"DEBUG: Pure Claude search pipeline failed: {e}")
+            logger.debug(f"Pure Claude search pipeline failed: {e}")
             return f"❌ Error with pure Claude search: {str(e)}"
 
     async def _handle_with_pure_perplexity(self, message, query: str) -> str:
@@ -1253,7 +1256,7 @@ Respond with ONLY the specific admin command, nothing else."""
             return response
             
         except Exception as e:
-            print(f"DEBUG: Pure Perplexity search pipeline failed: {e}")
+            logger.debug(f"Pure Perplexity search pipeline failed: {e}")
             return f"❌ Error with pure Perplexity search: {str(e)}"
     
     async def _handle_with_groq(self, message, query: str) -> str:
@@ -1290,7 +1293,7 @@ Respond with ONLY the specific admin command, nothing else."""
     
     async def _handle_with_crafting(self, message, query: str) -> str:
         """Handle query with crafting system using the dedicated crafting module"""
-        print(f"DEBUG: _handle_with_crafting called with query: '{query}'")
+        logger.debug(f"_handle_with_crafting called with query: '{query}'")
         try:
             from .crafting_module import CraftingProcessor
             
@@ -1439,7 +1442,7 @@ Be concise and clear about what the action will do."""
         # Add research context to parameters if available (for multi-step actions)
         if research_context and action_type == "reorganize_roles":
             parameters["research_context"] = research_context
-            print(f"DEBUG: Added research context to reorganize_roles parameters")
+            logger.debug(f"Added research context to reorganize_roles parameters")
         
         admin_intent = {
             "action_type": action_type,
@@ -1632,7 +1635,7 @@ Be concise and clear about what the action will do."""
         del self.admin_actions[action_id]
         try:
             await reaction.message.delete()
-        except:
+        except Exception:
             pass
     
     async def _execute_role_list_reorganization(self, message, guild, role_list: list, theme: str):
@@ -1693,7 +1696,7 @@ Be concise and clear about what the action will do."""
                     
                 except Exception as e:
                     errors.append(f"`{old_name}` → `{new_name}`: {str(e)}")
-                    print(f"DEBUG: Failed to rename role {old_name} to {new_name}: {e}")
+                    logger.debug(f"Failed to rename role {old_name} to {new_name}: {e}")
             
             # Final status message
             if renamed_count > 0:
@@ -1716,4 +1719,4 @@ Be concise and clear about what the action will do."""
                 
         except Exception as e:
             await message.channel.send(f"❌ **Role reorganization failed**: {str(e)}")
-            print(f"DEBUG: Role list reorganization error: {e}")
+            logger.debug(f"Role list reorganization error: {e}")

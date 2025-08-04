@@ -4,6 +4,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Import logger after load_dotenv to ensure proper initialization
+from .utils.logging import get_logger
+logger = get_logger(__name__)
+
 class Config:
     """Configuration management with environment validation"""
     
@@ -37,6 +41,12 @@ class Config:
     # Channel Context
     CHANNEL_CONTEXT_LIMIT: int = 50
     CHANNEL_CONTEXT_DISPLAY: int = 35
+    
+    # Claude configuration
+    @property
+    def use_claude_as_default(self) -> bool:
+        """Check if Claude should be used as the default AI"""
+        return self.has_anthropic_api() and not self.has_groq_api()
     
     def __init__(self):
         self._validate_and_load()
@@ -88,6 +98,10 @@ class Config:
         if errors:
             raise ValueError(f"Configuration errors: {'; '.join(errors)}")
     
+    def is_valid(self) -> bool:
+        """Check if the configuration is valid"""
+        return bool(self.DISCORD_TOKEN and hasattr(self, 'AUTHORIZED_USER_ID'))
+    
     def has_groq_api(self) -> bool:
         """Check if Groq API is configured"""
         return bool(self.GROQ_API_KEY)
@@ -134,15 +148,16 @@ def init_config() -> Config:
         _config_instance = Config()
         return _config_instance
     except Exception as e:
-        print(f"[ERROR] Configuration Error: {e}")
+        logger.error(f"Configuration Error: {e}")
         raise
 
 # Create config instance on import, but handle errors gracefully
 try:
     config = Config()
-    print("[OK] Configuration loaded successfully")
+    logger.info("Configuration loaded successfully")
+    logger.info(f"Available APIs: Claude={config.has_anthropic_api()}, Groq={config.has_groq_api()}, Google Search={config.has_google_search()}")
 except Exception as e:
-    print(f"[WARNING] Configuration error: {e}")
-    print("Some features may not work without proper configuration")
+    logger.warning(f"Configuration error: {e}")
+    logger.warning("Some features may not work without proper configuration")
     # Create a minimal config object that won't crash on access
     config = None

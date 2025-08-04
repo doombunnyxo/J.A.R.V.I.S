@@ -3,6 +3,9 @@ import os
 import asyncio
 from typing import Dict, Any, Optional
 from ..config import config
+from ..utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 class DataManager:
     """Handles persistent data storage and retrieval"""
@@ -33,7 +36,7 @@ class DataManager:
             else:
                 self.conversation_history = {}
         except Exception as e:
-            print(f"Error loading conversation history: {e}")
+            logger.error(f"Error loading conversation history: {e}")
             self.conversation_history = {}
     
     async def _load_user_settings(self):
@@ -45,7 +48,7 @@ class DataManager:
             else:
                 self.user_settings = {}
         except Exception as e:
-            print(f"Error loading user settings: {e}")
+            logger.error(f"Error loading user settings: {e}")
             self.user_settings = {}
     
     async def _load_permanent_context(self):
@@ -57,7 +60,7 @@ class DataManager:
             else:
                 self.permanent_context = {}
         except Exception as e:
-            print(f"Error loading permanent context: {e}")
+            logger.error(f"Error loading permanent context: {e}")
             self.permanent_context = {}
     
     async def _load_unfiltered_permanent_context(self):
@@ -69,7 +72,7 @@ class DataManager:
             else:
                 self.unfiltered_permanent_context = []
         except Exception as e:
-            print(f"Error loading unfiltered permanent context: {e}")
+            logger.error(f"Error loading unfiltered permanent context: {e}")
             self.unfiltered_permanent_context = []
     
     async def save_conversation_history(self):
@@ -81,7 +84,7 @@ class DataManager:
                 with open(config.HISTORY_FILE, 'w', encoding='utf-8') as f:
                     json.dump(self.conversation_history, f, indent=2, ensure_ascii=False)
             except Exception as e:
-                print(f"Error saving conversation history: {e}")
+                logger.error(f"Error saving conversation history: {e}")
     
     async def save_user_settings(self):
         """Save user settings to file"""
@@ -91,7 +94,7 @@ class DataManager:
                 with open(config.SETTINGS_FILE, 'w', encoding='utf-8') as f:
                     json.dump(self.user_settings, f, indent=2, ensure_ascii=False)
             except Exception as e:
-                print(f"Error saving user settings: {e}")
+                logger.error(f"Error saving user settings: {e}")
     
     async def save_permanent_context(self):
         """Save permanent context to file"""
@@ -101,7 +104,7 @@ class DataManager:
                 with open(config.PERMANENT_CONTEXT_FILE, 'w', encoding='utf-8') as f:
                     json.dump(self.permanent_context, f, indent=2, ensure_ascii=False)
             except Exception as e:
-                print(f"Error saving permanent context: {e}")
+                logger.error(f"Error saving permanent context: {e}")
     
     async def save_unfiltered_permanent_context(self):
         """Save unfiltered permanent context to file"""
@@ -111,7 +114,7 @@ class DataManager:
                 with open(config.UNFILTERED_PERMANENT_CONTEXT_FILE, 'w', encoding='utf-8') as f:
                     json.dump(self.unfiltered_permanent_context, f, indent=2, ensure_ascii=False)
             except Exception as e:
-                print(f"Error saving unfiltered permanent context: {e}")
+                logger.error(f"Error saving unfiltered permanent context: {e}")
     
     def get_user_key(self, user) -> str:
         """Generate consistent user key for data storage"""

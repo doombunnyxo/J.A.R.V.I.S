@@ -8,6 +8,9 @@ from typing import Dict, List, Optional, Tuple
 from collections import defaultdict, deque
 from ..data.persistence import data_manager
 from ..config import config
+from ..utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ContextManager:
@@ -182,7 +185,7 @@ Return only the filtered previous conversation context - no explanations."""
             return filtered_context
             
         except Exception as e:
-            print(f"DEBUG: Context filtering failed: {e}")
+            logger.debug(f"Context filtering failed: {e}")
             # Fallback to basic context
             context_parts = []
             if user_name:
@@ -229,13 +232,13 @@ Return only relevant permanent context items, one per line, in the exact same fo
             # Use Claude Haiku for permanent context filtering
             filtered_response = await self._call_claude_haiku(filter_messages, max_tokens=400)
             
-            print(f"DEBUG: Permanent context filter for user '{user_name}' (ID: {message.author.id if message else 'unknown'})")
-            print(f"DEBUG: Original items: {len(permanent_context)}")
-            print(f"DEBUG: Query: '{query}'")
-            print(f"DEBUG: Filter response: {filtered_response[:200]}...")
+            logger.debug(f"Permanent context filter for user '{user_name}' (ID: {message.author.id if message else 'unknown'})")
+            logger.debug(f"Original items: {len(permanent_context)}")
+            logger.debug(f"Query: '{query}'")
+            logger.debug(f"Filter response: {filtered_response[:200]}...")
             
             if "no relevant permanent context" in filtered_response.lower():
-                print(f"DEBUG: No relevant permanent context found")
+                logger.debug(f"No relevant permanent context found")
                 return []
             
             # Parse response back into list
@@ -250,7 +253,7 @@ Return only relevant permanent context items, one per line, in the exact same fo
             return filtered_items
             
         except Exception as e:
-            print(f"DEBUG: Permanent context filtering failed: {e}")
+            logger.debug(f"Permanent context filtering failed: {e}")
             return permanent_context
     
     async def build_full_context(self, query: str, user_id: int, channel_id: int, user_name: str, message=None) -> str:
@@ -305,7 +308,7 @@ Return only relevant permanent context items, one per line, in the exact same fo
                 
                 return filtered_context
             except Exception as e:
-                print(f"DEBUG: Context filtering failed: {e}")
+                logger.debug(f"Context filtering failed: {e}")
                 # Fallback to unfiltered context
                 full_context = "\n\n".join(context_parts)
                 unfiltered_items = data_manager.get_unfiltered_permanent_context()
@@ -358,7 +361,7 @@ Return only the filtered context - no explanations."""
             return filtered_context
             
         except Exception as e:
-            print(f"DEBUG: Unified context filtering failed: {e}")
+            logger.debug(f"Unified context filtering failed: {e}")
             # Fallback to basic context
             return f"User: {user_name}\n\n{full_context[:500]}..." if full_context else f"User: {user_name}" if user_name else ""
     
@@ -388,7 +391,7 @@ Return only the filtered context - no explanations."""
                         resolved_text = resolved_text.replace(mention_format, user.display_name)
                 
             except Exception as e:
-                print(f"DEBUG: Failed to resolve user mention <@{user_id}>: {e}")
+                logger.debug(f"Failed to resolve user mention <@{user_id}>: {e}")
                 continue
         
         return resolved_text

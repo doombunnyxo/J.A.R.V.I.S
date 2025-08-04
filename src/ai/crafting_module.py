@@ -6,7 +6,11 @@ to improve maintainability and organization while preserving all features.
 """
 
 import re
+import logging
 from typing import Tuple, List, Dict, Optional
+from ..utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class CraftingProcessor:
@@ -463,13 +467,11 @@ class CraftingProcessor:
         try:
             from src.config import config
             from dune_crafting import list_craftable_items
-            from src.search.claude import AnthropicAPI
+            import aiohttp
+            import json
             
             if not config.has_anthropic_api():
                 return self._fallback_parse(user_query)
-            
-            # Create Claude client
-            claude = AnthropicAPI(config.ANTHROPIC_API_KEY)
             
             # Get all available items for accurate matching
             available_items = list_craftable_items()
@@ -546,11 +548,34 @@ Available items (sample):
 
 Match this request to an exact database key. Remember: if a vehicle type was mentioned, all parts in the request belong to that vehicle."""
             
-            response = await claude.create_message(
-                system_message=system_message,
-                user_message=user_message,
-                max_tokens=150
-            )
+            # Call Claude API directly
+            headers = {
+                "x-api-key": config.ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json"
+            }
+            
+            data = {
+                "model": "claude-3-5-haiku-20241022",
+                "system": system_message,
+                "messages": [{"role": "user", "content": user_message}],
+                "max_tokens": 150,
+                "temperature": 0.0
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers=headers,
+                    json=data,
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as api_response:
+                    if api_response.status != 200:
+                        logger.error(f"Claude API error: {api_response.status}")
+                        return self._fallback_parse(user_query)
+                    
+                    api_result = await api_response.json()
+                    response = api_result['content'][0]['text']
             
             result = response.strip()
             # Clean up any quotes or extra formatting
@@ -631,13 +656,13 @@ Match this request to an exact database key. Remember: if a vehicle type was men
                     if base_item in available_items:
                         return item_name, quantity
                     else:
-                        print(f"DEBUG: Claude suggested non-existent item: {base_item}")
+                        logger.debug(f"Claude suggested non-existent item: {base_item}")
                         return self._smart_fallback_match(user_query, available_items)
             else:
                 return self._smart_fallback_match(user_query, available_items)
                 
         except Exception as e:
-            print(f"DEBUG: Claude recipe interpretation failed: {e}")
+            logger.debug(f"Claude recipe interpretation failed: {e}")
             return self._fallback_parse(user_query)
     
     def _fallback_parse(self, query: str) -> Tuple[str, int]:

@@ -16,6 +16,10 @@ from discord.ext import commands
 from src.config import config
 from src.data.persistence import data_manager
 from src.ai.handler_refactored import AIHandler
+from src.utils.logging import setup_logger
+
+# Set up logging
+logger = setup_logger("discord_bot", level="INFO")
 
 async def setup_bot():
     """Setup and configure the bot"""
@@ -24,19 +28,19 @@ async def setup_bot():
         from src.config import config as imported_config, init_config
         
         if imported_config is None:
-            print("[INFO] Attempting to reinitialize configuration...")
+            logger.info("Attempting to reinitialize configuration...")
             config_instance = init_config()
         else:
             config_instance = imported_config
             
-        print("[OK] Configuration validated successfully")
-        print(f"Bot will use AI model: {config_instance.AI_MODEL}")
-        print(f"Rate limiting: {config_instance.AI_RATE_LIMIT_REQUESTS} requests per {config_instance.AI_RATE_LIMIT_WINDOW}s")
+        logger.info("Configuration validated successfully")
+        logger.info(f"Bot will use AI model: {config_instance.AI_MODEL}")
+        logger.info(f"Rate limiting: {config_instance.AI_RATE_LIMIT_REQUESTS} requests per {config_instance.AI_RATE_LIMIT_WINDOW}s")
         
         # Load persistent data
-        print("Loading persistent data...")
+        logger.info("Loading persistent data...")
         await data_manager.load_all_data()
-        print("[OK] Data loaded successfully")
+        logger.info("Data loaded successfully")
         
         # Setup Discord bot
         intents = discord.Intents.default()
@@ -65,9 +69,9 @@ async def setup_bot():
         for cog in cogs_to_load:
             try:
                 await bot.load_extension(cog)
-                print(f"[OK] Loaded {cog}")
+                logger.info(f"Loaded {cog}")
             except Exception as e:
-                print(f"[ERROR] Failed to load {cog}: {e}")
+                logger.error(f"Failed to load {cog}: {e}")
         
         # Set up event handler references
         event_handler = bot.get_cog('EventHandlers')
@@ -79,37 +83,37 @@ async def setup_bot():
         return bot
         
     except ValueError as e:
-        print(f"[ERROR] Configuration Error: {e}")
-        print("Please check your environment variables and try again.")
+        logger.error(f"Configuration Error: {e}")
+        logger.error("Please check your environment variables and try again.")
         return None
     except Exception as e:
-        print(f"[ERROR] Setup Error: {e}")
+        logger.error(f"Setup Error: {e}")
         return None
 
 async def main():
     """Main entry point"""
-    print("[INFO] Starting Discord Bot...")
+    logger.info("Starting Discord Bot...")
     
     bot = await setup_bot()
     if not bot:
-        print("[ERROR] Bot setup failed. Exiting.")
+        logger.error("Bot setup failed. Exiting.")
         return
     
     try:
-        print("[INFO] Starting bot...")
+        logger.info("Starting bot...")
         if hasattr(bot, '_config') and bot._config:
             await bot.start(bot._config.DISCORD_TOKEN)
         else:
-            print("[ERROR] No valid configuration found. Cannot start bot.")
+            logger.error("No valid configuration found. Cannot start bot.")
             return
     except KeyboardInterrupt:
-        print("\n[INFO] Bot stopped by user")
+        logger.info("Bot stopped by user")
     except Exception as e:
-        print(f"[ERROR] Bot error: {e}")
+        logger.error(f"Bot error: {e}")
     finally:
         if bot:
             await bot.close()
-            print("[OK] Bot shutdown complete")
+            logger.info("Bot shutdown complete")
 
 if __name__ == '__main__':
     asyncio.run(main())

@@ -1,38 +1,42 @@
 import discord
 from discord.ext import commands
+from typing import Optional, Any
+from ..utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 class EventHandlers(commands.Cog):
     """Discord event handlers"""
     
     _instance_count = 0
     
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
         EventHandlers._instance_count += 1
         self.instance_id = EventHandlers._instance_count
-        print(f"DEBUG: Creating EventHandlers instance #{self.instance_id}")
+        logger.debug(f"Creating EventHandlers instance #{self.instance_id}")
         
         self.bot = bot
         self.ai_handler = None
         self.search_handler = None
         self.crafting_handler = None
     
-    def set_handlers(self, ai_handler, search_handler, crafting_handler):
+    def set_handlers(self, ai_handler: Any, search_handler: Any, crafting_handler: Any) -> None:
         """Set handler references after bot initialization"""
         self.ai_handler = ai_handler
         self.search_handler = search_handler
         self.crafting_handler = crafting_handler
     
     @commands.Cog.listener()
-    async def on_ready(self):
+    async def on_ready(self) -> None:
         """Called when the bot is ready"""
-        print(f'{self.bot.user} has connected to Discord!')
+        logger.info(f'{self.bot.user} has connected to Discord!')
         
         # Initialize channel context from recent messages
         if self.ai_handler and hasattr(self.ai_handler, 'context_manager'):
             await self._initialize_channel_contexts()
     
     @commands.Cog.listener()
-    async def on_reaction_add(self, reaction, user):
+    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User) -> None:
         """Handle admin action confirmations via reactions"""
         if user.bot:
             return
@@ -41,12 +45,12 @@ class EventHandlers(commands.Cog):
             await self.ai_handler.handle_admin_reaction(reaction, user)
     
     @commands.Cog.listener()
-    async def on_message(self, message):
+    async def on_message(self, message: discord.Message) -> None:
         """Handle incoming messages"""
         if message.author == self.bot.user:
             return
         
-        print(f'[{message.channel}] {message.author}: {message.content} (msg_id: {message.id})')
+        logger.debug(f'[{message.channel}] {message.author}: {message.content} (msg_id: {message.id})')
         
         # Capture channel message for context (non-empty messages only)
         if message.content.strip() and self.ai_handler and hasattr(self.ai_handler, 'context_manager'):
@@ -82,7 +86,7 @@ class EventHandlers(commands.Cog):
             
             # Route to crafting if we found a craft pattern
             if craft_query:
-                print(f"DEBUG: [EventHandler-{self.instance_id}] Routing to crafting system: {craft_query}")
+                logger.debug(f"[EventHandler-{self.instance_id}] Routing to crafting system: {craft_query}")
                 await self.ai_handler.handle_ai_command(message, craft_query, "crafting")
                 return
             
@@ -96,7 +100,7 @@ class EventHandlers(commands.Cog):
                     query = message.content[g_index + 3:].strip()
                 
                 if query and self.ai_handler:
-                    print(f"DEBUG: [EventHandler-{self.instance_id}] Forcing Groq for: {query}")
+                    logger.debug(f"[EventHandler-{self.instance_id}] Forcing Groq for: {query}")
                     await self.ai_handler.handle_ai_command(message, query, force_provider="groq")
                 return
             
@@ -110,17 +114,17 @@ class EventHandlers(commands.Cog):
                     query = message.content[p_index + 3:].strip()
                 
                 if query and self.ai_handler:
-                    print(f"DEBUG: [EventHandler-{self.instance_id}] Forcing Perplexity for: {query}")
+                    logger.debug(f"[EventHandler-{self.instance_id}] Forcing Perplexity for: {query}")
                     await self.ai_handler.handle_ai_command(message, query, force_provider="perplexity")
                 return
             
             # Default AI processing
             else:
                 ai_query = message.content
-                print(f"Debug: ai query: {ai_query}")
+                logger.debug(f"AI query: {ai_query}")
                 
                 if ai_query and self.ai_handler:
-                    print(f"DEBUG: [EventHandler-{self.instance_id}] Calling AI handler for message {message.id}")
+                    logger.debug(f"[EventHandler-{self.instance_id}] Calling AI handler for message {message.id}")
                     await self.ai_handler.handle_ai_command(message, ai_query)
         
         # Direct search command (legacy support)
@@ -135,10 +139,10 @@ class EventHandlers(commands.Cog):
         # Process commands
         await self.bot.process_commands(message)
     
-    async def _initialize_channel_contexts(self):
+    async def _initialize_channel_contexts(self) -> None:
         """Initialize channel context from recent messages on startup"""
         try:
-            print("DEBUG: Initializing channel contexts...")
+            logger.debug("Initializing channel contexts...")
             context_manager = self.ai_handler.context_manager
             channels_initialized = 0
             
@@ -167,16 +171,16 @@ class EventHandlers(commands.Cog):
                         
                         if messages_added > 0:
                             channels_initialized += 1
-                            print(f"DEBUG: Initialized {messages_added} messages for #{channel.name}")
+                            logger.debug(f"Initialized {messages_added} messages for #{channel.name}")
                             
                     except Exception as e:
-                        print(f"DEBUG: Failed to initialize context for #{channel.name}: {e}")
+                        logger.debug(f"Failed to initialize context for #{channel.name}: {e}")
                         continue
             
-            print(f"DEBUG: Channel context initialization complete - {channels_initialized} channels initialized")
+            logger.info(f"Channel context initialization complete - {channels_initialized} channels initialized")
             
         except Exception as e:
-            print(f"ERROR: Failed to initialize channel contexts: {e}")
+            logger.error(f"Failed to initialize channel contexts: {e}")
 
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(EventHandlers(bot))

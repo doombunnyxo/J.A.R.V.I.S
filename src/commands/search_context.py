@@ -1,29 +1,33 @@
 import discord
 from discord.ext import commands
 from datetime import datetime, timedelta
-from ..search.perplexity import perplexity_search
+from typing import Optional, Dict, Any
 from ..admin.permissions import is_admin
+from ..utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 class SearchContextCommands(commands.Cog):
-    """Commands for managing Perplexity search conversation context"""
+    """Commands for managing AI conversation context across providers."""
     
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self._executing_commands = set()  # Track commands being executed to prevent duplicates
+        self._executing_commands: set[str] = set()  # Track commands being executed to prevent duplicates
     
     @commands.command(name='clear_search_context', aliases=['clear_context', 'reset_search'])
-    async def clear_search_context(self, ctx):
-        """Clear your conversation context for both AI providers"""
+    async def clear_search_context(self, ctx: commands.Context) -> None:
+        """Clear your conversation context for all AI providers.
+        
+        Args:
+            ctx: Discord command context
+        """
         command_key = f"clear_search_context_{ctx.author.id}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate clear_search_context command detected, ignoring")
+            logger.debug(f"Duplicate clear_search_context command detected for user {ctx.author.id}, ignoring")
             return
         
         self._executing_commands.add(command_key)
         try:
-            # Clear Perplexity context
-            perplexity_search.clear_context(ctx.author.id, ctx.channel.id)
-            
             # Clear unified context and provider tracking
             ai_handler = self.bot._ai_handler
             if ai_handler:
@@ -37,17 +41,21 @@ class SearchContextCommands(commands.Cog):
             self._executing_commands.discard(command_key)
     
     @commands.command(name='search_context_info', aliases=['context_info'])
-    async def search_context_info(self, ctx):
-        """Show information about your current conversation context"""
+    async def search_context_info(self, ctx: commands.Context) -> None:
+        """Show information about your current conversation context.
+        
+        Args:
+            ctx: Discord command context
+        """
         command_key = f"search_context_info_{ctx.author.id}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate search_context_info command detected, ignoring")
+            logger.debug(f"Duplicate search_context_info command detected for user {ctx.author.id}, ignoring")
             return
         
         self._executing_commands.add(command_key)
         try:
-            # Get Perplexity context info
-            perplexity_info = perplexity_search.get_context_info(ctx.author.id, ctx.channel.id)
+            # Initialize context info
+            has_context = False
             
             # Get unified context info
             ai_handler = self.bot._ai_handler
@@ -65,7 +73,13 @@ class SearchContextCommands(commands.Cog):
             # Current AI provider
             if ai_handler and conversation_key in ai_handler.conversation_providers:
                 provider = ai_handler.conversation_providers[conversation_key]
-                provider_name = "🌐 Perplexity (Web Search)" if provider == "perplexity" else "⚡ Groq (Chat/Admin)"
+                provider_names = {
+                    "perplexity": "🌐 Perplexity (Web Search)",
+                    "groq": "⚡ Groq (Chat/Admin)",
+                    "claude": "🤖 Claude (Search/Admin)",
+                    "hybrid": "🔄 Hybrid (Claude + Perplexity)"
+                }
+                provider_name = provider_names.get(provider, f"❓ {provider}")
                 embed.add_field(name="Last Used AI", value=provider_name, inline=False)
             
             # Unified context (shared between both AIs)
@@ -86,20 +100,19 @@ class SearchContextCommands(commands.Cog):
                 embed.add_field(name="🔄 Unified Context", value="No active context", inline=False)
                 has_context = False
             
-            # Legacy Perplexity context (for backwards compatibility)
-            if perplexity_info["has_context"]:
-                expires_str = perplexity_info["expires_at"].strftime("%H:%M:%S") if perplexity_info["expires_at"] else "Unknown"
+            # Provider info from conversation tracking
+            if ai_handler and conversation_key in ai_handler.conversation_providers:
+                provider_info = ai_handler.conversation_providers.get(conversation_key, "Unknown")
                 embed.add_field(
-                    name="🌐 Legacy Perplexity Context", 
-                    value=f"**{perplexity_info['message_count']}** messages\nExpires: {expires_str}",
+                    name="🔄 Active Provider", 
+                    value=f"Currently using: **{provider_info}**",
                     inline=True
                 )
-                has_context = True
             
             if not has_context:
                 embed.description = "No active conversation context. Your next message will start a new conversation that can switch between AIs while maintaining context."
             else:
-                embed.description = "Active conversation context detected. You can switch between web search (Perplexity) and chat/admin (Groq) while maintaining full context."
+                embed.description = "Active conversation context detected. You can switch between different AI providers while maintaining full context."
             
             await ctx.send(embed=embed)
         finally:
@@ -107,18 +120,19 @@ class SearchContextCommands(commands.Cog):
     
     @commands.command(name='clear_all_search_contexts')
     @commands.check(lambda ctx: is_admin(ctx.author.id))
-    async def clear_all_search_contexts(self, ctx):
-        """[Admin] Clear all conversation contexts for all users"""
+    async def clear_all_search_contexts(self, ctx: commands.Context) -> None:
+        """[Admin] Clear all conversation contexts for all users.
+        
+        Args:
+            ctx: Discord command context
+        """
         command_key = f"clear_all_search_contexts_{ctx.author.id}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate clear_all_search_contexts command detected, ignoring")
+            logger.debug(f"Duplicate clear_all_search_contexts command detected from admin {ctx.author.id}, ignoring")
             return
         
         self._executing_commands.add(command_key)
         try:
-            # Clear all Perplexity contexts
-            perplexity_search.clear_all_contexts()
-            
             # Clear all unified contexts and provider tracking
             ai_handler = self.bot._ai_handler
             if ai_handler:
@@ -130,5 +144,10 @@ class SearchContextCommands(commands.Cog):
         finally:
             self._executing_commands.discard(command_key)
 
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
+    """Set up the search context commands cog.
+    
+    Args:
+        bot: Discord bot instance
+    """
     await bot.add_cog(SearchContextCommands(bot))
