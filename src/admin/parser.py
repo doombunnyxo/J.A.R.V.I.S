@@ -314,6 +314,17 @@ class AdminIntentParser:
                         # Don't fall back to fetch_user as it returns User objects that can't be edited
                         return None
         
+        # Check for @username format (converted mentions)
+        at_mentions = re.findall(r'@([a-zA-Z0-9_.-]+)', text)
+        if at_mentions:
+            for username in at_mentions:
+                username_lower = username.lower()
+                for member in guild.members:
+                    if (member.name.lower() == username_lower or 
+                        member.display_name.lower() == username_lower):
+                        print(f"DEBUG: Found user by @username match: {member}")
+                        return member
+        
         # Check for username/display name matching
         words = text.split()
         for member in guild.members:

@@ -618,6 +618,10 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
     async def _handle_standard_admin_command(self, message, query: str) -> str:
         """Handle non-search admin commands through admin parser with confirmation"""
         try:
+            # Debug: Check what we're actually receiving
+            debug_msg = f"DEBUG: _handle_standard_admin_command received:\n- query: '{query}'\n- message.content: '{message.content}'"
+            await message.channel.send(debug_msg)
+            
             # Use admin parser to interpret command and extract parameters
             from ..admin.parser import AdminIntentParser
             
