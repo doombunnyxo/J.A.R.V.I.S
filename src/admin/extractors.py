@@ -19,18 +19,28 @@ class AdminParameterExtractors:
         if not user:
             return None
         
-        # Extract the new nickname
+        # Extract the new nickname using multiple patterns
         nickname = None
         
-        # Try to find nickname in quotes first
+        # Try to find nickname in quotes first (highest priority)
         nick_match = re.search(r'["\']([^"\']+)["\']', original_content)
         if nick_match:
             nickname = nick_match.group(1)
         else:
-            # Try to extract nickname after "to" keyword
-            to_match = re.search(r'\bto\s+(\w+)', content, re.IGNORECASE)
-            if to_match:
-                nickname = to_match.group(1)
+            # Try various patterns for nickname extraction
+            patterns = [
+                r'\bto\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s|$)',  # "change nick to NewName"
+                r'\bas\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s|$)',  # "set nick as NewName"  
+                r'nickname\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s|$)',  # "change John nickname NewName"
+                r'nick\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s|$)',      # "change John nick NewName"
+                r'name\s+to\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s|$)', # "change name to NewName"
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, original_content, re.IGNORECASE)
+                if match:
+                    nickname = match.group(1).strip()
+                    break
         
         return {"user": user, "nickname": nickname}
     

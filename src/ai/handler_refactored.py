@@ -83,6 +83,9 @@ class AIHandler:
         # Track processed messages to prevent duplicates
         self.processed_messages: Set[int] = set()
         
+        # Track admin actions (delegated to admin processor)
+        self.admin_actions: Dict[str, Dict] = {}
+        
         # Cleanup tasks will be started when bot is ready
         self._cleanup_tasks_started = False
         
@@ -104,12 +107,12 @@ class AIHandler:
             current_time = time.time()
             stale_actions = []
             
-            for action_id, action_data in self.admin_actions.items():
-                if current_time - action_data.get('timestamp', 0) > 600:  # 10 minutes
-                    stale_actions.append(action_id)
-            
-            for action_id in stale_actions:
-                del self.admin_actions[action_id]
+            # Admin actions are now handled by AdminProcessor
+            # This cleanup is maintained for compatibility
+            if hasattr(self.admin_processor, 'pending_admin_actions'):
+                for action_id, action_data in list(self.admin_processor.pending_admin_actions.items()):
+                    if current_time - action_data.get('timestamp', datetime.now()).timestamp() > 600:  # 10 minutes
+                        del self.admin_processor.pending_admin_actions[action_id]
     
     def _start_cleanup_tasks(self):
         """Start cleanup tasks if not already started"""
@@ -195,8 +198,8 @@ class AIHandler:
         if should_use_openai:
             return "openai", query
         
-        # Default to Groq
-        return "groq", query
+        # Default to OpenAI
+        return "openai", query
     
     async def _determine_provider(self, message, query: str, force_provider: str) -> str:
         """Determine which AI provider to use for the query"""
@@ -214,8 +217,8 @@ class AIHandler:
         if should_use_openai_for_search(query):
             return "openai"
         
-        # Default to Groq
-        return "groq"
+        # Default to OpenAI
+        return "openai"
     
     async def _handle_with_openai(self, message, query: str) -> str:
         """Handle query using OpenAI - either admin actions or pure OpenAI search"""

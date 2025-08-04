@@ -5,7 +5,6 @@ import re
 from typing import Dict, Optional, Any
 from datetime import datetime
 import discord
-from groq import Groq
 from openai import AsyncOpenAI
 import aiohttp
 import json
@@ -27,7 +26,6 @@ class AdminProcessor:
         self.ai_handler = ai_handler
         self.parser = AdminIntentParser(bot)
         self.actions = AdminActionHandler(bot)
-        self.groq_client = Groq(api_key=config.GROQ_API_KEY) if config.has_groq_api() else None
         
         # Track pending admin actions
         self.pending_admin_actions = {}
@@ -128,11 +126,13 @@ class AdminProcessor:
             return f"❌ Error processing admin command: {str(e)}"
     
     async def _analyze_role_command(self, query: str) -> dict:
-        """Analyze role reorganization command using Groq"""
+        """Analyze role reorganization command using OpenAI"""
         try:
-            if not self.groq_client:
+            if not config.has_openai_api():
                 # Fallback to regex extraction
                 return self._extract_theme_fallback(query)
+            
+            client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
             
             system_message = """Extract the theme/franchise for role reorganization.
 Return JSON with:
@@ -141,8 +141,8 @@ Return JSON with:
   "search_query": "optimized search query for the theme"
 }"""
             
-            completion = self.groq_client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+            completion = await client.chat.completions.create(
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_message},
                     {"role": "user", "content": f"Extract theme from: {query}"}
