@@ -1,6 +1,6 @@
-# Discord Bot - Hybrid AI System
+# Discord Bot - Multi-AI System
 
-A sophisticated Discord bot with hybrid AI functionality that intelligently routes queries between Groq, OpenAI, and Perplexity APIs using a unified search pipeline. Features comprehensive admin tools with natural language processing, Dune Awakening crafting system, conversation management, and production-ready architecture with centralized logging.
+A sophisticated Discord bot with intelligent AI routing between Groq and OpenAI APIs. Features comprehensive admin tools with natural language processing, Dune Awakening crafting system, conversation management, and production-ready architecture with centralized logging.
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -8,12 +8,12 @@ A sophisticated Discord bot with hybrid AI functionality that intelligently rout
 
 ## ✨ Key Features
 
-### 🤖 **Hybrid AI System**
-- **Intelligent Routing**: Automatically routes queries between Groq (chat) and OpenAI (admin + hybrid search)
-- **Hybrid Search**: OpenAI for fast query optimization, Perplexity for high-quality result analysis
+### 🤖 **Intelligent AI System**
+- **Smart Routing**: Automatically routes queries between Groq (chat) and OpenAI (admin + search)
+- **OpenAI Search**: GPT-4o mini for web search and result analysis
 - **Unified Search Pipeline**: Generic search architecture with provider adapters
-- **Cross-AI Context**: Unified conversation context shared between all AI providers
-- **Force Provider Syntax**: Override routing with `groq:`, `openai:`, `pure-openai:`, `perplexity:`, `pure-perplexity:` prefixes
+- **Cross-AI Context**: Unified conversation context shared between AI providers
+- **Force Provider Syntax**: Override routing with `groq:` prefix
 - **Model Switching**: Admin users can switch OpenAI models (gpt-4o-mini, gpt-4o, gpt-4-turbo)
 - **Fallback Support**: Graceful degradation when API keys are unavailable
 
@@ -37,9 +37,9 @@ A sophisticated Discord bot with hybrid AI functionality that intelligently rout
 - **Context Filtering**: OpenAI GPT-4o mini-powered relevance filtering to optimize token usage
 
 ### 🔍 **Advanced Search Integration**
-- **Hybrid Search (Default)**: OpenAI optimization + Perplexity analysis for optimal cost/quality balance
+- **OpenAI Search (Default)**: GPT-4o mini for query optimization and web search
 - **Unified Search Pipeline**: Generic search flow that works with any AI provider
-- **Pure Provider Options**: Force pure OpenAI or pure Perplexity when needed
+- **Provider Options**: Force Groq for chat-focused responses
 - **Google Custom Search**: Real-time web search integration for current information
 - **Context-Aware Results**: Search results combined with user conversation context
 - **Query Optimization**: AI-enhanced search queries for better results
@@ -149,11 +149,9 @@ AI_TEMPERATURE=0.7                       # AI creativity (0.0-2.0)
 
 #### Force Specific Provider
 ```
-@bot groq: Explain quantum computing
-@bot openai: What happened in tech news today?        # Hybrid (default)
-@bot pure-openai: Latest AI developments              # OpenAI only
-@bot perplexity: Latest crypto trends                  # Perplexity only
-@bot search: best programming tutorials 2025
+@bot groq: Explain quantum computing                     # Force Groq
+@bot What happened in tech news today?                # OpenAI (default for search)
+@bot groq: Tell me a joke                             # Force Groq
 ```
 
 #### Admin Commands (Admin Only)
@@ -316,13 +314,10 @@ discord-bot/
     │   └── handlers.py        # Discord events with type hints
     ├── search/                # Unified search architecture
     │   ├── search_pipeline.py # Generic search pipeline
-    │   ├── hybrid_search_provider.py # Hybrid OpenAI+Perplexity (default)
-    │   ├── claude_adapter.py  # Pure Claude search provider (legacy)
-    │   ├── perplexity_adapter.py # Pure Perplexity search provider
-    │   ├── claude.py          # Claude API functions (legacy compatibility)
+    │   ├── openai_adapter.py  # OpenAI search (primary)
+    │   ├── claude_adapter.py  # Claude search provider (legacy)
+    │   ├── claude.py          # Claude API functions (legacy)
     │   ├── openai.py          # OpenAI API functions (primary)
-    │   ├── openai_adapter.py  # OpenAI search adapter (primary)
-    │   ├── perplexity.py      # Perplexity API functions (legacy compatibility)
     │   └── google.py          # Google Custom Search
     ├── scraping/
     │   └── web_scraper.py     # Web utilities
@@ -342,7 +337,7 @@ discord-bot/
 
 #### Enhanced AIHandler (`src/ai/handler_refactored.py`)
 - **Consolidated Architecture**: Single handler, no legacy code
-- **Hybrid routing**: Intelligent selection between Groq, OpenAI, and Perplexity
+- **Smart routing**: Intelligent selection between Groq and OpenAI
 - **Unified search pipeline**: Generic search architecture
 - **Context management**: Shared context across all AI providers
 - **Rate limiting**: 10 requests/60 seconds per user
@@ -350,8 +345,8 @@ discord-bot/
 
 #### Search Architecture (`src/search/`)
 - **Unified Pipeline**: Generic search flow with provider adapters
-- **Hybrid Provider (Default)**: OpenAI optimization + Perplexity analysis
-- **Pure Providers**: OpenAI-only and Perplexity-only options
+- **OpenAI Provider (Default)**: GPT-4o mini for search and optimization
+- **Groq Provider**: Chat-focused responses with llama-3.1-8b-instant
 - **Legacy Compatibility**: Maintained for specific use cases
 - **Protocol-Based Design**: Extensible for future providers
 
@@ -573,7 +568,7 @@ python -c "from src.utils.logging import get_logger; get_logger('test').info('Te
 - **Rate Limiting Metrics**: Request tracking per user
 
 ### Cost Optimization
-- **Hybrid Search**: Uses reliable OpenAI for query optimization, more expensive but comprehensive Perplexity for search result analysis
+- **OpenAI Search**: Uses GPT-4o mini for query optimization and comprehensive web search
 - **Context Filtering**: Reduces token usage while maintaining response quality
 - **Smart Caching**: Efficient data storage and retrieval
 - **Request Batching**: Optimized API usage patterns

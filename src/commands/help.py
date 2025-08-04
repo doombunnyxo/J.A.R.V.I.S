@@ -23,18 +23,15 @@ class HelpCommands(commands.Cog):
         embed = discord.Embed(
             title="🤖 J.A.R.V.I.S Discord Bot",
             description="**Primary Interaction**: @mention the bot + your message\n" +
-                       "Hybrid AI system using Groq + Claude for intelligent query routing.",
+                       "AI system using Groq for conversation and OpenAI for search/admin tasks.",
             color=0x5865f2
         )
         
         # AI Interaction
         embed.add_field(
             name="🧠 AI Interaction",
-            value="**@bot + message** - Auto-routes to appropriate AI\n" +
-                  "**@bot groq:** or **@bot g:** - Force Groq\n" +
-                  "**@bot claude:** - Force Claude web search\n" +
-                  "**@bot perplexity:** or **@bot p:** - Force Perplexity search\n" +
-                  "**@bot search:** - Direct Google search\n" +
+            value="**@bot + message** - OpenAI with search/admin routing\n" +
+                  "**@bot ai:** - Direct OpenAI chat (no search)\n" +
                   "**@bot craft:** or **@bot cr:** - Crafting system",
             inline=False
         )
@@ -103,30 +100,28 @@ class HelpCommands(commands.Cog):
         if category in ['ai', 'bot']:
             embed = discord.Embed(
                 title="🧠 AI System Details",
-                description="Hybrid AI routing between Groq and Claude",
+                description="AI routing between Groq and OpenAI",
                 color=0x00ff7f
             )
             
             embed.add_field(
                 name="🎯 Automatic Routing",
-                value="**Claude/Perplexity (Web Search via Google):**\n" +
-                      "• Both use: Query optimization → Google Search → AI analysis\n" +
+                value="**OpenAI (Default - Search & Admin):**\n" +
+                      "• Query optimization → Google Search → AI analysis\n" +
                       "• Current events, news, latest information\n" +
                       "• Research questions, comparisons\n" +
-                      "• Questions needing web data\n\n" +
-                      "**Groq (Chat/Admin):**\n" +
-                      "• Personal conversations, jokes\n" +
                       "• Admin actions (kick, ban, etc.)\n" +
+                      "• Questions needing web data\n\n" +
+                      "**Direct AI (`ai:` prefix):**\n" +
+                      "• Pure OpenAI chat without web search\n" +
+                      "• Personal conversations, creative tasks\n" +
                       "• General knowledge questions",
                 inline=False
             )
             
             embed.add_field(
                 name="🔀 Force Provider Syntax",
-                value="• `@bot groq: message` or `@bot g: message`\n" +
-                      "• `@bot claude: message` - Claude + Google search\n" +
-                      "• `@bot perplexity: message` or `@bot p: message`\n" +
-                      "• `@bot search: query` - Direct Google search\n" +
+                value="• `@bot ai: message` - Direct OpenAI chat\n" +
                       "• `@bot craft: item` or `@bot cr: item`",
                 inline=False
             )

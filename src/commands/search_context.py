@@ -74,10 +74,8 @@ class SearchContextCommands(commands.Cog):
             if ai_handler and conversation_key in ai_handler.conversation_providers:
                 provider = ai_handler.conversation_providers[conversation_key]
                 provider_names = {
-                    "perplexity": "🌐 Perplexity (Web Search)",
-                    "groq": "⚡ Groq (Chat/Admin)",
-                    "claude": "🤖 Claude (Search/Admin)",
-                    "hybrid": "🔄 Hybrid (Claude + Perplexity)"
+                    "openai": "🔍 OpenAI (Search/Admin)",
+                    "direct-ai": "💬 OpenAI (Direct Chat)"
                 }
                 provider_name = provider_names.get(provider, f"❓ {provider}")
                 embed.add_field(name="Last Used AI", value=provider_name, inline=False)

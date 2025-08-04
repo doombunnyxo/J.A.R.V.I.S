@@ -15,7 +15,6 @@ from typing import Optional, Dict, Set, Tuple
 
 from discord.ext import commands
 import discord
-from groq import Groq
 
 from src.config import config
 from src.data.persistence import data_manager
@@ -70,7 +69,6 @@ class AIHandler:
     
     def __init__(self, bot):
         self.bot = bot
-        self.groq_client = self._initialize_groq()
         self.context_manager = ContextManager()
         
         # Initialize admin processor
@@ -92,12 +90,6 @@ class AIHandler:
         self.instance_id = str(uuid.uuid4())[:8]
         logger.info(f"AIHandler initialized with ID: {self.instance_id}")
     
-    def _initialize_groq(self) -> Optional[Groq]:
-        """Initialize Groq client if API key is available"""
-        if config.has_groq_api():
-            return Groq(api_key=config.GROQ_API_KEY)
-        logger.warning("No Groq API key found - Groq functionality disabled")
-        return None
     
     async def _cleanup_processed_messages(self):
         """Periodically clean up processed message IDs"""
@@ -160,17 +152,13 @@ class AIHandler:
             
             # Route to appropriate handler
             if provider == "openai":
-                response = await self._handle_with_openai(message, cleaned_query)  # Hybrid by default
-            elif provider == "pure-openai":
-                response = await self._handle_with_pure_openai(message, cleaned_query)
-            elif provider == "perplexity":
-                response = await self._handle_with_perplexity(message, cleaned_query)
-            elif provider == "pure-perplexity":
-                response = await self._handle_with_pure_perplexity(message, cleaned_query)
+                response = await self._handle_with_openai(message, cleaned_query)
+            elif provider == "direct-ai":
+                response = await self._handle_direct_ai(message, cleaned_query)
             elif provider == "crafting":
                 response = await self._handle_with_crafting(message, cleaned_query)
-            else:  # groq
-                response = await self._handle_with_groq(message, cleaned_query)
+            else:  # Default to OpenAI
+                response = await self._handle_with_openai(message, cleaned_query)
             
             # Store conversation context
             if response and not response.startswith("Error"):
@@ -230,7 +218,7 @@ class AIHandler:
         return "groq"
     
     async def _handle_with_openai(self, message, query: str) -> str:
-        """Handle query using OpenAI - either admin actions or hybrid search"""
+        """Handle query using OpenAI - either admin actions or pure OpenAI search"""
         try:
             # Check if this is an admin command
             from .routing import ADMIN_KEYWORDS
@@ -273,36 +261,8 @@ class AIHandler:
             logger.debug(f"Search pipeline failed: {e}")
             return f"❌ Error with search: {str(e)}"
 
-    async def _handle_with_perplexity(self, message, query: str) -> str:
-        """Handle query using Perplexity search adapter and unified pipeline"""
-        try:
-            from ..search.search_pipeline import SearchPipeline
-            from ..search.perplexity_adapter import PerplexitySearchProvider
-            
-            if not config.has_perplexity_api():
-                return "❌ Perplexity API not configured. Please contact an administrator."
-            
-            # Build context for Perplexity
-            context = await self.context_manager.build_full_context(
-                query, message.author.id, message.channel.id,
-                message.author.display_name, message
-            )
-            
-            # Create Perplexity provider and search pipeline
-            perplexity_provider = PerplexitySearchProvider()
-            pipeline = SearchPipeline(perplexity_provider)
-            
-            # Execute the unified search pipeline
-            response = await pipeline.search_and_respond(query, context)
-            
-            return response
-            
-        except Exception as e:
-            logger.debug(f"Perplexity search pipeline failed: {e}")
-            return f"❌ Error with Perplexity search: {str(e)}"
-    
-    async def _handle_with_pure_openai(self, message, query: str) -> str:
-        """Handle query using pure OpenAI (not hybrid) search adapter"""
+    async def _handle_direct_ai(self, message, query: str) -> str:
+        """Handle direct AI chat without search routing"""
         try:
             from ..search.search_pipeline import SearchPipeline
             from ..search.openai_adapter import OpenAISearchProvider
@@ -310,85 +270,34 @@ class AIHandler:
             if not config.has_openai_api():
                 return "❌ OpenAI API not configured. Please contact an administrator."
             
-            # Build context for OpenAI
+            # Build context but use direct chat mode
             context = await self.context_manager.build_full_context(
                 query, message.author.id, message.channel.id,
                 message.author.display_name, message
             )
             
-            # Create pure OpenAI provider and search pipeline
-            openai_provider = OpenAISearchProvider()
-            pipeline = SearchPipeline(openai_provider)
+            # Use OpenAI in direct chat mode (no web search)
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
             
-            # Execute the unified search pipeline with pure OpenAI
-            response = await pipeline.search_and_respond(query, context)
+            messages = [
+                {"role": "system", "content": f"You are a helpful AI assistant. Use this context if relevant: {context}"},
+                {"role": "user", "content": query}
+            ]
             
-            return response
-            
-        except Exception as e:
-            logger.debug(f"Pure OpenAI search pipeline failed: {e}")
-            return f"❌ Error with pure OpenAI search: {str(e)}"
-
-    async def _handle_with_pure_perplexity(self, message, query: str) -> str:
-        """Handle query using pure Perplexity (not hybrid) search adapter"""
-        try:
-            from ..search.search_pipeline import SearchPipeline
-            from ..search.perplexity_adapter import PerplexitySearchProvider
-            
-            if not config.has_perplexity_api():
-                return "❌ Perplexity API not configured. Please contact an administrator."
-            
-            # Build context for Perplexity
-            context = await self.context_manager.build_full_context(
-                query, message.author.id, message.channel.id,
-                message.author.display_name, message
-            )
-            
-            # Create pure Perplexity provider and search pipeline
-            perplexity_provider = PerplexitySearchProvider()
-            pipeline = SearchPipeline(perplexity_provider)
-            
-            # Execute the unified search pipeline with pure Perplexity
-            response = await pipeline.search_and_respond(query, context)
-            
-            return response
-            
-        except Exception as e:
-            logger.debug(f"Pure Perplexity search pipeline failed: {e}")
-            return f"❌ Error with pure Perplexity search: {str(e)}"
-    
-    async def _handle_with_groq(self, message, query: str) -> str:
-        """Handle query with Groq"""
-        try:
-            if not self.groq_client:
-                return "❌ Groq API not configured. Please contact an administrator."
-            
-            # Build context for Groq
-            context = await self._build_groq_context(message, query)
-            system_message = self._build_groq_system_message(context, message.author.id)
-            
-            # Get response from Groq
-            completion = self.groq_client.chat.completions.create(
-                model=config.AI_MODEL,
-                messages=[
-                    {"role": "system", "content": system_message},
-                    {"role": "user", "content": query}
-                ],
+            completion = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
                 max_tokens=1000,
                 temperature=0.7
             )
             
-            response = completion.choices[0].message.content.strip()
+            return completion.choices[0].message.content.strip()
             
-            # Handle admin actions if detected
-            if await self._handle_admin_actions(message, query, response):
-                return ""  # Admin action handled, no additional response needed
-            
-            return response
-        
         except Exception as e:
-            return f"Error processing with Groq: {str(e)}"
-    
+            logger.debug(f"Direct AI failed: {e}")
+            return f"❌ Error with direct AI: {str(e)}"
+
     async def _handle_with_crafting(self, message, query: str) -> str:
         """Handle query with crafting system using the dedicated crafting module"""
         logger.debug(f"_handle_with_crafting called with query: '{query}'")
@@ -401,123 +310,6 @@ class AIHandler:
         except Exception as e:
             return f"❌ **Crafting system error:** {str(e)}"
     
-    async def _build_groq_context(self, message, query: str) -> str:
-        """Build context for Groq queries"""
-        user_key = data_manager.get_user_key(message.author)
-        user_settings = data_manager.get_user_settings(user_key)
-        
-        # Get conversation context
-        conversation_context = self.context_manager.get_conversation_context(
-            message.author.id, message.channel.id
-        )
-        
-        # Build full context (includes conversation, channel, and permanent context)
-        return await self.context_manager.build_full_context(
-            query, message.author.id, message.channel.id,
-            message.author.display_name, message
-        )
-    
-    def _build_groq_system_message(self, context: str, user_id: int) -> str:
-        """Build system message for Groq"""
-        parts = []
-        
-        if context:
-            parts.append(f"RELEVANT CONTEXT:\\n{context}")
-            parts.append("=" * 50)
-        
-        core_instructions = """You are a helpful AI assistant with the following capabilities:
-
-1. **General Knowledge**: Answer questions using your training data and any relevant context provided above.
-
-2. **Discord Server Management** (Admin only): Help with server administration including user moderation, role management, channel management, and message cleanup.
-
-The relevant context section above contains only information pertinent to the current query. Use this context to provide more personalized and informed responses."""
-
-        parts.append(core_instructions)
-        
-        # Add admin capabilities if user is admin
-        if is_admin(user_id):
-            admin_instructions = """Additional admin capabilities:
-
-- User moderation (kick, ban, timeout/mute users)
-- Role management (add/remove roles from users, rename roles)  
-- Channel management (create/delete channels)
-- Message cleanup (bulk delete messages, including from specific users)
-- Nickname changes
-- Role reorganization (reorganize all server roles based on themes/contexts)
-
-IMPORTANT: When you receive ANY admin command (like "kick user", "delete messages", "reorganize roles", etc.), you MUST respond with the confirmation format below. This triggers the reaction-based confirmation system.
-
-When you detect an administrative request, respond by clearly stating what action you understood. DO NOT ask for text-based confirmation. The system will automatically handle confirmation.
-
-MANDATORY FORMAT for admin commands:
-I understand you want to [ACTION]. [Brief description of what will happen]
-
-Examples:
-- "kick spammer" → I understand you want to kick the spammer. They will be removed from the server.
-- "delete messages from John" → I understand you want to delete messages from John. I'll remove their recent messages.
-- "rename role Moderator to Super Mod" → I understand you want to rename the Moderator role to Super Mod.
-- "reorganize roles Dune theme" → I understand you want to reorganize all server roles based on Dune universe factions. I'll rename roles using appropriate faction names and hierarchy.
-
-CRITICAL: Always use "I understand you want to [ACTION]" format for ANY admin command to trigger the confirmation system.
-
-Be concise and clear about what the action will do."""
-
-            parts.append(admin_instructions)
-        
-        return "\n\n".join(parts)
-    
-    def _build_claude_admin_system_message(self, context: str, user_id: int) -> str:
-        """Build system message for Claude admin processing"""
-        parts = []
-        
-        if context:
-            parts.append(f"RELEVANT CONTEXT:\\n{context}")
-            parts.append("=" * 50)
-        
-        core_instructions = """You are Claude, an AI assistant specialized in Discord server administration and general helpfulness.
-
-Your capabilities include:
-
-1. **General Knowledge**: Answer questions using your training data and any relevant context provided above.
-
-2. **Discord Server Management** (Admin only): Help with server administration including user moderation, role management, channel management, and message cleanup.
-
-The relevant context section above contains information pertinent to the current query, including any research results that should inform your admin actions. Use this context to provide more personalized and informed responses.
-
-IMPORTANT: If the context includes research results about themes, organizations, or hierarchies, use that information to better understand and process admin requests that reference those topics."""
-
-        parts.append(core_instructions)
-        
-        # Add admin capabilities if user is admin
-        if is_admin(user_id):
-            admin_instructions = """Additional admin capabilities:
-
-- User moderation (kick, ban, timeout/mute users)
-- Role management (add/remove roles from users, rename roles)  
-- Channel management (create/delete channels)
-- Message cleanup (bulk delete messages, including from specific users)
-- Nickname changes
-- Intelligent role reorganization using research context when provided
-
-When you detect an administrative request, respond by clearly stating what action you understood. DO NOT ask for text-based confirmation. The system will automatically handle confirmation.
-
-Use this format:
-I understand you want to [ACTION]. [Brief description of what will happen]
-
-Examples:
-- "kick that spammer" → I understand you want to kick [user]. They will be removed from the server.
-- "delete John's messages" → I understand you want to delete messages from John. I'll remove their recent messages.
-- "rename role Moderator to Super Mod" → I understand you want to rename the Moderator role to Super Mod.
-- "rename all roles to match Dune factions" → I understand you want to reorganize all server roles to match Dune universe factions. I'll rename roles using appropriate faction names and hierarchy.
-
-RESEARCH-ENHANCED ACTIONS: When context includes research about themes, organizations, or hierarchies, use that information to understand and confirm thematic role reorganization requests. Always acknowledge that you can perform the action based on the research provided.
-
-Be concise and clear about what the action will do."""
-
-            parts.append(admin_instructions)
-        
-        return "\n\n".join(parts)
     
     async def _handle_admin_actions(self, message, query: str, response: str, research_context: str = None) -> bool:
         """Handle admin action detection and confirmation"""
@@ -628,12 +420,12 @@ Be concise and clear about what the action will do."""
             return
         
         executor = action_data.get('executor')
-        intent = action_data.get('intent')  # Optional for new Perplexity flow
+        intent = action_data.get('intent')
         
         if str(reaction.emoji) == "✅":
             # Execute the admin action
             try:
-                # Handle Perplexity-based role reorganization with pre-generated list
+                # Handle role reorganization with pre-generated list
                 if action_data.get('action_type') == 'role_reorganization_list':
                     role_list = action_data.get('role_list', [])
                     guild = action_data['message'].guild
@@ -643,45 +435,6 @@ Be concise and clear about what the action will do."""
                     else:
                         await reaction.message.channel.send("❌ **Error:** No role list or guild found")
                     return
-                
-                # Check if this is a research-enhanced action that needs final command generation
-                elif action_data.get('research_context') and action_data.get('original_query'):
-                    # Step 1: Use Claude to generate specific admin command text
-                    claude_command = await self._claude_generate_specific_admin_command(
-                        action_data['message'], 
-                        action_data['original_query'], 
-                        action_data['research_context']
-                    )
-                    
-                    if claude_command and not claude_command.startswith("❌"):
-                        # Step 2: Pass Claude's command through the admin parser (same as if Groq generated it)
-                        from ..admin.parser import AdminIntentParser
-                        from ..admin.actions import AdminActionHandler
-                        
-                        parser = AdminIntentParser(self.bot)
-                        executor = AdminActionHandler(self.bot)
-                        
-                        # Parse the command that Claude generated
-                        parsed_action_type, parsed_parameters = await parser.parse_admin_intent(
-                            claude_command, action_data['message'].guild, action_data['message'].author
-                        )
-                        
-                        if parsed_action_type:
-                            # Step 3: Add research context to parsed parameters
-                            if parsed_parameters:
-                                parsed_parameters['research_context'] = action_data['research_context']
-                            
-                            # Step 4: Execute through normal admin action flow
-                            result = await executor.execute_admin_action(
-                                action_data['message'], 
-                                parsed_action_type, 
-                                parsed_parameters
-                            )
-                            await reaction.message.channel.send(f"✅ **Action completed:** {result}")
-                        else:
-                            await reaction.message.channel.send(f"❌ **Command not recognized:** {claude_command}")
-                    else:
-                        await reaction.message.channel.send(f"❌ **Command generation failed:** {claude_command}")
                 
                 # Handle standard admin actions (delete, kick, ban, timeout, etc.)
                 elif action_data.get('action_type') == 'standard_admin' and intent:

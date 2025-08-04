@@ -105,50 +105,16 @@ PERSONAL_KEYWORDS = [
 
 def should_use_openai_for_search(query: str) -> bool:
     """
-    Determine if query should be routed to OpenAI for web search
+    Determine if query should be routed to OpenAI (always True now)
+    Kept for compatibility but always returns True since Groq is removed
     
     Args:
         query: User's query string
         
     Returns:
-        bool: True if should use OpenAI, False if should use Groq
+        bool: Always True (OpenAI only system)
     """
-    query_lower = query.lower()
-    
-    # Check for crafting patterns first - these should never go to web search
-    if query_lower.startswith('craft:') or query_lower.startswith('cr:'):
-        return False
-    
-    # Check for admin commands - always use OpenAI
-    if any(keyword in query_lower for keyword in ADMIN_KEYWORDS):
-        return True
-    
-    # Check for personal interactions - use Groq for short personal queries
-    if any(keyword in query_lower for keyword in PERSONAL_KEYWORDS):
-        if len(query_lower.split()) <= 3:
-            return False
-    
-    # Check for search indicators - use OpenAI
-    if any(indicator in query_lower for indicator in SEARCH_INDICATORS):
-        return True
-    
-    # Check for comparison queries - use OpenAI
-    if any(indicator in query_lower for indicator in COMPARISON_INDICATORS):
-        return True
-    
-    # Check for question patterns - use OpenAI
-    if any(pattern in query_lower for pattern in QUESTION_PATTERNS):
-        return True
-    
-    # Check for current topics - use OpenAI
-    if any(topic in query_lower for topic in CURRENT_TOPICS):
-        return True
-    
-    # Check for comparison topics - use OpenAI
-    if any(topic in query_lower for topic in COMPARISON_TOPICS):
-        return True
-    
-    # Default to OpenAI for most queries (web search preferred)
+    # Everything goes to OpenAI now
     return True
 
 
@@ -170,18 +136,8 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
         # Craft commands first to avoid conflicts
         (r'^craft:\s*(.+)', 'crafting'),
         (r'^cr:\s*(.+)', 'crafting'),
-        # Pure provider options (for explicit single-provider usage)
-        (r'^pure-openai:\s*(.+)', 'pure-openai'),
-        (r'^openai-only:\s*(.+)', 'pure-openai'),
-        (r'^pure-perplexity:\s*(.+)', 'pure-perplexity'),
-        (r'^perplexity-only:\s*(.+)', 'pure-perplexity'),
-        # Hybrid and regular providers
-        (r'^groq:\s*(.+)', 'groq'),
-        (r'^g:\s*(.+)', 'groq'),
-        (r'^openai:\s*(.+)', 'openai'),  # Uses hybrid by default
-        (r'^hybrid:\s*(.+)', 'openai'),  # Explicitly hybrid
-        (r'^perplexity:\s*(.+)', 'perplexity'),
-        (r'^p:\s*(.+)', 'perplexity'),
+        # Direct AI chat (bypasses search routing)
+        (r'^ai:\s*(.+)', 'direct-ai'),
     ]
     
     for pattern, provider in force_patterns:

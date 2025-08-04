@@ -5,7 +5,7 @@
 ### Core System
 - **Entry Point**: `main.py` - Bot initialization, cog loading, logging setup
 - **Command Prefix**: `!` for slash commands
-- **AI Routing**: Hybrid system using Groq (chat) + OpenAI (admin/optimization) + Perplexity (search analysis)
+- **AI Routing**: OpenAI-only system with optional direct chat mode
 - **Context Management**: OpenAI GPT-4o mini-powered filtering across multiple context types
 
 ### File Structure
@@ -36,13 +36,10 @@ src/
 │   └── handlers.py         # Discord event processing
 ├── search/                 # Search system architecture
 │   ├── search_pipeline.py  # Generic search interface
-│   ├── hybrid_search_provider.py # OpenAI+Perplexity (default)
 │   ├── claude_adapter.py   # Pure Claude search (legacy)
 │   ├── openai_adapter.py   # Pure OpenAI search (primary)
-│   ├── perplexity_adapter.py # Pure Perplexity search
 │   ├── claude.py           # Legacy Claude functions
 │   ├── openai.py           # Primary OpenAI functions
-│   ├── perplexity.py       # Legacy Perplexity functions
 │   └── google.py           # Google Custom Search
 ├── data/
 │   └── persistence.py      # JSON data storage with async locks
@@ -61,19 +58,15 @@ AUTHORIZED_USER_ID          # Admin user ID (integer)
 
 ### Optional API Keys
 ```
-GROQ_API_KEY               # For chat functionality
-OPENAI_API_KEY             # For admin commands and search optimization  
-ANTHROPIC_API_KEY          # Legacy Claude support (being replaced)
-PERPLEXITY_API_KEY         # For search result analysis
+OPENAI_API_KEY             # Primary AI provider for all functionality
+ANTHROPIC_API_KEY          # Legacy support (unused, kept for compatibility)
 GOOGLE_API_KEY             # For web search
 GOOGLE_SEARCH_ENGINE_ID    # Google Custom Search Engine ID
 ```
 
 ### AI Configuration Defaults
 ```python
-AI_MODEL = "llama-3.1-8b-instant"  # Groq model
-AI_MAX_TOKENS = 1000
-AI_TEMPERATURE = 0.7                # Groq temperature
+# OpenAI is now the primary and only AI provider
 AI_RATE_LIMIT_REQUESTS = 10         # Per user per minute
 AI_RATE_LIMIT_WINDOW = 60           # Seconds
 CHANNEL_CONTEXT_LIMIT = 50          # Messages stored per channel
@@ -89,26 +82,15 @@ intents.message_content = True
 
 ## AI Models and Temperatures
 
-### Groq Configuration
-- **Model**: `llama-3.1-8b-instant`
-- **Temperature**: 0.7 (configurable via AI_TEMPERATURE)
-- **Max Tokens**: 1000
-- **Use**: General chat, conversations
-
-### OpenAI Configuration  
+### OpenAI Configuration (Primary)
 - **Models**: `gpt-4o-mini` (default), `gpt-4o`, `gpt-4-turbo`, `gpt-4`
-- **Temperature**: 0.1-0.2 (varies by function)
-- **Use**: Admin commands, search optimization, context filtering
+- **Temperature**: 0.1-0.2 (search/admin), 0.7 (direct chat)
+- **Use**: All functionality - search, admin, chat, context filtering
 
-### Claude Configuration (Legacy)
-- **Models**: `claude-3-5-haiku-20241022`, `claude-3-5-sonnet`, `claude-3-opus`
-- **Temperature**: 0.2 (hardcoded for search tasks)
-- **Use**: Legacy support, being replaced by OpenAI
+### Legacy Configuration (Unused)
+- **ANTHROPIC_API_KEY**: Kept for compatibility but not used
+- **GROQ_API_KEY**: Removed - Groq no longer supported
 
-### Perplexity Configuration
-- **Model**: `sonar`
-- **Temperature**: 0.1-0.2 (varies by function)
-- **Use**: Search result analysis and summarization
 
 ## Admin System Architecture
 
@@ -166,26 +148,22 @@ channel_conversations: deque(maxlen=50)  # 50 messages per channel
 
 ## Search System Architecture
 
-### Hybrid Search (Default)
+### OpenAI Search (Default)
 ```python
-class HybridSearchProvider:
-    # OpenAI GPT-4o mini: Fast, reliable query optimization
-    # Perplexity Sonar: High-quality result analysis
+class OpenAISearchProvider:
+    # OpenAI GPT-4o mini: Query optimization and web search
+    # Direct Google search integration
 ```
 
 ### Search Routing Keywords
-**Triggers OpenAI/Perplexity search:**
+**Triggers OpenAI search:**
 - Current events: `current`, `latest`, `recent`, `today`, `2025`
 - Questions: `what is`, `who is`, `how to`, `when will`
 - Comparisons: `vs`, `versus`, `better`, `compare`
 - Research: `search for`, `find`, `tell me about`
 
 ### Force Provider Syntax
-- `groq:` or `g:` - Force Groq
-- `openai:` - Hybrid search (default)
-- `pure-openai:` - OpenAI only
-- `perplexity:` or `p:` - Perplexity only  
-- `search:` - Direct Google search
+- `ai:` - Direct OpenAI chat (bypasses search routing)
 
 ## Command System
 
@@ -220,8 +198,9 @@ class HybridSearchProvider:
 ```
 
 ### Primary Interface: @mentions
-- Main bot interaction through Discord mentions
+- Main bot interaction through Discord mentions (defaults to OpenAI with search)
 - Natural language admin commands with AI parsing
+- Direct chat: `@bot ai: <message>` (OpenAI without search)
 - Crafting requests: `@bot craft: <request>`
 
 ## Data Persistence
@@ -259,7 +238,7 @@ HISTORY_FILE = 'data/conversation_history.json'
 
 ## Rate Limiting
 - **Global Limit**: 10 requests per 60 seconds per user
-- **Applies To**: All AI providers (Groq, OpenAI, Perplexity)
+- **Applies To**: All OpenAI requests (search and direct chat)
 - **Reset**: Automatic after window expires
 
 ## Common Development Issues
@@ -280,17 +259,20 @@ HISTORY_FILE = 'data/conversation_history.json'
 - **Debug**: Check API key configuration and rate limits
 
 ### Search System Issues
-- **Hybrid Search**: Requires both OpenAI and Perplexity API keys for optimal function
-- **Fallbacks**: Pure OpenAI if Perplexity unavailable
+- **OpenAI Search**: Requires OpenAI API key for search functionality
+- **Fallbacks**: Uses OpenAI for all search operations
 - **Google Search**: Requires both `GOOGLE_API_KEY` and `GOOGLE_SEARCH_ENGINE_ID`
 
 ## Development Notes
 
 ### Recent Architecture Changes
+- **AI System**: Migrated from Groq+OpenAI hybrid to OpenAI-only system
+- **Direct Chat**: Added `ai:` command for OpenAI without search routing
 - **Admin System**: Split from monolithic parser to modular 2-phase system
 - **Context Filtering**: Migrated from Claude Haiku to OpenAI GPT-4o mini for consistency
 - **Crafting Database**: Expanded from 79+ to 250+ recipes
 - **Command Naming**: Settings commands changed from `unfiltered_permanent_context` to `add_setting` etc.
+- **Code Cleanup**: Removed Claude and Groq dead code, simplified routing
 
 ### Code Quality
 - **Logging**: Centralized system with proper levels

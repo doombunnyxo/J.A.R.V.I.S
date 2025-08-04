@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Discord Bot - Hybrid AI System
+Discord Bot - Multi-AI System
 Main entry point for the Discord bot with cross-AI functionality.
 
 Features:
-- Hybrid Groq + Perplexity AI routing
+- Groq + OpenAI + Perplexity AI routing
 - Cross-AI conversation context sharing
 - Advanced admin action parsing
 - Comprehensive command system
