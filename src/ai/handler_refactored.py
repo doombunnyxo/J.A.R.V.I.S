@@ -1484,26 +1484,13 @@ Be concise and clear about what the action will do."""
         if len(response) <= 2000:
             await message.channel.send(response)
         else:
-            # Split long messages
-            chunks = []
-            current_chunk = ""
+            # Use smart message splitting that preserves formatting
+            from ..utils.message_utils import smart_split_message
+            import asyncio
             
-            for line in response.split('\\n'):
-                if len(current_chunk + line + '\\n') > 1900:  # Leave buffer
-                    if current_chunk:
-                        chunks.append(current_chunk.strip())
-                        current_chunk = line + '\\n'
-                    else:
-                        # Line itself is too long, force split
-                        chunks.append(line[:1900])
-                        current_chunk = line[1900:] + '\\n'
-                else:
-                    current_chunk += line + '\\n'
+            chunks = smart_split_message(response, max_length=2000)
             
-            if current_chunk.strip():
-                chunks.append(current_chunk.strip())
-            
-            # Send chunks
+            # Send chunks with small delays
             for i, chunk in enumerate(chunks):
                 if i > 0:
                     await asyncio.sleep(0.5)  # Small delay between chunks
