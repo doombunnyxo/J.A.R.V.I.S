@@ -32,8 +32,8 @@ class ContextManager:
         self.last_activity: Dict[str, datetime] = {}
         self.context_expiry_minutes = 30
         
-        # Channel conversation storage - keyed by channel_id (store more for intelligent selection)
-        self.channel_conversations: Dict[int, deque] = defaultdict(lambda: deque(maxlen=75))  # Store more than we show
+        # Channel conversation storage - keyed by channel_id
+        self.channel_conversations: Dict[int, deque] = defaultdict(lambda: deque(maxlen=35))
         self.channel_last_activity: Dict[int, datetime] = {}
         
         # Thread conversation storage - unlimited storage for active threads
@@ -151,45 +151,31 @@ class ContextManager:
         return self.get_smart_channel_context(channel_id, limit)
     
     def get_smart_channel_context(self, channel_id: int, limit: int = 35, include_weights: bool = False) -> List[str]:
-        """Get channel messages using recency decay scoring"""
+        """Get channel messages with optional recency weights"""
         channel_messages = self.channel_conversations.get(channel_id, deque())
         
         if not channel_messages:
             return []
         
-        # Calculate recency scores for all messages
-        now = datetime.now()
-        scored_messages = []
-        
-        for msg in channel_messages:
-            # Calculate how many hours old the message is
-            hours_old = (now - msg.timestamp).total_seconds() / 3600
-            
-            # Exponential decay: newer messages get higher scores
-            # Decay factor: message loses half importance every 12 hours
-            recency_score = math.exp(-hours_old / 12)
-            
-            scored_messages.append((msg, recency_score))
-        
-        # Sort by recency score (highest first) and take top messages
-        scored_messages.sort(key=lambda x: x[1], reverse=True)
-        top_messages = scored_messages[:limit]
-        
-        # Sort selected messages by original timestamp (chronological order)
-        top_messages.sort(key=lambda x: x[0].timestamp)
+        # Just get all messages (already limited to 35 by storage)
+        messages = list(channel_messages)
         
         # Return content strings with optional weight information
         if include_weights:
             result = []
-            for msg, score in top_messages:
-                # Convert score to percentage for readability
-                weight_percent = int(score * 100)
+            now = datetime.now()
+            for msg in messages:
+                # Calculate recency weight for display
+                hours_old = (now - msg.timestamp).total_seconds() / 3600
+                recency_score = math.exp(-hours_old / 12)
+                weight_percent = int(recency_score * 100)
+                
                 # Format: [Weight: 85%] Username: message content
                 result.append(f"[Weight: {weight_percent}%] {msg.content}")
             return result
         else:
-            # Return just the content strings (backward compatibility)
-            return [msg.content for msg, score in top_messages]
+            # Return just the content strings
+            return [msg.content for msg in messages]
     
     def get_thread_context(self, thread_id: int) -> List[str]:
         """Get thread messages (parent context already inherited when thread was first seen)"""
