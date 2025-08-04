@@ -163,6 +163,8 @@ class AIHandler:
                 response = await self._handle_with_perplexity(message, cleaned_query)
             elif provider == "pure-perplexity":
                 response = await self._handle_with_pure_perplexity(message, cleaned_query)
+            elif provider == "direct-perplexity-search":
+                response = await self._handle_direct_perplexity_search(message, cleaned_query)
             elif provider == "crafting":
                 response = await self._handle_with_crafting(message, cleaned_query)
             else:  # groq
@@ -1292,6 +1294,28 @@ Respond with ONLY the specific admin command, nothing else."""
         
         except Exception as e:
             return f"Error processing with Groq: {str(e)}"
+    
+    async def _handle_direct_perplexity_search(self, message, query: str) -> str:
+        """Handle direct web search using Perplexity's search capabilities"""
+        try:
+            if not config.has_perplexity_api():
+                return "❌ Perplexity API not configured for search functionality."
+            
+            # Direct web search with Perplexity - no context, no filtering, just search
+            from ..search.perplexity import perplexity_search
+            
+            # Call Perplexity's search_and_answer directly with minimal context
+            result = await perplexity_search.search_and_answer(
+                query, 
+                user_id=message.author.id,
+                channel_id=message.channel.id
+            )
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Direct Perplexity search failed: {e}")
+            return f"❌ Error performing web search: {str(e)}"
     
     async def _handle_with_crafting(self, message, query: str) -> str:
         """Handle query with crafting system using the dedicated crafting module"""
