@@ -157,7 +157,7 @@ class AdminIntentParser:
         
         return result
     
-    # TODO: Add other parameter extractors for different action types
+    # Parameter extractors for each action type
     async def _extract_kick_params(self, content, original_content, guild, message_author):
         """Extract parameters for kick action"""
         user = await self._find_user(content, guild, message_author)
@@ -222,13 +222,111 @@ class AdminIntentParser:
     
     async def _extract_rename_role_params(self, content, original_content, guild, message_author):
         """Extract parameters for rename role action"""
-        # TODO: Implement role renaming parameter extraction
-        return None
+        
+        # Find the role to rename
+        role = self._find_role(content, guild)
+        if not role:
+            return None
+        
+        # Extract the new name from various patterns
+        new_name = None
+        
+        # Pattern 1: Look for quoted strings for the new name (most reliable)
+        quoted_matches = re.findall(r'["\']([^"\']+)["\']', original_content)
+        if len(quoted_matches) >= 2:
+            # If there are 2+ quoted strings, the last one is likely the new name
+            new_name = quoted_matches[-1].strip()
+        elif len(quoted_matches) == 1:
+            # Single quoted string might be the new name if role was found by other means
+            new_name = quoted_matches[0].strip()
+        
+        # Pattern 2: Look for "to [new_name]" or "called [new_name]" patterns
+        if not new_name:
+            to_patterns = [
+                r'(?:rename|change|update).*?role.*?to\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s*$|[.!?])',
+                r'role.*?to\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s*$|[.!?])',
+                r'(?:rename|change|update).*?role.*?called\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s*$|[.!?])',
+                r'role.*?called\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s*$|[.!?])'
+            ]
+            
+            for pattern in to_patterns:
+                match = re.search(pattern, original_content, re.IGNORECASE)
+                if match:
+                    new_name = match.group(1).strip()
+                    # Remove trailing punctuation
+                    new_name = re.sub(r'[.!?]+$', '', new_name).strip()
+                    break
+        
+        if not new_name:
+            return None
+            
+        return {"role": role, "new_name": new_name}
     
     async def _extract_reorganize_roles_params(self, content, original_content, guild, message_author):
         """Extract parameters for reorganize roles action"""
-        # TODO: Implement role reorganization parameter extraction
-        return None
+        
+        # Extract custom context/description from user input
+        context_description = self._extract_role_context_description(content, original_content)
+        
+        return {
+            "context": context_description, 
+            "guild": guild
+        }
+    
+    def _extract_role_context_description(self, content: str, original_content: str) -> str:
+        """Extract custom context description for role reorganization"""
+        
+        # Look for patterns that indicate custom context descriptions
+        context_patterns = [
+            r'(?:organize|fix|update|rename).*?roles.*?(?:based\s+on|according\s+to|using|with)\s+(.+?)(?:\.|$)',
+            r'(?:make|organize).*?roles.*?like\s+(.+?)(?:\.|$)',
+            r'roles.*?for\s+(.+?)(?:\.|$)',
+            r'context(?:\s+is)?[:\s]+(.+?)(?:\.|$)',
+            r'(?:reorganize|fix|improve|clean\s+up).*?roles[,\s]+(.+?)(?:\.|$)',
+            r'based\s+on\s+(?:what\s+)?(?:i\s+)?(?:found|searched|learned)[:\s]+(.+?)(?:\.|$)',
+            r'according\s+to\s+(.+?)(?:\.|$)',
+            r'(?:using|with)\s+(?:the\s+)?(?:following\s+)?(?:info|information|context|description)[:\s]+(.+?)(?:\.|$)',
+        ]
+        
+        # Try to extract custom context description
+        for pattern in context_patterns:
+            match = re.search(pattern, original_content, re.IGNORECASE | re.DOTALL)
+            if match:
+                description = match.group(1).strip()
+                # Clean up the description
+                description = re.sub(r'\s+', ' ', description)  # Normalize whitespace
+                description = description.rstrip('.,!?')  # Remove trailing punctuation
+                
+                # Filter out very short or generic descriptions
+                if len(description) > 10 and not self._is_generic_description(description):
+                    return description
+        
+        # If no custom context found, look for quoted strings that might be context
+        quoted_descriptions = re.findall(r'["\']([^"\']{15,})["\']', original_content)
+        for desc in quoted_descriptions:
+            if not self._is_generic_description(desc):
+                return desc
+        
+        # Fallback: return generic context
+        return "general community server"
+    
+    def _is_generic_description(self, description: str) -> bool:
+        """Check if a description is too generic to be useful"""
+        generic_phrases = [
+            'make sense', 'better', 'good', 'appropriate', 'nice', 'proper', 'correct',
+            'organized', 'clean', 'professional', 'clear', 'simple', 'basic'
+        ]
+        description_lower = description.lower()
+        
+        # Too short
+        if len(description) < 10:
+            return True
+        
+        # Only contains generic phrases
+        if any(phrase in description_lower for phrase in generic_phrases) and len(description) < 30:
+            return True
+        
+        return False
     
     async def _extract_bulk_delete_params(self, content, original_content, guild, message_author):
         """Extract parameters for bulk delete action"""
@@ -244,24 +342,77 @@ class AdminIntentParser:
                 break
         parameters["limit"] = limit
         
-        # Check if targeting a specific user (bot messages)
+        # Check if targeting a specific user
+        user_filter = None
+        
+        # Check for bot-targeting pronouns
         if any(word in content for word in ['your', 'you', 'bot']):
-            # Target the bot itself
-            bot_member = guild.get_member(self.bot.user.id)
-            if bot_member:
-                parameters["user_filter"] = bot_member
+            user_filter = guild.get_member(self.bot.user.id)
+        
+        # Check for self-targeting pronouns (user's own messages)
+        elif any(word in content for word in ['my', 'me', 'i', 'mine']):
+            if message_author:
+                user_filter = message_author
+        
+        # Check for specific user mentions
+        else:
+            user_filter = await self._find_user(content, guild, message_author)
+        
+        if user_filter:
+            parameters["user_filter"] = user_filter
         
         return parameters
     
     async def _extract_create_channel_params(self, content, original_content, guild, message_author):
         """Extract parameters for create channel action"""
-        # TODO: Implement create channel parameter extraction
-        return None
+        
+        # Determine channel type
+        channel_type = "voice" if "voice" in content else "text"
+        
+        # Extract channel name from various patterns
+        name = None
+        
+        # Pattern 1: Quoted channel name (most reliable)
+        quoted_match = re.search(r'["\']([^"\']+)["\']', original_content)
+        if quoted_match:
+            name = quoted_match.group(1).strip()
+        
+        # Pattern 2: "channel called [name]" or "channel named [name]"
+        if not name:
+            called_match = re.search(r'channel.*?(?:called|named)\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s*$|[.!?])', original_content, re.IGNORECASE)
+            if called_match:
+                name = called_match.group(1).strip()
+                name = re.sub(r'[.!?]+$', '', name).strip()
+        
+        # Pattern 3: Extract from "create [type] channel [name]"
+        if not name:
+            create_match = re.search(r'create.*?channel\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s*$|[.!?])', original_content, re.IGNORECASE)
+            if create_match:
+                name = create_match.group(1).strip()
+                name = re.sub(r'[.!?]+$', '', name).strip()
+        
+        if not name:
+            return None
+            
+        # Clean up channel name (Discord requirements)
+        name = name.lower().replace(' ', '-').replace('_', '-')
+        # Remove invalid characters
+        name = re.sub(r'[^a-z0-9-]', '', name)
+        # Ensure not empty after cleaning
+        if not name:
+            return None
+            
+        return {"name": name, "type": channel_type}
     
     async def _extract_delete_channel_params(self, content, original_content, guild, message_author):
         """Extract parameters for delete channel action"""
-        # TODO: Implement delete channel parameter extraction
-        return None
+        
+        # Find the channel to delete
+        channel = self._find_channel(content, guild)
+        if not channel:
+            return None
+            
+        return {"channel": channel}
     
     async def _find_user(self, text: str, guild, message_author=None) -> Optional:
         """Fast user lookup - optimized for Discord mentions"""
