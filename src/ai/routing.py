@@ -90,7 +90,8 @@ ADMIN_KEYWORDS = [
     # Channel management
     'create channel', 'delete channel', 'voice channel', 'text channel',
     # Nickname management
-    'change nickname', 'set nickname', 'rename', 'nickname'
+    'change nickname', 'set nickname', 'rename', 'nickname', 'nick',
+    'user nickname', 'users nickname', 'user\'s nickname', 'set user', 'change user'
 ]
 
 # Personal interaction keywords - triggers Groq

@@ -95,10 +95,13 @@ class AdminIntentParser:
             member_display_lower = member.display_name.lower()
             
             for word in words:
-                if (word == member_name_lower or 
-                    word == member_display_lower or
-                    word in member_name_lower or 
-                    word in member_display_lower):
+                # Strip possessive forms and other punctuation
+                clean_word = word.lower().rstrip("'s").rstrip("'").rstrip(",").rstrip(".")
+                
+                if (clean_word == member_name_lower or 
+                    clean_word == member_display_lower or
+                    clean_word in member_name_lower or 
+                    clean_word in member_display_lower):
                     print(f"DEBUG: Found user by name match: {member}")
                     return member
         

@@ -628,6 +628,12 @@ Make the roles hierarchical (from highest to lowest authority) and appropriate f
                 query, message.guild, message.author
             )
             
+            # Debug info for troubleshooting
+            debug_msg = f"**DEBUG**: Parsing query: `{query}`\n"
+            debug_msg += f"**Action type**: {action_type}\n"
+            debug_msg += f"**Parameters**: {parameters}"
+            await message.channel.send(debug_msg)
+            
             if action_type:
                 # Create confirmation message for admin action
                 return await self._create_standard_admin_confirmation(message, query, action_type, parameters)
