@@ -1,4 +1,5 @@
 """Message utilities for Discord bot"""
+import re
 
 def smart_split_message(text: str, max_length: int = 2000) -> list[str]:
     """Smart message splitting that preserves paragraphs, sentences, and links"""
@@ -70,8 +71,21 @@ def smart_split_message(text: str, max_length: int = 2000) -> list[str]:
     return chunks
 
 
+def suppress_link_previews(text: str) -> str:
+    """Suppress Discord link previews by wrapping URLs in angle brackets"""
+    # Pattern to match URLs that aren't already wrapped in angle brackets
+    # This matches http(s):// URLs that don't have < before them or > after them
+    url_pattern = r'(?<!<)(https?://[^\s<>]+)(?!>)'
+    
+    # Replace unprotected URLs with angle-bracket wrapped versions
+    return re.sub(url_pattern, r'<\1>', text)
+
+
 async def send_long_message(channel, text: str, max_length: int = 2000):
-    """Send a long message using smart splitting"""
+    """Send a long message using smart splitting and suppress link previews"""
+    # Suppress link previews first
+    text = suppress_link_previews(text)
+    
     chunks = smart_split_message(text, max_length)
     for chunk in chunks:
         await channel.send(chunk)

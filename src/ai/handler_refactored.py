@@ -1470,7 +1470,12 @@ Be concise and clear about what the action will do."""
         return True
     
     async def _send_response(self, message, response: str):
-        """Send response, handling Discord's message limits"""
+        """Send response, handling Discord's message limits and suppressing link previews"""
+        from ..utils.message_utils import suppress_link_previews
+        
+        # Suppress link previews first
+        response = suppress_link_previews(response)
+        
         if len(response) <= 2000:
             await message.channel.send(response)
         else:

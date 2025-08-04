@@ -162,7 +162,22 @@ class HistoryCommands(commands.Cog):
         
         self._executing_commands.add(command_key)
         try:
-            # Convert to 0-based index
+            # Validate index
+            if index < 1:
+                await ctx.send(f'❌ Setting number must be 1 or higher. Use `!list_settings` to see valid numbers.')
+                return
+            
+            # Get current settings to show count
+            current_settings = data_manager.get_unfiltered_permanent_context()
+            if not current_settings:
+                await ctx.send('❌ No global settings found to remove.')
+                return
+            
+            if index > len(current_settings):
+                await ctx.send(f'❌ Invalid setting number: {index}. There are only {len(current_settings)} settings. Use `!list_settings` to see valid numbers.')
+                return
+            
+            # Convert to 0-based index and remove
             removed_setting = data_manager.remove_unfiltered_permanent_context(index - 1)
             
             if removed_setting:
@@ -171,7 +186,11 @@ class HistoryCommands(commands.Cog):
                 display_setting = removed_setting[:100] + "..." if len(removed_setting) > 100 else removed_setting
                 await ctx.send(f'✅ **Global setting removed:**\n> {display_setting}')
             else:
-                await ctx.send(f'❌ Invalid setting number: {index}. Use `!list_settings` to see valid numbers.')
+                await ctx.send(f'❌ Failed to remove setting {index}. Use `!list_settings` to see valid numbers.')
+                
+        except Exception as e:
+            print(f"ERROR in remove_setting command: {e}")
+            await ctx.send(f'❌ Error removing setting: {str(e)}')
         finally:
             self._executing_commands.discard(command_key)
     
