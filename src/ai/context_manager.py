@@ -241,6 +241,52 @@ Return only relevant permanent context items, one per line, in the exact same fo
             logger.debug(f"Permanent context filtering failed: {e}")
             return permanent_context
     
+    async def build_unfiltered_context(self, user_id: int, channel_id: int, user_name: str, message=None) -> str:
+        """Build complete unfiltered context for casual AI chat"""
+        user_key = data_manager.get_user_key(message.author) if message else None
+        
+        # Gather all available context without filtering
+        context_parts = []
+        
+        # Always include user name
+        if user_name:
+            context_parts.append(f"User: {user_name}")
+        
+        # Get conversation context (last 6 exchanges)
+        conversation_context = self.get_conversation_context(user_id, channel_id)
+        if conversation_context:
+            conversation_text = "\n".join([
+                f"[Previous] {msg['role']}: {msg['content']}" 
+                for msg in conversation_context[-6:]
+            ])
+            context_parts.append(f"Previous conversation:\n{conversation_text}")
+        
+        # Get channel context if enabled
+        if user_key:
+            user_settings = data_manager.get_user_settings(user_key)
+            if user_settings.get("use_channel_context", True):
+                channel_messages = self.get_channel_context(channel_id, limit=35)
+                if channel_messages:
+                    channel_context_text = "\n".join(channel_messages)
+                    context_parts.append(f"Recent channel discussion:\n{channel_context_text}")
+        
+        # Get ALL permanent context without filtering
+        if user_key:
+            permanent_items = data_manager.get_permanent_context(user_key)
+            if permanent_items:
+                permanent_text = "\n".join([f"- {item}" for item in permanent_items])
+                context_parts.append(f"Stored information about user:\n{permanent_text}")
+        
+        # Add global unfiltered permanent context
+        unfiltered_items = data_manager.get_unfiltered_permanent_context()
+        if unfiltered_items:
+            unfiltered_context = "Global preferences (always apply):\n" + "\n".join([
+                f"- [MANDATORY] {item}" for item in unfiltered_items
+            ])
+            context_parts.append(unfiltered_context)
+        
+        return "\n\n".join(context_parts) if context_parts else ""
+
     async def build_full_context(self, query: str, user_id: int, channel_id: int, user_name: str, message=None) -> str:
         """Build complete filtered context for AI (conversation + channel + permanent context filtered together)"""
         user_key = data_manager.get_user_key(message.author) if message else None

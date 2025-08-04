@@ -277,9 +277,9 @@ class AIHandler:
             if not config.has_openai_api():
                 return "❌ OpenAI API not configured. Please contact an administrator."
             
-            # Build context but use direct chat mode
-            context = await self.context_manager.build_full_context(
-                query, message.author.id, message.channel.id,
+            # Build unfiltered context for casual conversation
+            context = await self.context_manager.build_unfiltered_context(
+                message.author.id, message.channel.id,
                 message.author.display_name, message
             )
             
