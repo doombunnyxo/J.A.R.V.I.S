@@ -328,8 +328,11 @@ class AdminIntentParser:
                         return None
         
         # Check for @username format (converted mentions)
+        if self.debug_channel:
+            await self.debug_channel.send("DEBUG: Checking for @username format")
         at_mentions = re.findall(r'@([a-zA-Z0-9_.-]+)', text)
-        print(f"DEBUG: Found @mentions in text: {at_mentions}")
+        if self.debug_channel:
+            await self.debug_channel.send(f"DEBUG: Found @mentions: {at_mentions}")
         if at_mentions:
             for username in at_mentions:
                 username_lower = username.lower()
