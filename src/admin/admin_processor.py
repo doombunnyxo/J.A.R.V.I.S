@@ -351,8 +351,9 @@ Generate role list:"""
         
         action_data = self.pending_admin_actions[message_id]
         
-        # Check if reactor is the original requester
-        if user.id != action_data['requester_id']:
+        # Check if the person reacting is an admin (this is the key security check)
+        if not is_admin(user.id):
+            logger.warning(f"Non-admin user {user.display_name} ({user.id}) tried to confirm admin action")
             return
         
         if str(reaction.emoji) == '✅':

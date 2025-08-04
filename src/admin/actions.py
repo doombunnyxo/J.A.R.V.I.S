@@ -13,14 +13,7 @@ class AdminActionHandler:
     
     async def execute_admin_action(self, message, action_type: str, parameters: Dict[str, Any]) -> str:
         """Execute administrative actions based on AI interpretation"""
-        
-        if not is_admin(message.author.id):
-            from ..config import config
-            return f"❌ **Access Denied**\n" + \
-                   f"Your Discord ID: `{message.author.id}`\n" + \
-                   f"Authorized ID: `{config.AUTHORIZED_USER_ID}`\n" + \
-                   f"Match: {message.author.id == config.AUTHORIZED_USER_ID}\n" + \
-                   f"Types: {type(message.author.id)} vs {type(config.AUTHORIZED_USER_ID)}"
+        # Permission check removed - already verified in admin processor at request and confirmation stages
         
         try:
             guild = message.guild
