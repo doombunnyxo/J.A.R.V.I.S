@@ -222,7 +222,6 @@ class AdminParameterExtractors:
         user_filter = None
         
         # Check for bot-targeting pronouns (whole words only)
-        import re
         if re.search(r'\b(your|you|bot)\b', content, re.IGNORECASE):
             user_filter = guild.get_member(self.utils.bot.user.id)
         
