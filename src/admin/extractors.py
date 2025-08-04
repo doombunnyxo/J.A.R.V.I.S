@@ -30,7 +30,21 @@ class AdminParameterExtractors:
         user = await self.utils.find_user(original_content, guild, message_author)
         logger.info(f"👤 NICKNAME EXTRACTOR: Found user: {user} from content: {original_content}")
         
+        # Debug user finding
+        try:
+            if guild and guild.text_channels:
+                channel = guild.text_channels[0]
+                await channel.send(f"👤 **USER LOOKUP**\nFound: `{user}`\nType: `{type(user)}`")
+        except:
+            pass
+        
         if not user:
+            try:
+                if guild and guild.text_channels:
+                    channel = guild.text_channels[0]
+                    await channel.send(f"❌ **USER NOT FOUND**\nReturning None")
+            except:
+                pass
             return None
         
         # Extract the new nickname using multiple patterns
@@ -64,6 +78,15 @@ class AdminParameterExtractors:
         # Log final result
         valid_result = nickname is not None and user is not None
         logger.info(f"👤 NICKNAME EXTRACTOR FINAL: User={user}, Nickname='{nickname}', Valid={valid_result}")
+        
+        # Debug final result
+        try:
+            if guild and guild.text_channels:
+                channel = guild.text_channels[0]
+                await channel.send(f"📋 **FINAL RESULT**\nUser: `{user}`\nNickname: `{nickname}`\nReturning: `{{'user': {user}, 'nickname': {nickname}}}`")
+        except:
+            pass
+        
         return {"user": user, "nickname": nickname}
     
     async def extract_kick_params(self, content, original_content, guild, message_author):
