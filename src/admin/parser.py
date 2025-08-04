@@ -122,35 +122,9 @@ class AdminIntentParser:
     async def _extract_nickname_params(self, content: str, original_content: str, guild, message_author) -> Optional[Dict[str, Any]]:
         """Extract parameters for nickname change action"""
         
-        debug_msg = f"DEBUG: _extract_nickname_params called with:\n- content: '{content}'\n- original_content: '{original_content}'"
-        print(debug_msg)
-        if self.debug_channel:
-            await self.debug_channel.send(debug_msg)
-        
-        # Find the user to rename (use original_content to preserve mentions)
-        debug_msg = f"DEBUG: About to call _find_user with: '{original_content}'"
-        print(debug_msg)
-        if self.debug_channel:
-            await self.debug_channel.send(debug_msg)
-            
-        try:
-            user = await self._find_user(original_content, guild, message_author)
-            debug_msg = f"DEBUG: _find_user returned: {user}"
-            print(debug_msg)
-            if self.debug_channel:
-                await self.debug_channel.send(debug_msg)
-        except Exception as e:
-            debug_msg = f"DEBUG: _find_user threw exception: {e}"
-            print(debug_msg)
-            if self.debug_channel:
-                await self.debug_channel.send(debug_msg)
-            user = None
-            
+        # Find the user to rename
+        user = await self._find_user(original_content, guild, message_author)
         if not user:
-            debug_msg = f"DEBUG: No user found, returning None from nickname extraction"
-            print(debug_msg)
-            if self.debug_channel:
-                await self.debug_channel.send(debug_msg)
             return None
         
         # Extract the new nickname
@@ -272,111 +246,25 @@ class AdminIntentParser:
         return None
     
     async def _find_user(self, text: str, guild, message_author=None) -> Optional:
-        """Helper function to find user mentions or names"""
-        if self.debug_channel:
-            await self.debug_channel.send(f"DEBUG: _find_user START with text: '{text}'")
+        """Fast user lookup - optimized for Discord mentions"""
         
-        # Check for Discord mentions first (proper format: <@123456789>)
+        # Fast path: Discord mentions (<@123456789>) - most common case
         if '<@' in text:
             user_ids = re.findall(r'<@!?(\d+)>', text)
-            if self.debug_channel:
-                await self.debug_channel.send(f"DEBUG: Found Discord mention IDs: {user_ids}")
-            
             if user_ids:
                 bot_id = str(self.bot.user.id)
-                
-                # Find the target user - prioritize non-bot users
-                non_bot_user_ids = [uid for uid in user_ids if uid != bot_id]
-                if non_bot_user_ids:
-                    # Use the last mentioned non-bot user (most likely the target)
-                    target_user_id = int(non_bot_user_ids[-1])
-                    user = guild.get_member(target_user_id)
-                    if user:
-                        if self.debug_channel:
-                            await self.debug_channel.send(f"DEBUG: Found user by Discord mention: {user.name}")
-                        return user
-                    else:
-                        # Try to get user from message author if it matches the target
-                        if message_author and message_author.id == target_user_id:
-                            if self.debug_channel:
-                                await self.debug_channel.send(f"DEBUG: Found user via message_author: {message_author.name}")
-                            return message_author
-                        
-                        if self.debug_channel:
-                            await self.debug_channel.send(f"DEBUG: User {target_user_id} not found - bot missing Guild Members Intent")
-                        return None
+                # Get the last non-bot user mentioned (most likely the target)
+                for user_id in reversed(user_ids):
+                    if user_id != bot_id:
+                        return guild.get_member(int(user_id))
         
-        # Check for first-person pronouns referring to the message author
-        if message_author and any(pronoun in text.lower() for pronoun in ['i', 'my', 'me', 'myself', 'mine']):
-            # Make sure it's in a context that suggests the user is the target
-            user_action_contexts = ['my messages', 'my msg', 'i sent', 'i posted', 'i wrote', 'delete my', 'remove my', 'clear my']
-            if any(context in text.lower() for context in user_action_contexts) or any(word in text.lower() for word in ['my', 'mine']):
-                author_member = guild.get_member(message_author.id)
-                if author_member:
-                    print(f"DEBUG: Found message author by first-person pronoun: {author_member}")
-                    return author_member
+        # Fallback: Self-reference (if author is targeting themselves)
+        if message_author and any(word in text.lower() for word in ['my', 'me', 'i']):
+            return message_author
         
-        # Check for pronouns referring to the bot
-        if any(pronoun in text.lower() for pronoun in ['you', 'your', 'yours', 'yourself']):
-            bot_member = guild.get_member(self.bot.user.id)
-            if bot_member:
-                print(f"DEBUG: Found bot by pronoun: {bot_member} (ID: {bot_member.id})")
-                return bot_member
-        
-        # Check for mentions first
-        if '<@' in text:
-            user_ids = re.findall(r'<@!?(\d+)>', text)
-            print(f"DEBUG: Found user IDs in message: {user_ids}")
-            if user_ids:
-                bot_id = str(self.bot.user.id)
-                
-                # Find the target user - prioritize non-bot users, but allow bot if it's the only/specific target
-                target_user_id = None
-                
-                # First, try to find non-bot users
-                non_bot_user_ids = [uid for uid in user_ids if uid != bot_id]
-                if non_bot_user_ids:
-                    # Use the last mentioned non-bot user (most likely the target)
-                    target_user_id = int(non_bot_user_ids[-1])
-                else:
-                    # If only bot is mentioned, check if the context suggests targeting the bot
-                    # Look for keywords that suggest bot actions (delete bot messages, etc.)
-                    bot_action_keywords = ['delete', 'remove', 'purge', 'clear', 'clean', 'ban', 'kick', 'timeout']
-                    if any(keyword in text.lower() for keyword in bot_action_keywords):
-                        target_user_id = int(bot_id)
-                        print(f"DEBUG: Bot targeted for admin action based on context (bot ID: {bot_id})")
-                
-                if target_user_id:
-                    user = guild.get_member(target_user_id)
-                    if user:
-                        print(f"DEBUG: Found member by mention: {user}")
-                        return user
-                    else:
-                        print(f"DEBUG: User {target_user_id} not found as member in guild {guild.name}")
-                        # For admin actions, we need Member objects, not User objects
-                        # Don't fall back to fetch_user as it returns User objects that can't be edited
-                        return None
-        
-        # Check for @username format (converted mentions)
-        if self.debug_channel:
-            await self.debug_channel.send("DEBUG: Checking for @username format")
-        at_mentions = re.findall(r'@([a-zA-Z0-9_.-]+)', text)
-        if self.debug_channel:
-            await self.debug_channel.send(f"DEBUG: Found @mentions: {at_mentions}")
-        if at_mentions:
-            for username in at_mentions:
-                username_lower = username.lower()
-                print(f"DEBUG: Looking for username: '{username_lower}'")
-                for member in guild.members:
-                    print(f"DEBUG: Checking member: '{member.name.lower()}' / '{member.display_name.lower()}'")
-                    if (member.name.lower() == username_lower or 
-                        member.display_name.lower() == username_lower):
-                        print(f"DEBUG: Found user by @username match: {member}")
-                        return member
-        
-        # Check for username/display name matching
-        words = text.split()
-        for member in guild.members:
+        return None
+    
+    def _find_role(self, text: str, guild):
             member_name_lower = member.name.lower()
             member_display_lower = member.display_name.lower()
             
