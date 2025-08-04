@@ -21,15 +21,45 @@ class AdminUtils:
         if '<@' in text:
             user_ids = re.findall(r'<@!?(\d+)>', text)
             logger.info(f"🔍 FIND_USER: Found user IDs: {user_ids} in text: '{text}'")
+            
+            # Debug to Discord
+            try:
+                if guild and guild.text_channels:
+                    channel = guild.text_channels[0]
+                    import asyncio
+                    asyncio.create_task(channel.send(f"🔍 **FIND_USER DEBUG**\nText: `{text}`\nUser IDs found: `{user_ids}`"))
+            except:
+                pass
+            
             if user_ids:
                 bot_id = str(self.bot.user.id)
                 logger.info(f"🔍 FIND_USER: Bot ID: {bot_id}")
+                
+                # Debug bot ID
+                try:
+                    if guild and guild.text_channels:
+                        channel = guild.text_channels[0]
+                        import asyncio
+                        asyncio.create_task(channel.send(f"🤖 **BOT ID**: `{bot_id}`"))
+                except:
+                    pass
+                
                 # Get the last non-bot user mentioned (most likely the target)
                 for user_id in reversed(user_ids):
                     logger.info(f"🔍 FIND_USER: Checking user_id: {user_id} != bot_id: {bot_id}")
                     if user_id != bot_id:
                         member = guild.get_member(int(user_id))
                         logger.info(f"🔍 FIND_USER: Found member: {member}")
+                        
+                        # Debug member lookup
+                        try:
+                            if guild and guild.text_channels:
+                                channel = guild.text_channels[0]
+                                import asyncio
+                                asyncio.create_task(channel.send(f"👤 **MEMBER LOOKUP**\nUser ID: `{user_id}`\nFound: `{member}`"))
+                        except:
+                            pass
+                        
                         return member
         
         # Fallback: Self-reference (if author is targeting themselves)
