@@ -57,7 +57,7 @@ class AdminIntentParser:
             'remove_timeout': ['remove timeout', 'unmute', 'unsilence'],
             
             # Nickname changes
-            'change_nickname': ['nickname', 'nick', 'rename user', 'rename member', 'change name of', 'change nickname', 'set nickname', 'update nickname'],
+            'change_nickname': ['nickname', 'nick', 'rename user', 'rename member', 'change name of', 'change nickname', 'set nickname', 'update nickname', 'rename'],
             
             # Role management
             'add_role': ['add role', 'give role'],
