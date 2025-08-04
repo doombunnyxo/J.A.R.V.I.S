@@ -414,13 +414,32 @@ class AdminIntentParser:
         if any(role_word in content for role_word in ['role', 'roles']):
             return None, None
             
-        # Be more specific to avoid conflicts with role renaming
+        # Check for nickname patterns with regex to handle mentions in between
+        import re
         nickname_patterns = [
-            'change nickname', 'set nickname', 'nickname to',
+            r'change\s+.*?\s+nickname',  # "change @user nickname"
+            r'set\s+.*?\s+nickname',     # "set @user nickname"  
+            r'change nickname', 'set nickname', 'nickname to',
+            r'rename\s+.*?\s+to',        # "rename @user to newname"
             'rename user', 'rename member', 'change name of',
             'set user\'s nickname', 'set users nickname', 'user\'s nickname to'
         ]
-        if any(phrase in content for phrase in nickname_patterns):
+        
+        # Check both literal strings and regex patterns
+        has_nickname_pattern = False
+        for pattern in nickname_patterns:
+            if pattern.startswith('r\'') or '\\s+' in pattern:
+                # Regex pattern
+                if re.search(pattern, content, re.IGNORECASE):
+                    has_nickname_pattern = True
+                    break
+            else:
+                # Literal string
+                if pattern in content:
+                    has_nickname_pattern = True
+                    break
+        
+        if has_nickname_pattern:
             user = await self._find_user(content, guild, message_author)
             if user:
                 # Try to find nickname in quotes first
