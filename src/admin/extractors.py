@@ -221,17 +221,18 @@ class AdminParameterExtractors:
         # Check if targeting a specific user
         user_filter = None
         
-        # Check for bot-targeting pronouns
-        if any(word in content for word in ['your', 'you', 'bot']):
+        # Check for bot-targeting pronouns (whole words only)
+        import re
+        if re.search(r'\b(your|you|bot)\b', content, re.IGNORECASE):
             user_filter = guild.get_member(self.utils.bot.user.id)
         
-        # Check for self-targeting pronouns (user's own messages)
-        elif any(word in content for word in ['my', 'me', 'i', 'mine']):
+        # Check for self-targeting pronouns (user's own messages, whole words only)
+        elif re.search(r'\b(my|me|i|mine)\b', content, re.IGNORECASE):
             if message_author:
                 user_filter = message_author
         
-        # Check for specific user mentions
-        else:
+        # Check for specific user mentions (only if there's a mention symbol)
+        elif '<@' in content:
             user_filter = await self.utils.find_user(content, guild, message_author)
         
         if user_filter:
