@@ -13,8 +13,6 @@ class AdminActionHandler:
     
     async def execute_admin_action(self, message, action_type: str, parameters: Dict[str, Any]) -> str:
         """Execute administrative actions based on AI interpretation"""
-        print(f"DEBUG: execute_admin_action called with action_type: {action_type}")
-        print(f"DEBUG: execute_admin_action parameters: {parameters}")
         
         if not is_admin(message.author.id):
             return "❌ **Access Denied**: You don't have permission to perform admin actions."
@@ -122,8 +120,6 @@ class AdminActionHandler:
         user = parameters.get("user")
         role = parameters.get("role")
         
-        print(f"DEBUG: Add role - user: {user}, role: {role}")
-        
         if not user:
             return "❌ **Error**: Could not find the user to add role to. Please mention the user or use their exact username."
         
@@ -143,8 +139,6 @@ class AdminActionHandler:
         user = parameters.get("user")
         role = parameters.get("role")
         
-        print(f"DEBUG: Remove role - user: {user}, role: {role}")
-        
         if not user:
             return "❌ **Error**: Could not find the user to remove role from. Please mention the user or use their exact username."
         
@@ -163,8 +157,6 @@ class AdminActionHandler:
         """Handle role renaming action"""
         role = parameters.get("role")
         new_name = parameters.get("new_name")
-        
-        print(f"DEBUG: Rename role - role: {role}, new_name: '{new_name}'")
         
         if not role:
             return "❌ **Error**: Could not find the role to rename. Please use quotes around the role name if it contains spaces (e.g., \"Old Role Name\")."
@@ -214,25 +206,19 @@ class AdminActionHandler:
                     break
                 
                 # Debug: Show message details
-                print(f"DEBUG: Checking message {msg.id} from {msg.author.name} (ID: {msg.author.id})")
                 if user_filter:
-                    print(f"DEBUG: User filter set for {user_filter.name} (ID: {user_filter.id})")
                 
                 # If we have a user filter and this message isn't from that user, skip it
                 if user_filter and msg.author.id != user_filter.id:
-                    print(f"DEBUG: Skipping message from {msg.author.name} - not target user {user_filter.name}")
                     continue
                 
-                print(f"DEBUG: Attempting to delete message from {msg.author.name}")
                 
                 # Delete the message
                 try:
                     await msg.delete()
                     deleted_count += 1
-                    print(f"DEBUG: Successfully deleted message {msg.id}")
                     await asyncio.sleep(1.0)  # Rate limit protection
                 except Exception as e:
-                    print(f"DEBUG: Failed to delete message {msg.id}: {e}")
                     continue
             
             if checked_count == 0:
@@ -249,7 +235,6 @@ class AdminActionHandler:
                     return f"✅ **Bulk Delete Complete**: Deleted {deleted_count} messages in {channel.mention}.\n**Requested by**: {admin_user.mention}"
         
         except Exception as e:
-            print(f"DEBUG: Error accessing channel history: {e}")
             return f"❌ **Error**: Could not access channel history in {channel.mention}. Error: {str(e)}\n**Requested by**: {admin_user.mention}"
     
     async def _handle_create_channel(self, parameters: dict, guild, admin_user) -> str:
@@ -300,8 +285,6 @@ class AdminActionHandler:
         context_description = parameters.get("context", "general community server")
         research_context = parameters.get("research_context")  # New: research context from multi-step actions
         
-        print(f"DEBUG: Role reorganization - guild: {guild}, context: '{context_description}'")
-        print(f"DEBUG: Research context available: {bool(research_context)}")
         
         if not guild:
             return "❌ **Error**: Guild not specified for role reorganization."
@@ -315,7 +298,6 @@ class AdminActionHandler:
         if not roles_to_analyze:
             return "❌ **Error**: No roles found that can be reorganized."
         
-        print(f"DEBUG: Found {len(roles_to_analyze)} roles to analyze")
         
         # Import here to avoid circular imports
         from ..config import config
@@ -391,7 +373,6 @@ OLD_NAME → NEW_NAME
 For roles that are already appropriate for the context, don't include them.
 Do not include any other text, explanations, or formatting beyond the rename pairs."""
 
-            print(f"DEBUG: Sending flexible prompt to Claude with context: '{context_description}'")
             
             # Make API call to Claude Haiku
             headers = {
@@ -421,7 +402,6 @@ Do not include any other text, explanations, or formatting beyond the rename pai
                     else:
                         error_text = await response.text()
                         raise Exception(f"Claude API error {response.status}: {error_text}")
-            print(f"DEBUG: AI suggestions received: {suggestions}")
             
             if not suggestions:
                 return "❌ **Error**: No suggestions received from AI analysis."
@@ -439,7 +419,6 @@ Do not include any other text, explanations, or formatting beyond the rename pai
                         old_name = old_name.strip().strip('"').strip("'")
                         new_name = new_name.strip().strip('"').strip("'")
                         
-                        print(f"DEBUG: Trying to rename '{old_name}' to '{new_name}'")
                         
                         # Find the role by name
                         role_to_rename = None
@@ -452,19 +431,14 @@ Do not include any other text, explanations, or formatting beyond the rename pai
                             try:
                                 await role_to_rename.edit(name=new_name, reason=f"Custom role reorganization by {admin_user.name}")
                                 renames_performed.append(f"'{old_name}' → '{new_name}'")
-                                print(f"DEBUG: Successfully renamed '{old_name}' to '{new_name}'")
                             except discord.Forbidden:
                                 renames_failed.append(f"'{old_name}' (permission denied)")
-                                print(f"DEBUG: Permission denied renaming '{old_name}'")
                             except Exception as e:
                                 renames_failed.append(f"'{old_name}' ({str(e)})")
-                                print(f"DEBUG: Error renaming '{old_name}': {e}")
                         else:
                             renames_failed.append(f"'{old_name}' (role not found)")
-                            print(f"DEBUG: Role '{old_name}' not found")
                     
                     except ValueError as e:
-                        print(f"DEBUG: Failed to parse line: {line} - {e}")
                         continue
             
             # Build response - show the context that was used
@@ -491,5 +465,4 @@ Do not include any other text, explanations, or formatting beyond the rename pai
             return response
             
         except Exception as e:
-            print(f"DEBUG: Exception in role reorganization: {e}")
             return f"❌ **Error**: Failed to reorganize roles: {str(e)}\n**Requested by**: {admin_user.mention}"

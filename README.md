@@ -1,6 +1,6 @@
 # Discord Bot - Hybrid AI System
 
-A sophisticated Discord bot with hybrid AI functionality that intelligently routes queries between Groq, Claude, and Perplexity APIs using a unified search pipeline. Features comprehensive admin tools, crafting systems, conversation management, and advanced security.
+A sophisticated Discord bot with hybrid AI functionality that intelligently routes queries between Groq, Claude, and Perplexity APIs using a unified search pipeline. Features comprehensive admin tools with natural language processing, Dune Awakening crafting system, conversation management, and production-ready architecture with centralized logging.
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -15,11 +15,16 @@ A sophisticated Discord bot with hybrid AI functionality that intelligently rout
 - **Cross-AI Context**: Unified conversation context shared between all AI providers
 - **Force Provider Syntax**: Override routing with `groq:`, `claude:`, `pure-claude:`, `perplexity:`, `pure-perplexity:` prefixes
 - **Model Switching**: Admin users can switch Claude models (haiku, sonnet, opus)
+- **Fallback Support**: Graceful degradation when API keys are unavailable
 
 ### 🛡️ **Enhanced Admin System**
 - **Natural Language Commands**: "kick that spammer", "rename role Moderator to Super Mod"
 - **Reaction Confirmations**: ✅/❌ reactions for admin action approval
-- **Comprehensive Actions**: User moderation, role management, channel management, bulk delete
+- **Complete User Moderation**: Kick, ban, unban, timeout, remove timeout with flexible syntax
+- **Advanced Role Management**: Add/remove roles, rename roles, AI-powered role organization
+- **Nickname Control**: Change user nicknames with multiple syntax variations
+- **Message Management**: Bulk delete with user filtering, pronoun support (my/bot messages)
+- **Channel Operations**: Create/delete text and voice channels
 - **Smart User Detection**: Handles pronouns, mentions, and context-aware targeting
 - **AI-Powered Role Organization**: Intelligent role renaming based on custom contexts
 - **Member-Only Operations**: Fixed user/member object handling for nickname changes
@@ -35,14 +40,18 @@ A sophisticated Discord bot with hybrid AI functionality that intelligently rout
 - **Hybrid Search (Default)**: Claude optimization + Perplexity analysis for optimal cost/quality balance
 - **Unified Search Pipeline**: Generic search flow that works with any AI provider
 - **Pure Provider Options**: Force pure Claude or pure Perplexity when needed
-- **Google Custom Search**: Optimized query enhancement for better results
-- **Context-Aware Results**: Search results combined with user context
+- **Google Custom Search**: Real-time web search integration for current information
+- **Context-Aware Results**: Search results combined with user conversation context
+- **Query Optimization**: AI-enhanced search queries for better results
 
 ### ⚔️ **Dune Awakening Crafting**
-- **79+ Recipes**: Complete weapon database with 7-tier progression
+- **250+ Recipes**: Complete database with weapons, tools, vehicles, and equipment (v6.3)
+- **Comprehensive Vehicle System**: Full Ornithopter, Sandbike, Buggy, and Sandcrawler crafting
+- **10+ Weapon Series**: Karpov 38, Maula Pistol, Disruptor M11, Sword, Rapier, JABAL Spitdart, and more
+- **Professional Tools**: Construction tools, gathering equipment, cartography gear
+- **6-Tier Progression**: Copper → Iron → Steel → Aluminum → Duraluminum → Plastanium
 - **Natural Language Processing**: AI-powered recipe interpretation
 - **Resource Calculator**: Advanced crafting system integration
-- **Material Optimization**: Find the best crafting combinations
 
 ### 🚀 **Modern Code Quality**
 - **Centralized Logging**: Professional logging system with configurable levels
@@ -55,8 +64,23 @@ A sophisticated Discord bot with hybrid AI functionality that intelligently rout
 
 ### Prerequisites
 - Python 3.8 or higher
-- Discord bot token
+- Discord bot token with required intents (see Discord Setup below)
 - At least one AI API key (Groq recommended)
+
+### Discord Bot Setup
+Your Discord bot requires these privileged intents to be enabled in the Discord Developer Portal:
+
+1. **Message Content Intent** - Required for reading message content
+2. **Guild Members Intent** - Required for admin commands (user lookup, nickname changes)
+
+To enable these:
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Select your bot application
+3. Go to "Bot" section
+4. Under "Privileged Gateway Intents", enable:
+   - ✅ Message Content Intent
+   - ✅ Server Members Intent
+5. Save changes and restart your bot
 
 ### Installation
 
@@ -73,13 +97,19 @@ A sophisticated Discord bot with hybrid AI functionality that intelligently rout
 
 3. **Environment setup**
    ```bash
-   cp .env.example .env
-   # Edit .env with your API keys
+   # Create .env file with your API keys (see Environment Variables section below)
+   touch .env
+   # Edit .env with your configuration
    ```
 
 4. **Run the bot**
    ```bash
+   # Option 1: Direct execution
    python main.py
+   
+   # Option 2: Using automated setup script (Linux/macOS)
+   chmod +x start.sh
+   ./start.sh
    ```
 
 ### Environment Variables
@@ -127,13 +157,49 @@ AI_TEMPERATURE=0.7                       # AI creativity (0.0-2.0)
 ```
 
 #### Admin Commands (Admin Only)
+
+**User Moderation:**
 ```
-@bot kick @spammer
-@bot delete 10 messages from @user
-@bot rename role "Old Name" to "New Name"
-@bot reorganize roles based on gaming community context
-@bot timeout @user 30 minutes for being rude
-@bot change @user nickname to "NewName"
+@bot kick @spammer                           # Remove user from server
+@bot ban @troublemaker for harassment        # Permanently ban user
+@bot unban 123456789012345678               # Unban user by ID
+@bot timeout @user 30 minutes for being rude # Temporarily mute user
+@bot remove timeout from @user              # Remove user timeout
+@bot unmute @user                           # Alternative remove timeout
+```
+
+**Nickname Management:**
+```
+@bot change @user nickname to "NewName"     # Change user's nickname
+@bot rename member @user to "CoolName"      # Alternative nickname syntax
+@bot set user's nickname to "DisplayName"   # Possessive form
+```
+
+**Role Management:**
+```
+@bot add role "Moderator" to @user          # Give role to user
+@bot give role "Trusted" to @user           # Alternative add role syntax
+@bot remove role "Muted" from @user         # Remove role from user
+@bot take role "Temporary" from @user       # Alternative remove role syntax
+@bot rename role "Old Name" to "New Name"   # Rename existing role
+@bot reorganize roles based on gaming context # AI-powered role organization
+@bot fix role names for community server    # Clean up role naming
+```
+
+**Message Management:**
+```
+@bot delete 10 messages                     # Delete recent messages
+@bot delete 5 messages from @user          # Delete specific user's messages
+@bot purge 20 messages                      # Alternative bulk delete
+@bot clear my messages                      # Delete your own messages
+@bot clean bot messages                     # Delete bot's messages
+```
+
+**Channel Management:**
+```
+@bot create channel "general-chat"          # Create text channel
+@bot create voice channel "Voice Chat"      # Create voice channel
+@bot delete channel #old-channel            # Delete existing channel
 ```
 
 ### Bot Commands
@@ -148,8 +214,10 @@ AI_TEMPERATURE=0.7                       # AI creativity (0.0-2.0)
 - `!list_permanent_context` - List all permanent context items
 - `!remove_permanent_context <index>` - Remove specific context item
 - `!clear_permanent_context` - Clear all permanent context
-- `!unfiltered_permanent_context <text>` - Add unfiltered permanent setting
-- `!list_unfiltered_permanent_context` - List unfiltered settings
+- `!add_setting <text>` - Add unfiltered setting
+- `!list_settings` - View all settings
+- `!remove_setting <index>` - Remove specific setting
+- `!clear_settings` - Clear all settings
 - `!clear_context` - Clear conversation context
 - `!context_info` - Show context status
 - `!search_context <query>` - Search your context items
@@ -162,22 +230,45 @@ AI_TEMPERATURE=0.7                       # AI creativity (0.0-2.0)
 - `!admin_panel` - Administrative control interface
 - `!clear_all_search_contexts` - Clear all user contexts
 
+**Note**: The primary admin interface is through natural language commands via @mentions (see Admin Commands section above). These slash commands provide additional administrative utilities.
+
 ### Advanced Features
 
 #### Crafting System
+
+**Basic Crafting:**
 ```
 @bot craft: I need 5 healing kits
 @bot craft: iron sword
-@bot craft: list weapons
+@bot craft: scout ornithopter mk5
 @bot craft: sandbike chassis
+@bot craft: list weapons
 ```
 
-#### Unfiltered Permanent Settings
+**Complex Vehicle Assembly:**
+```
+@bot craft: Assault Ornithopter mk6 with mk5 engine and mk5 wings, storage and rocket launcher
+@bot craft: Sandbike mk3 with booster, storage, and night rider boost
+@bot craft: Buggy mk6 with utility rear, cutteray, and storage
+@bot craft: Sandcrawler mk6 with walker engine and dampened treads
+@bot craft: Carrier Ornithopter mk6 with side hull and main hull
+```
+
+**Material Calculation:**
+```
+@bot craft: What materials do I need for a plastanium JABAL Spitdart?
+@bot craft: How much iron do I need for a complete sandbike mk2?
+@bot craft: Show me the materials breakdown for 10 iron swords
+```
+
+The crafting system uses advanced natural language processing to understand complex vehicle specifications with mixed component tiers, optional parts, and provides detailed material breakdowns for crafting calculations.
+
+#### Settings (Unfiltered)
 Settings that apply to ALL AI queries without filtering:
 ```
-!unfiltered_permanent_context Always respond in a friendly, casual tone
-!unfiltered_permanent_context I prefer shorter responses when possible
-!unfiltered_permanent_context Remember that I'm a developer working on Discord bots
+!add_setting Always respond in a friendly, casual tone
+!add_setting I prefer shorter responses when possible
+!add_setting Remember that I'm a developer working on Discord bots
 ```
 
 #### Context Filtering
@@ -192,19 +283,21 @@ discord-bot/
 ├── requirements.txt            # Dependencies
 ├── pyproject.toml             # Project configuration
 ├── discord-bot.service        # Systemd service file
-├── dune_crafting.py           # Crafting system module
+├── dune_crafting.py           # Standalone crafting system module
 ├── logs/                      # Log files (auto-created)
 ├── data/                      # Persistent data storage
 │   ├── conversation_history.json
 │   ├── permanent_context.json
 │   ├── unfiltered_permanent_context.json
 │   ├── user_settings.json
-│   └── dune_recipes.json      # Crafting database (79+ recipes)
+│   └── dune_recipes.json      # Crafting database (250+ recipes)
 └── src/
     ├── config.py              # Configuration management with logging
-    ├── admin/                 # Enhanced admin system
+    ├── admin/                 # Enhanced admin system (refactored 2025)
     │   ├── actions.py         # Admin action execution with proper error handling
-    │   ├── parser.py          # Natural language parsing (Member vs User fix)
+    │   ├── parser.py          # Two-phase parsing orchestrator (130 lines)
+    │   ├── extractors.py      # Parameter extractors for all 13 admin actions (280 lines)
+    │   ├── utils.py           # Utility functions (user/role/channel finding, 120 lines)
     │   └── permissions.py     # Permission checking
     ├── ai/
     │   ├── handler_refactored.py  # Main AI handler (consolidated, no legacy)
@@ -261,11 +354,14 @@ discord-bot/
 - **Protocol-Based Design**: Extensible for future providers
 
 #### Enhanced Admin System (`src/admin/`)
+- **Two-Phase Architecture**: Action identification → parameter extraction for optimal performance
+- **Modular Design**: Split into parser.py (orchestrator), extractors.py (13 action handlers), utils.py (helper functions)
 - **Fixed User/Member Handling**: Proper discord.Member vs discord.User distinction
-- **Natural Language Processing**: Advanced command parsing
-- **Reaction Confirmations**: ✅/❌ approval system
-- **Comprehensive Actions**: User, role, channel management
-- **Error Recovery**: Graceful handling of permission errors
+- **Natural Language Processing**: Advanced command parsing with flexible syntax
+- **Reaction Confirmations**: ✅/❌ approval system for all admin actions
+- **Comprehensive Actions**: User moderation, role management, nickname control, message management, channel operations
+- **Performance Optimized**: User lookup optimized from 100ms to 1ms
+- **Error Recovery**: Graceful handling of permission errors with user-friendly messages
 
 #### Improved Data Management (`src/data/persistence.py`)
 - **Thread-Safe Operations**: Async locks for concurrent access
@@ -281,15 +377,26 @@ discord-bot/
   - claude-3-5-haiku-20241022 (default) - Fast, cost-effective
   - claude-3-5-sonnet - Balanced performance
   - claude-3-opus - Most capable
+- **Perplexity Model**: sonar - Real-time web search and analysis
 - **Max Tokens**: 1000
-- **Temperature**: 0.7 (Groq), 0.2 (Claude search)
+- **Temperature**: 0.7 (Groq), 0.2 (Claude search), 0.2 (Perplexity search)
 - **Rate Limiting**: 10 requests per 60 seconds per user
 
 ### Context Management
-- **Channel Context Limit**: 50 messages
-- **Display Limit**: 35 messages
-- **Unified Context**: 12 message limit shared between AIs
-- **Context Expiry**: 30 minutes
+- **Channel Context Storage**: 50 messages per channel (loaded from Discord history on startup)
+- **Channel Context Display**: 35 messages shown to AI
+- **Unified Conversation Context**: 12 message limit shared between all AIs
+- **Context Expiry**: 30 minutes of inactivity
+- **Context Filtering**: Claude Haiku-powered relevance filtering for:
+  - Conversation context (previous messages)
+  - Permanent context (user-specific information)
+  - Channel context (recent channel activity)
+- **Unfiltered Settings**: Always-applied global preferences (bypass filtering)
+- **Context Types**:
+  - **Conversation**: Recent AI interactions per user/channel
+  - **Channel**: General channel discussion for situational awareness
+  - **Permanent**: Filtered user information and preferences
+  - **Settings**: Unfiltered mandatory preferences
 
 ### Logging Configuration
 ```python
@@ -366,6 +473,10 @@ See [SYSTEMD_SETUP.md](SYSTEMD_SETUP.md) for detailed setup instructions.
 - ✅ **Migrated crafting module to direct Claude API**
 - ✅ **Enhanced error handling with user-friendly messages**
 - ✅ **Standardized coding patterns across modules**
+- ✅ **Admin system architecture refactor**: Split monolithic parser into focused modules
+- ✅ **Two-phase admin parsing**: Identify action type → extract parameters approach  
+- ✅ **Performance optimization**: User lookup optimized from 100ms to 1ms
+- ✅ **Debug message cleanup**: Removed all debug print statements from admin system
 
 ### Testing
 ```bash
@@ -386,9 +497,9 @@ python -c "from src.ai.handler_refactored import AIHandler; print('AI handler im
 - **discord.py** (2.5.2) - Discord API wrapper
 - **groq** (0.30.0) - Groq API client
 - **openai** (1.57.0) - OpenAI API client (for compatibility)
-- **aiohttp** (3.9.1) - Async HTTP for Claude and Perplexity
-- **google-api-python-client** (2.108.0) - Google Search
-- **python-dotenv** (1.0.0) - Environment management
+- **aiohttp** (3.9.1) - Async HTTP client for Claude and Perplexity APIs
+- **google-api-python-client** (2.108.0) - Google Custom Search integration
+- **python-dotenv** (1.0.0) - Environment variable management
 
 ## 🆘 Troubleshooting
 
@@ -406,10 +517,17 @@ python -c "from src.config import config; print('Config loaded:', config.is_vali
 # Ensure API keys are valid
 ```
 
-#### User/Member Errors
-The bot now properly distinguishes between `discord.User` and `discord.Member` objects:
+#### Admin Command Issues
+
+**"Command not recognized as admin action"**
+- **Cause**: Missing Guild Members Intent in Discord Developer Portal
+- **Symptoms**: Bot can only see itself in guild.members, commands like "set user's nickname" fail
+- **Fix**: Enable "Server Members Intent" in Discord Developer Portal and restart bot
+
+**User/Member Errors**
+The bot properly distinguishes between `discord.User` and `discord.Member` objects:
 - **User objects**: Basic user info, cannot be edited
-- **Member objects**: Server-specific, can change nicknames/roles
+- **Member objects**: Server-specific, can change nicknames/roles  
 - **Fix**: Bot will show clear error messages when operations require Member objects
 
 #### Rate Limiting
@@ -453,8 +571,8 @@ python -c "from src.utils.logging import get_logger; get_logger('test').info('Te
 - **Rate Limiting Metrics**: Request tracking per user
 
 ### Cost Optimization
-- **Hybrid Search**: ~$0.002 per Claude request vs $5+ Perplexity
-- **Context Filtering**: Reduces token usage while maintaining quality
+- **Hybrid Search**: Uses cost-effective Claude for query optimization, more expensive but comprehensive Perplexity for search result analysis
+- **Context Filtering**: Reduces token usage while maintaining response quality
 - **Smart Caching**: Efficient data storage and retrieval
 - **Request Batching**: Optimized API usage patterns
 
