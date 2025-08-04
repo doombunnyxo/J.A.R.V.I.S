@@ -230,7 +230,10 @@ class AIHandler:
             
             if is_admin_command:
                 # Admin command path - use admin processor
-                return await self.admin_processor.process_admin_command(message, query)
+                logger.info(f"Detected admin command, routing to admin processor: {query}")
+                admin_response = await self.admin_processor.process_admin_command(message, query)
+                logger.info(f"Admin processor returned: {admin_response[:100]}...")
+                return admin_response
             else:
                 # Search command path  
                 return await self._handle_search_with_openai(message, query)

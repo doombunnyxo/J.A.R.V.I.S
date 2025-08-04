@@ -38,10 +38,12 @@ class AdminProcessor:
             # Check admin permissions
             if not is_admin(message.author.id):
                 logger.warning(f"Non-admin user {message.author.display_name} ({message.author.id}) tried admin command")
-                return f"❌ Access Denied: You don't have permission to perform admin actions.\n" + \
-                       f"Your Discord ID: `{message.author.id}`\n" + \
-                       f"Authorized ID: `{config.AUTHORIZED_USER_ID}`\n" + \
-                       f"To fix: Set `AUTHORIZED_USER_ID={message.author.id}` in your environment variables"
+                error_msg = f"❌ **Access Denied**\n" + \
+                           f"Your Discord ID: `{message.author.id}`\n" + \
+                           f"Authorized ID: `{config.AUTHORIZED_USER_ID}`\n" + \
+                           f"Set environment: `AUTHORIZED_USER_ID={message.author.id}`"
+                logger.info(f"Sending permission error: {error_msg}")
+                return error_msg
             
             # Check if this needs web search (role reorganization)
             if await self._needs_role_search(query):

@@ -15,7 +15,12 @@ class AdminActionHandler:
         """Execute administrative actions based on AI interpretation"""
         
         if not is_admin(message.author.id):
-            return "❌ **Access Denied**: You don't have permission to perform admin actions."
+            from ..config import config
+            return f"❌ **Access Denied**\n" + \
+                   f"Your Discord ID: `{message.author.id}`\n" + \
+                   f"Authorized ID: `{config.AUTHORIZED_USER_ID}`\n" + \
+                   f"Match: {message.author.id == config.AUTHORIZED_USER_ID}\n" + \
+                   f"Types: {type(message.author.id)} vs {type(config.AUTHORIZED_USER_ID)}"
         
         try:
             guild = message.guild
