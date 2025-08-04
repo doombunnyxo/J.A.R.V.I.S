@@ -269,7 +269,8 @@ Return only relevant permanent context items, one per line, in the exact same fo
                 channel_messages = self.get_channel_context(channel_id, limit=35)
                 if channel_messages:
                     channel_context_text = "\n".join(channel_messages)
-                    context_parts.append(f"Recent channel discussion:\n{channel_context_text}")
+                    current_channel_name = message.channel.name if message and hasattr(message.channel, 'name') else "current channel"
+                    context_parts.append(f"Recent discussion in #{current_channel_name}:\n{channel_context_text}")
                 
                 # Check if user mentioned other channels and include their context
                 if message and message.channel_mentions:
@@ -325,7 +326,8 @@ Return only relevant permanent context items, one per line, in the exact same fo
                 channel_messages = self.get_channel_context(channel_id, limit=35)
                 if channel_messages:
                     channel_context_text = "\n".join(channel_messages)
-                    context_parts.append(f"Recent channel discussion:\n{channel_context_text}")
+                    current_channel_name = message.channel.name if message and hasattr(message.channel, 'name') else "current channel"
+                    context_parts.append(f"Recent discussion in #{current_channel_name}:\n{channel_context_text}")
                 
                 # Check if user mentioned other channels and include their context
                 if message and message.channel_mentions:
