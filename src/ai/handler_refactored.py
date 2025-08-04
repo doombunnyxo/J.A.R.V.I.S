@@ -228,11 +228,15 @@ class AIHandler:
             query_lower = query.lower()
             is_admin_command = any(keyword in query_lower for keyword in ADMIN_KEYWORDS)
             
+            # Debug routing decision
+            matched_keywords = [keyword for keyword in ADMIN_KEYWORDS if keyword in query_lower]
+            logger.info(f"🔍 ROUTING DEBUG: Query='{query}' | Admin keywords found: {matched_keywords} | Is admin command: {is_admin_command}")
+            
             if is_admin_command:
                 # Admin command path - use admin processor
                 logger.info(f"Detected admin command, routing to admin processor: {query}")
                 admin_response = await self.admin_processor.process_admin_command(message, query)
-                logger.info(f"Admin processor returned: {admin_response[:100]}...")
+                logger.info(f"Admin processor returned: {admin_response[:100] if admin_response else 'None/Empty'}...")
                 return admin_response
             else:
                 # Search command path  

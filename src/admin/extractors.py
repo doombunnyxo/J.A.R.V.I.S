@@ -14,8 +14,13 @@ class AdminParameterExtractors:
     async def extract_nickname_params(self, content: str, original_content: str, guild, message_author) -> Optional[Dict[str, Any]]:
         """Extract parameters for nickname change action"""
         
+        from ..utils.logging import get_logger
+        logger = get_logger(__name__)
+        logger.info(f"👤 NICKNAME EXTRACTOR DEBUG: Extracting from '{original_content}'")
+        
         # Find the user to rename
         user = await self.utils.find_user(original_content, guild, message_author)
+        logger.info(f"👤 NICKNAME EXTRACTOR DEBUG: Found user: {user}")
         if not user:
             return None
         

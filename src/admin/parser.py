@@ -27,7 +27,7 @@ class AdminIntentParser:
         
         # Phase 1: Quickly identify action type
         action_type = self._identify_action_type(content)
-        logger.info(f"Identified action type: {action_type}")
+        logger.info(f"🎯 ADMIN PARSER DEBUG: Action type identified: {action_type} for content: '{content}'")
         
         if not action_type:
             return None, None
