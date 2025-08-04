@@ -81,8 +81,12 @@ class AdminIntentParser:
                     # Additional validation for some ambiguous cases
                     if action_type == 'ban_user' and 'unban' in content:
                         continue  # This is actually an unban
-                    if action_type == 'bulk_delete' and not any(msg_word in content for msg_word in ['message', 'messages', 'msg', 'msgs']):
-                        continue  # Delete without message context might not be bulk delete
+                    # Allow bulk_delete if there's a number, even without "message" keyword
+                    if action_type == 'bulk_delete':
+                        has_message_word = any(msg_word in content for msg_word in ['message', 'messages', 'msg', 'msgs'])
+                        has_number = any(char.isdigit() for char in content)
+                        if not (has_message_word or has_number):
+                            continue  # Delete without message context or number might not be bulk delete
                     
                     
                     return action_type
