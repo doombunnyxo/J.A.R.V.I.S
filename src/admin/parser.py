@@ -122,13 +122,13 @@ class AdminIntentParser:
     async def _extract_nickname_params(self, content: str, original_content: str, guild, message_author) -> Optional[Dict[str, Any]]:
         """Extract parameters for nickname change action"""
         
-        debug_msg = f"DEBUG: _extract_nickname_params called with content: '{content}'"
+        debug_msg = f"DEBUG: _extract_nickname_params called with:\n- content: '{content}'\n- original_content: '{original_content}'"
         print(debug_msg)
         if self.debug_channel:
             await self.debug_channel.send(debug_msg)
         
-        # Find the user to rename
-        user = await self._find_user(content, guild, message_author)
+        # Find the user to rename (use original_content to preserve mentions)
+        user = await self._find_user(original_content, guild, message_author)
         debug_msg = f"DEBUG: Found user in nickname extraction: {user}"
         print(debug_msg)
         if self.debug_channel:
