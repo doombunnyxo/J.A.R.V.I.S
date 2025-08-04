@@ -232,8 +232,26 @@ class AdminIntentParser:
     
     async def _extract_bulk_delete_params(self, content, original_content, guild, message_author):
         """Extract parameters for bulk delete action"""
-        # TODO: Implement bulk delete parameter extraction
-        return None
+        parameters = {}
+        
+        # Extract number of messages (look for reasonable counts 1-1000)
+        numbers = re.findall(r'\b(\d+)\b', content)
+        limit = 1  # default
+        for num_str in numbers:
+            num = int(num_str)
+            if 1 <= num <= 1000:  # Reasonable message count
+                limit = num
+                break
+        parameters["limit"] = limit
+        
+        # Check if targeting a specific user (bot messages)
+        if any(word in content for word in ['your', 'you', 'bot']):
+            # Target the bot itself
+            bot_member = guild.get_member(self.bot.user.id)
+            if bot_member:
+                parameters["user_filter"] = bot_member
+        
+        return parameters
     
     async def _extract_create_channel_params(self, content, original_content, guild, message_author):
         """Extract parameters for create channel action"""
