@@ -1157,10 +1157,7 @@ Respond with ONLY the specific admin command, nothing else."""
         """Handle search queries using the existing hybrid search pipeline"""
         try:
             # Check if this is a search: command that should use GPT-4o mini for summarization
-            original_query = query
-            forced_provider, _ = routing.extract_forced_provider(message.content)
-            
-            if forced_provider == "openai" and message.content.lower().startswith("search:"):
+            if "search:" in message.content.lower():
                 # Use pure OpenAI for both optimization and summarization
                 from ..search.search_pipeline import SearchPipeline
                 from ..search.openai_adapter import OpenAISearchProvider
