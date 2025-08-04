@@ -890,9 +890,8 @@ The goal is to find authentic terminology and structure that can be adapted for 
             import aiohttp
             
             headers = {
-                "x-api-key": config.ANTHROPIC_API_KEY,
+                "Authorization": f"Bearer {config.OPENAI_API_KEY}",
                 "Content-Type": "application/json",
-                "anthropic-version": "2023-06-01"
             }
             
             # System message for research analysis and confirmation planning
@@ -931,27 +930,28 @@ Respond with ONLY the JSON, no other text."""
                 "max_tokens": 300,
                 "temperature": 0.1,
                 "messages": [
+                    {"role": "system", "content": system_message},
                     {"role": "user", "content": f"User request: {original_query}\n\nAnalyze the research and create confirmation info."}
                 ]
             }
             
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post("https://api.anthropic.com/v1/messages", 
+                async with session.post("https://api.openai.com/v1/chat/completions", 
                                        headers=headers, json=payload) as response:
                     if response.status == 200:
                         result = await response.json()
-                        claude_response = result["content"][0]["text"].strip()
+                        openai_response = result["choices"][0]["message"]["content"].strip()
                         
                         # Parse JSON response
                         import json
                         try:
-                            confirmation_info = json.loads(claude_response)
+                            confirmation_info = json.loads(openai_response)
                             return confirmation_info
                         except json.JSONDecodeError as e:
-                            return {"error": f"❌ Failed to parse Claude response as JSON: {str(e)}"}
+                            return {"error": f"❌ Failed to parse OpenAI response as JSON: {str(e)}"}
                     else:
-                        raise Exception(f"Claude API error {response.status}: {await response.text()}")
+                        raise Exception(f"OpenAI API error {response.status}: {await response.text()}")
                         
         except Exception as e:
             logger.debug(f"Claude research analysis failed: {e}")
@@ -1010,8 +1010,8 @@ Respond with ONLY the JSON, no other text."""
     async def _claude_generate_specific_admin_command(self, message, original_query: str, research_context: str) -> str:
         """Use Claude to generate a specific admin command text that the parser can interpret"""
         try:
-            if not config.has_anthropic_api():
-                return "❌ Claude API not configured"
+            if not config.has_openai_api():
+                return "❌ OpenAI API not configured"
             
             # This method is called AFTER user clicks ✅, so we generate a specific command
             user_context = await self.context_manager.build_full_context(
@@ -1022,9 +1022,8 @@ Respond with ONLY the JSON, no other text."""
             import aiohttp
             
             headers = {
-                "x-api-key": config.ANTHROPIC_API_KEY,
+                "Authorization": f"Bearer {config.OPENAI_API_KEY}",
                 "Content-Type": "application/json",
-                "anthropic-version": "2023-06-01"
             }
             
             # System message for generating specific admin commands
@@ -1057,20 +1056,21 @@ Respond with ONLY the specific command, no other text."""
                 "max_tokens": 100,
                 "temperature": 0.1,
                 "messages": [
+                    {"role": "system", "content": system_message},
                     {"role": "user", "content": f"User confirmed request: {original_query}\n\nGenerate specific admin command based on research."}
                 ]
             }
             
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post("https://api.anthropic.com/v1/messages", 
+                async with session.post("https://api.openai.com/v1/chat/completions", 
                                        headers=headers, json=payload) as response:
                     if response.status == 200:
                         result = await response.json()
-                        command = result["content"][0]["text"].strip()
+                        command = result["choices"][0]["message"]["content"].strip()
                         return command
                     else:
-                        raise Exception(f"Claude API error {response.status}: {await response.text()}")
+                        raise Exception(f"OpenAI API error {response.status}: {await response.text()}")
                         
         except Exception as e:
             logger.debug(f"Claude command generation failed: {e}")
@@ -1079,8 +1079,8 @@ Respond with ONLY the specific command, no other text."""
     async def _claude_generate_admin_commands(self, message, original_query: str, research_context: str) -> str:
         """Use Claude to analyze research and generate specific admin commands for Groq"""
         try:
-            if not config.has_anthropic_api():
-                return "❌ Claude API not configured"
+            if not config.has_openai_api():
+                return "❌ OpenAI API not configured"
             
             # Build context for Claude's command generation
             user_context = await self.context_manager.build_full_context(
@@ -1091,9 +1091,8 @@ Respond with ONLY the specific command, no other text."""
             import aiohttp
             
             headers = {
-                "x-api-key": config.ANTHROPIC_API_KEY,
+                "Authorization": f"Bearer {config.OPENAI_API_KEY}",
                 "Content-Type": "application/json",
-                "anthropic-version": "2023-06-01"
             }
             
             # Specialized system message for command generation
@@ -1131,20 +1130,21 @@ Respond with ONLY the specific admin command, nothing else."""
                 "max_tokens": 200,
                 "temperature": 0.1,
                 "messages": [
+                    {"role": "system", "content": system_message},
                     {"role": "user", "content": f"User request: {original_query}\n\nGenerate a specific admin command based on the research context provided above."}
                 ]
             }
             
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post("https://api.anthropic.com/v1/messages", 
+                async with session.post("https://api.openai.com/v1/chat/completions", 
                                        headers=headers, json=payload) as response:
                     if response.status == 200:
                         result = await response.json()
-                        command = result["content"][0]["text"].strip()
+                        command = result["choices"][0]["message"]["content"].strip()
                         return command
                     else:
-                        raise Exception(f"Claude API error {response.status}: {await response.text()}")
+                        raise Exception(f"OpenAI API error {response.status}: {await response.text()}")
                         
         except Exception as e:
             logger.debug(f"Claude command generation failed: {e}")

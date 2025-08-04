@@ -470,13 +470,13 @@ class CraftingProcessor:
             import aiohttp
             import json
             
-            if not config.has_anthropic_api():
+            if not config.has_openai_api():
                 return self._fallback_parse(user_query)
             
             # Get all available items for accurate matching
             available_items = list_craftable_items()
             
-            # Create strategic samples to show Claude the naming patterns
+            # Create strategic samples to show OpenAI the naming patterns
             pattern_samples = {
                 "weapons": [item for item in available_items if any(w in item for w in ['karpov_38', 'maula_pistol', 'drillshot_fk7', 'grda_44', 'jabal_spitdart', 'disruptor_m11', 'sword', 'rapier', 'dirk', 'kindjal']) and not any(part in item for part in ['engine', 'chassis', 'hull'])],
                 "vehicles": [item for item in available_items if any(v in item for v in ['sandbike_', 'buggy_', 'ornithopter_']) and any(part in item for part in ['engine', 'chassis', 'hull', 'wing', 'tread'])],
@@ -548,34 +548,35 @@ Available items (sample):
 
 Match this request to an exact database key. Remember: if a vehicle type was mentioned, all parts in the request belong to that vehicle."""
             
-            # Call Claude API directly
+            # Call OpenAI API directly
             headers = {
-                "x-api-key": config.ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json"
+                "Authorization": f"Bearer {config.OPENAI_API_KEY}",
+                "Content-Type": "application/json"
             }
             
             data = {
                 "model": "gpt-4o-mini",
-                "system": system_message,
-                "messages": [{"role": "user", "content": user_message}],
+                "messages": [
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": user_message}
+                ],
                 "max_tokens": 150,
                 "temperature": 0.0
             }
             
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    "https://api.anthropic.com/v1/messages",
+                    "https://api.openai.com/v1/chat/completions",
                     headers=headers,
                     json=data,
                     timeout=aiohttp.ClientTimeout(total=30)
                 ) as api_response:
                     if api_response.status != 200:
-                        logger.error(f"Claude API error: {api_response.status}")
+                        logger.error(f"OpenAI API error: {api_response.status}")
                         return self._fallback_parse(user_query)
                     
                     api_result = await api_response.json()
-                    response = api_result['content'][0]['text']
+                    response = api_result['choices'][0]['message']['content']
             
             result = response.strip()
             # Clean up any quotes or extra formatting
@@ -584,7 +585,7 @@ Match this request to an exact database key. Remember: if a vehicle type was men
             elif result.startswith('"'):
                 result = result[1:]
             
-            # Parse Claude's response
+            # Parse OpenAI's response
             if '|' in result:
                 parts = result.split('|')
                 
@@ -662,11 +663,11 @@ Match this request to an exact database key. Remember: if a vehicle type was men
                 return self._smart_fallback_match(user_query, available_items)
                 
         except Exception as e:
-            logger.debug(f"Claude recipe interpretation failed: {e}")
+            logger.debug(f"OpenAI recipe interpretation failed: {e}")
             return self._fallback_parse(user_query)
     
     def _fallback_parse(self, query: str) -> Tuple[str, int]:
-        """Simple fallback parsing when Claude is unavailable"""
+        """Simple fallback parsing when OpenAI is unavailable"""
         parts = query.split()
         item_name = parts[0].lower() if parts else ""
         quantity = 1

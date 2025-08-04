@@ -300,8 +300,8 @@ class AdminActionHandler:
         from ..config import config
         import aiohttp
         
-        if not config.has_anthropic_api():
-            return "❌ **Error**: Claude API not available for role analysis."
+        if not config.has_openai_api():
+            return "❌ **Error**: OpenAI API not available for role analysis."
         
         try:
             
@@ -391,14 +391,14 @@ Do not include any other text, explanations, or formatting beyond the rename pai
             
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post("https://api.anthropic.com/v1/messages", 
+                async with session.post("https://api.openai.com/v1/chat/completions", 
                                        headers=headers, json=payload) as response:
                     if response.status == 200:
                         result = await response.json()
-                        suggestions = result["content"][0]["text"].strip()
+                        suggestions = result["choices"][0]["message"]["content"].strip()
                     else:
                         error_text = await response.text()
-                        raise Exception(f"Claude API error {response.status}: {error_text}")
+                        raise Exception(f"OpenAI API error {response.status}: {error_text}")
             
             if not suggestions:
                 return "❌ **Error**: No suggestions received from AI analysis."
