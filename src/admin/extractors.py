@@ -44,6 +44,7 @@ class AdminParameterExtractors:
         nick_match = re.search(r'["\']([^"\']+)["\']', original_content)
         if nick_match:
             nickname = nick_match.group(1)
+            logger.info(f"👤 NICKNAME EXTRACTOR: Found nickname in quotes: '{nickname}'")
         else:
             # Try various patterns for nickname extraction
             patterns = [
@@ -54,12 +55,27 @@ class AdminParameterExtractors:
                 r'name\s+to\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s|$)', # "change name to NewName"
             ]
             
-            for pattern in patterns:
+            logger.info(f"👤 NICKNAME EXTRACTOR: Trying patterns on '{original_content}'")
+            for i, pattern in enumerate(patterns):
                 match = re.search(pattern, original_content, re.IGNORECASE)
                 if match:
                     nickname = match.group(1).strip()
+                    logger.info(f"👤 NICKNAME EXTRACTOR: Pattern {i} matched: '{nickname}'")
                     break
+                else:
+                    logger.info(f"👤 NICKNAME EXTRACTOR: Pattern {i} failed: {pattern}")
         
+        # Send final debug to Discord
+        if guild and hasattr(guild, 'text_channels') and guild.text_channels:
+            import asyncio
+            try:
+                debug_channel = guild.text_channels[0] if guild.text_channels else None
+                if debug_channel:
+                    asyncio.create_task(debug_channel.send(f"👤 **NICKNAME FINAL**\nUser: `{user}`\nNickname: `{nickname}`\nReturning: `{nickname is not None and user is not None}`"))
+            except:
+                pass
+        
+        logger.info(f"👤 NICKNAME EXTRACTOR: Final result - User: {user}, Nickname: '{nickname}'")
         return {"user": user, "nickname": nickname}
     
     async def extract_kick_params(self, content, original_content, guild, message_author):
