@@ -14,7 +14,7 @@ from ..config import config
 from ..utils.logging import get_logger
 from .parser import AdminIntentParser
 from .permissions import is_admin
-from .actions import AdminActions
+from .actions import AdminActionHandler
 
 logger = get_logger(__name__)
 
@@ -26,7 +26,7 @@ class AdminProcessor:
         self.bot = bot
         self.ai_handler = ai_handler
         self.parser = AdminIntentParser(bot)
-        self.actions = AdminActions(bot)
+        self.actions = AdminActionHandler(bot)
         self.groq_client = Groq(api_key=config.GROQ_API_KEY) if config.has_groq_api() else None
         
         # Track pending admin actions
@@ -303,17 +303,17 @@ Generate role list:"""
     def _format_confirmation(self, action_type: str, parameters: dict) -> str:
         """Format confirmation message for standard admin actions"""
         confirmations = {
-            'kick_user': lambda p: f"🦵 Kick user **{p['user']}**{f' - Reason: {p['reason']}' if p.get('reason') else ''}",
-            'ban_user': lambda p: f"🔨 Ban user **{p['user']}**{f' - Reason: {p['reason']}' if p.get('reason') else ''}",
+            'kick_user': lambda p: f"🦵 Kick user **{p['user']}**" + (f" - Reason: {p['reason']}" if p.get('reason') else ""),
+            'ban_user': lambda p: f"🔨 Ban user **{p['user']}**" + (f" - Reason: {p['reason']}" if p.get('reason') else ""),
             'unban_user': lambda p: f"✅ Unban user **{p['user']}**",
-            'timeout_user': lambda p: f"⏰ Timeout **{p['user']}** for {p['duration']} minute(s){f' - Reason: {p['reason']}' if p.get('reason') else ''}",
+            'timeout_user': lambda p: f"⏰ Timeout **{p['user']}** for {p['duration']} minute(s)" + (f" - Reason: {p['reason']}" if p.get('reason') else ""),
             'remove_timeout': lambda p: f"✅ Remove timeout from **{p['user']}**",
             'change_nickname': lambda p: f"✏️ Change **{p['user']}'s** nickname to **{p['nickname']}**",
             'add_role': lambda p: f"➕ Add role **{p['role']}** to **{p['user']}**",
             'remove_role': lambda p: f"➖ Remove role **{p['role']}** from **{p['user']}**",
             'rename_role': lambda p: f"✏️ Rename role **{p['old_name']}** to **{p['new_name']}**",
             'bulk_delete': lambda p: self._format_bulk_delete(p),
-            'create_channel': lambda p: f"➕ Create {p['type']} channel **{p['name']}**{f' in category {p['category']}' if p.get('category') else ''}",
+            'create_channel': lambda p: f"➕ Create {p['type']} channel **{p['name']}**" + (f" in category {p['category']}" if p.get('category') else ""),
             'delete_channel': lambda p: f"🗑️ Delete channel **{p['channel']}**"
         }
         
@@ -374,16 +374,13 @@ Generate role list:"""
                 )
             else:
                 # Standard admin actions
-                success, result_msg = await self.actions.execute_action(
+                result_msg = await self.actions.execute_admin_action(
+                    message,
                     action_type,
-                    action_data['parameters'],
-                    message.guild
+                    action_data['parameters']
                 )
                 
-                if success:
-                    return f"✅ {result_msg}"
-                else:
-                    return f"❌ {result_msg}"
+                return result_msg
                     
         except Exception as e:
             logger.error(f"Admin action execution failed: {e}")
