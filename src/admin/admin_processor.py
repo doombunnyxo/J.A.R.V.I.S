@@ -33,8 +33,11 @@ class AdminProcessor:
     async def process_admin_command(self, message, query: str) -> str:
         """Main entry point for processing admin commands"""
         try:
+            logger.info(f"Processing admin command from {message.author.display_name}: {query}")
+            
             # Check admin permissions
             if not is_admin(message.author.id):
+                logger.warning(f"Non-admin user {message.author.display_name} ({message.author.id}) tried admin command")
                 return "❌ You don't have permission to use admin commands."
             
             # Check if this needs web search (role reorganization)
@@ -98,6 +101,7 @@ class AdminProcessor:
             )
             
             if not action_type or not parameters:
+                logger.info(f"No admin action detected in query: {query}")
                 return None  # Let the AI handle it as a regular message
             
             # Create confirmation message

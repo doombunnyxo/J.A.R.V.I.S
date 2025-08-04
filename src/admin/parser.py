@@ -21,8 +21,13 @@ class AdminIntentParser:
         """Parse user message to detect admin intentions and extract parameters"""
         content = message_content.lower()
         
+        from ..utils.logging import get_logger
+        logger = get_logger(__name__)
+        logger.info(f"Parsing admin intent from: '{message_content}'")
+        
         # Phase 1: Quickly identify action type
         action_type = self._identify_action_type(content)
+        logger.info(f"Identified action type: {action_type}")
         
         if not action_type:
             return None, None
@@ -52,12 +57,12 @@ class AdminIntentParser:
             'remove_timeout': ['remove timeout', 'unmute', 'unsilence'],
             
             # Nickname changes
-            'change_nickname': ['nickname', 'rename user', 'rename member', 'change name of'],
+            'change_nickname': ['nickname', 'nick', 'rename user', 'rename member', 'change name of', 'change nickname', 'set nickname', 'update nickname'],
             
             # Role management
             'add_role': ['add role', 'give role'],
             'remove_role': ['remove role', 'take role'],
-            'rename_role': ['rename role', 'change role name', 'update role name'],
+            'rename_role': ['rename role', 'change role name', 'update role name', 'update the role name'],
             'reorganize_roles': ['reorganize roles', 'fix role names', 'improve role names', 'clean up roles'],
             
             # Message management

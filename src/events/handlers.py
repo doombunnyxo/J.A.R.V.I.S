@@ -81,32 +81,14 @@ class EventHandlers(commands.Cog):
                 await self.ai_handler.handle_ai_command(message, craft_query, "crafting")
                 return
             
-            # Check for groq: or g: patterns
-            elif "groq:" in content or " g:" in content:
-                if "groq:" in content:
-                    groq_index = content.find("groq:")
-                    query = message.content[groq_index + 5:].strip()
-                else:  # " g:" case
-                    g_index = content.find(" g:")
-                    query = message.content[g_index + 3:].strip()
+            # Check for ai: pattern (direct AI chat)
+            elif "ai:" in content:
+                ai_index = content.find("ai:")
+                query = message.content[ai_index + 3:].strip()
                 
                 if query and self.ai_handler:
-                    logger.debug(f"[EventHandler-{self.instance_id}] Forcing Groq for: {query}")
-                    await self.ai_handler.handle_ai_command(message, query, force_provider="groq")
-                return
-            
-            # Check for perplexity: or p: patterns
-            elif "perplexity:" in content or " p:" in content:
-                if "perplexity:" in content:
-                    perplexity_index = content.find("perplexity:")
-                    query = message.content[perplexity_index + 11:].strip()
-                else:  # " p:" case
-                    p_index = content.find(" p:")
-                    query = message.content[p_index + 3:].strip()
-                
-                if query and self.ai_handler:
-                    logger.debug(f"[EventHandler-{self.instance_id}] Forcing Perplexity for: {query}")
-                    await self.ai_handler.handle_ai_command(message, query, force_provider="perplexity")
+                    logger.debug(f"[EventHandler-{self.instance_id}] Forcing direct AI for: {query}")
+                    await self.ai_handler.handle_ai_command(message, query, force_provider="direct-ai")
                 return
             
             # Default AI processing
@@ -115,8 +97,13 @@ class EventHandlers(commands.Cog):
                 logger.debug(f"AI query: {ai_query}")
                 
                 if ai_query and self.ai_handler:
-                    logger.debug(f"[EventHandler-{self.instance_id}] Calling AI handler for message {message.id}")
-                    await self.ai_handler.handle_ai_command(message, ai_query)
+                    try:
+                        logger.debug(f"[EventHandler-{self.instance_id}] Calling AI handler for message {message.id}")
+                        await self.ai_handler.handle_ai_command(message, ai_query)
+                    except Exception as e:
+                        logger.error(f"[EventHandler-{self.instance_id}] AI handler failed for message {message.id}: {e}")
+                        await message.channel.send(f"❌ Error processing your request: {str(e)}")
+                        return
         
         
         # Process commands
