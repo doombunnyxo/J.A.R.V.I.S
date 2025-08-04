@@ -316,10 +316,13 @@ class AdminIntentParser:
         
         # Check for @username format (converted mentions)
         at_mentions = re.findall(r'@([a-zA-Z0-9_.-]+)', text)
+        print(f"DEBUG: Found @mentions in text: {at_mentions}")
         if at_mentions:
             for username in at_mentions:
                 username_lower = username.lower()
+                print(f"DEBUG: Looking for username: '{username_lower}'")
                 for member in guild.members:
+                    print(f"DEBUG: Checking member: '{member.name.lower()}' / '{member.display_name.lower()}'")
                     if (member.name.lower() == username_lower or 
                         member.display_name.lower() == username_lower):
                         print(f"DEBUG: Found user by @username match: {member}")
