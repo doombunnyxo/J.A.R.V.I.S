@@ -191,7 +191,7 @@ Return JSON with:
     async def _search_for_theme(self, search_query: str) -> str:
         """Perform Google search for theme information"""
         try:
-            if not config.has_google_api():
+            if not config.has_google_search():
                 return "❌ Google search not configured"
             
             url = "https://www.googleapis.com/customsearch/v1"
