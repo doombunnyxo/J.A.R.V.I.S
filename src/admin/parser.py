@@ -296,12 +296,14 @@ class AdminIntentParser:
                             await self.debug_channel.send(f"DEBUG: Found user by Discord mention: {user.name}")
                         return user
                     else:
-                        # Debug guild info
+                        # Try to get user from message author if it matches the target
+                        if message_author and message_author.id == target_user_id:
+                            if self.debug_channel:
+                                await self.debug_channel.send(f"DEBUG: Found user via message_author: {message_author.name}")
+                            return message_author
+                        
                         if self.debug_channel:
-                            await self.debug_channel.send(f"DEBUG: User {target_user_id} not found in guild")
-                            await self.debug_channel.send(f"DEBUG: Guild name: {guild.name}, member count: {guild.member_count}")
-                            member_ids = [str(m.id) for m in list(guild.members)[:5]]
-                            await self.debug_channel.send(f"DEBUG: First 5 member IDs: {member_ids}")
+                            await self.debug_channel.send(f"DEBUG: User {target_user_id} not found - bot missing Guild Members Intent")
                         return None
         
         # Check for first-person pronouns referring to the message author
