@@ -34,6 +34,7 @@ class AdminProcessor:
         """Main entry point for processing admin commands"""
         try:
             logger.info(f"Processing admin command from {message.author.display_name}: {query}")
+            await message.channel.send(f"🎯 **ADMIN PROCESSOR DEBUG**\nProcessing: `{query}`\nFrom: `{message.author.display_name}`")
             
             # Check admin permissions
             if not is_admin(message.author.id):
@@ -102,7 +103,7 @@ class AdminProcessor:
         try:
             # Use the existing parser
             action_type, parameters = await self.parser.parse_admin_intent(
-                query, message.guild, message.author
+                query, message.guild, message.author, message.channel
             )
             
             if not action_type or not parameters:

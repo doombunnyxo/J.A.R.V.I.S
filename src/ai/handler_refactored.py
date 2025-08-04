@@ -232,6 +232,9 @@ class AIHandler:
             matched_keywords = [keyword for keyword in ADMIN_KEYWORDS if keyword in query_lower]
             logger.info(f"🔍 ROUTING DEBUG: Query='{query}' | Admin keywords found: {matched_keywords} | Is admin command: {is_admin_command}")
             
+            # Send debug to Discord
+            await message.channel.send(f"🔍 **ROUTING DEBUG**\nQuery: `{query}`\nMatched keywords: `{matched_keywords}`\nIs admin command: `{is_admin_command}`")
+            
             if is_admin_command:
                 # Admin command path - use admin processor
                 logger.info(f"Detected admin command, routing to admin processor: {query}")

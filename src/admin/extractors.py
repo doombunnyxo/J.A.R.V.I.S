@@ -21,6 +21,19 @@ class AdminParameterExtractors:
         # Find the user to rename
         user = await self.utils.find_user(original_content, guild, message_author)
         logger.info(f"👤 NICKNAME EXTRACTOR DEBUG: Found user: {user}")
+        
+        # Send debug to Discord - get channel from guild context
+        if guild and hasattr(guild, 'text_channels') and guild.text_channels:
+            # Find the channel where this was called - this is a hack but works for debug
+            import asyncio
+            try:
+                # We'll try to send to the first available text channel for debug
+                debug_channel = guild.text_channels[0] if guild.text_channels else None
+                if debug_channel:
+                    asyncio.create_task(debug_channel.send(f"👤 **NICKNAME EXTRACTOR DEBUG**\nOriginal: `{original_content}`\nFound user: `{user}`"))
+            except:
+                pass
+        
         if not user:
             return None
         

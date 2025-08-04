@@ -17,7 +17,7 @@ class AdminIntentParser:
         self.utils = AdminUtils(bot)
         self.extractors = AdminParameterExtractors(self.utils)
     
-    async def parse_admin_intent(self, message_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    async def parse_admin_intent(self, message_content: str, guild, message_author=None, channel=None) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         """Parse user message to detect admin intentions and extract parameters"""
         content = message_content.lower()
         
@@ -26,7 +26,7 @@ class AdminIntentParser:
         logger.info(f"Parsing admin intent from: '{message_content}'")
         
         # Phase 1: Quickly identify action type
-        action_type = self._identify_action_type(content)
+        action_type = self._identify_action_type(content, channel)
         logger.info(f"🎯 ADMIN PARSER DEBUG: Action type identified: {action_type} for content: '{content}'")
         
         if not action_type:
@@ -44,7 +44,7 @@ class AdminIntentParser:
         except Exception as e:
             return None, None
     
-    def _identify_action_type(self, content: str) -> Optional[str]:
+    def _identify_action_type(self, content: str, channel=None) -> Optional[str]:
         """Phase 1: Quickly identify what type of admin action this is"""
         
         # Check for specific action keywords (order matters - more specific first)
@@ -56,8 +56,8 @@ class AdminIntentParser:
             'timeout_user': ['timeout', 'mute', 'silence', 'quiet', 'shush'],
             'remove_timeout': ['remove timeout', 'unmute', 'unsilence'],
             
-            # Nickname changes
-            'change_nickname': ['nickname', 'nick', 'rename user', 'rename member', 'change name of', 'change nickname', 'set nickname', 'update nickname', 'rename'],
+            # Nickname changes (more specific patterns first)
+            'change_nickname': ['change nickname', 'set nickname', 'update nickname', 'rename user', 'rename member', 'change name of', 'nickname', 'nick', 'rename'],
             
             # Role management
             'add_role': ['add role', 'give role'],
@@ -82,6 +82,16 @@ class AdminIntentParser:
                         continue  # This is actually an unban
                     if action_type == 'bulk_delete' and not any(msg_word in content for msg_word in ['message', 'messages', 'msg', 'msgs']):
                         continue  # Delete without message context might not be bulk delete
+                    
+                    # Debug: log which keyword matched
+                    from ..utils.logging import get_logger
+                    logger = get_logger(__name__)
+                    logger.info(f"🔍 PATTERN MATCH: '{keyword}' in '{content}' → {action_type}")
+                    
+                    # Send debug to Discord if channel available
+                    if channel:
+                        import asyncio
+                        asyncio.create_task(channel.send(f"🔍 **PATTERN MATCH**\nKeyword: `{keyword}`\nContent: `{content}`\nAction: `{action_type}`"))
                     
                     return action_type
         
