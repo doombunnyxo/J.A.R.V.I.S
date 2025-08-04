@@ -265,24 +265,6 @@ class AdminIntentParser:
         return None
     
     def _find_role(self, text: str, guild):
-            member_name_lower = member.name.lower()
-            member_display_lower = member.display_name.lower()
-            
-            for word in words:
-                # Strip possessive forms and other punctuation
-                clean_word = word.lower().rstrip("'s").rstrip("'").rstrip(",").rstrip(".")
-                
-                if (clean_word == member_name_lower or 
-                    clean_word == member_display_lower or
-                    clean_word in member_name_lower or 
-                    clean_word in member_display_lower):
-                    print(f"DEBUG: Found user by name match: {member}")
-                    return member
-        
-        print(f"DEBUG: No user found in: {text}")
-        return None
-    
-    def _find_role(self, text: str, guild):
         """Find role by name with improved matching"""
         print(f"DEBUG: Looking for role in text: '{text}'")
         
