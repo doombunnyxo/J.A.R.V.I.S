@@ -463,7 +463,7 @@ class CraftingProcessor:
             return f"❌ **Error processing vehicle assembly:** {str(e)}\n\n**Original request:** {original_query}"
 
     async def _interpret_recipe_request(self, user_query: str, message=None) -> Tuple[str, int]:
-        """Use Claude Haiku to interpret natural language recipe requests and match to JSON structure"""
+        """Use OpenAI GPT-4o mini to interpret natural language recipe requests and match to JSON structure"""
         try:
             from src.config import config
             from dune_crafting import list_craftable_items
@@ -556,7 +556,7 @@ Match this request to an exact database key. Remember: if a vehicle type was men
             }
             
             data = {
-                "model": "claude-3-5-haiku-20241022",
+                "model": "gpt-4o-mini",
                 "system": system_message,
                 "messages": [{"role": "user", "content": user_message}],
                 "max_tokens": 150,

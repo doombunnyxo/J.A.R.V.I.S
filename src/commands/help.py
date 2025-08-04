@@ -133,10 +133,10 @@ class HelpCommands(commands.Cog):
             
             if user_is_admin:
                 embed.add_field(
-                    name="🔧 Admin: Claude Models",
-                    value="• `@bot use haiku to...` - Fast (default)\n" +
-                          "• `@bot with sonnet...` - Balanced\n" +
-                          "• `@bot model: opus...` - Most capable",
+                    name="🔧 Admin: OpenAI Models",
+                    value="• `@bot use gpt-4o-mini to...` - Fast (default)\n" +
+                          "• `@bot with gpt-4o...` - Balanced\n" +
+                          "• `@bot model: gpt-4-turbo...` - Most capable",
                     inline=False
                 )
         

@@ -5,8 +5,8 @@
 ### Core System
 - **Entry Point**: `main.py` - Bot initialization, cog loading, logging setup
 - **Command Prefix**: `!` for slash commands
-- **AI Routing**: Hybrid system using Groq (chat) + Claude (admin/optimization) + Perplexity (search analysis)
-- **Context Management**: Claude Haiku-powered filtering across multiple context types
+- **AI Routing**: Hybrid system using Groq (chat) + OpenAI (admin/optimization) + Perplexity (search analysis)
+- **Context Management**: OpenAI GPT-4o mini-powered filtering across multiple context types
 
 ### File Structure
 ```
@@ -23,7 +23,7 @@ src/
 │   └── permissions.py       # Admin permission checking
 ├── ai/
 │   ├── handler_refactored.py # Main AI routing and processing
-│   ├── context_manager.py   # Context filtering with Claude Haiku
+│   ├── context_manager.py   # Context filtering with OpenAI GPT-4o mini
 │   ├── routing.py           # Query routing keywords and logic
 │   └── crafting_module.py   # Crafting system integration
 ├── commands/                # Discord slash commands
@@ -36,10 +36,12 @@ src/
 │   └── handlers.py         # Discord event processing
 ├── search/                 # Search system architecture
 │   ├── search_pipeline.py  # Generic search interface
-│   ├── hybrid_search_provider.py # Claude+Perplexity (default)
-│   ├── claude_adapter.py   # Pure Claude search
+│   ├── hybrid_search_provider.py # OpenAI+Perplexity (default)
+│   ├── claude_adapter.py   # Pure Claude search (legacy)
+│   ├── openai_adapter.py   # Pure OpenAI search (primary)
 │   ├── perplexity_adapter.py # Pure Perplexity search
 │   ├── claude.py           # Legacy Claude functions
+│   ├── openai.py           # Primary OpenAI functions
 │   ├── perplexity.py       # Legacy Perplexity functions
 │   └── google.py           # Google Custom Search
 ├── data/
@@ -60,7 +62,8 @@ AUTHORIZED_USER_ID          # Admin user ID (integer)
 ### Optional API Keys
 ```
 GROQ_API_KEY               # For chat functionality
-ANTHROPIC_API_KEY          # For admin commands and search optimization  
+OPENAI_API_KEY             # For admin commands and search optimization  
+ANTHROPIC_API_KEY          # Legacy Claude support (being replaced)
 PERPLEXITY_API_KEY         # For search result analysis
 GOOGLE_API_KEY             # For web search
 GOOGLE_SEARCH_ENGINE_ID    # Google Custom Search Engine ID
@@ -92,10 +95,15 @@ intents.message_content = True
 - **Max Tokens**: 1000
 - **Use**: General chat, conversations
 
-### Claude Configuration  
-- **Models**: `claude-3-5-haiku-20241022` (default), `claude-3-5-sonnet`, `claude-3-opus`
-- **Temperature**: 0.2 (hardcoded for search tasks)
+### OpenAI Configuration  
+- **Models**: `gpt-4o-mini` (default), `gpt-4o`, `gpt-4-turbo`, `gpt-4`
+- **Temperature**: 0.1-0.2 (varies by function)
 - **Use**: Admin commands, search optimization, context filtering
+
+### Claude Configuration (Legacy)
+- **Models**: `claude-3-5-haiku-20241022`, `claude-3-5-sonnet`, `claude-3-opus`
+- **Temperature**: 0.2 (hardcoded for search tasks)
+- **Use**: Legacy support, being replaced by OpenAI
 
 ### Perplexity Configuration
 - **Model**: `sonar`
@@ -147,11 +155,11 @@ channel_conversations: deque(maxlen=50)  # 50 messages per channel
 ### Context Types
 1. **Conversation Context**: Recent AI interactions per user/channel (12 messages, 30min expiry)
 2. **Channel Context**: General channel messages (50 stored, 35 shown, loaded from Discord history on startup)
-3. **Permanent Context**: User-specific info, filtered per query by Claude Haiku
+3. **Permanent Context**: User-specific info, filtered per query by OpenAI GPT-4o mini
 4. **Settings (Unfiltered)**: Global preferences, bypass all filtering
 
 ### Context Filtering
-- **All filtering uses Claude Haiku** (`claude-3-5-haiku-20241022`)
+- **All filtering uses OpenAI GPT-4o mini** (`gpt-4o-mini`)
 - **Temperature**: 0.1 for context filtering tasks
 - **Max Tokens**: 300-600 depending on task
 - **Filtering Types**: Conversation, permanent, and unified context filtering
@@ -161,12 +169,12 @@ channel_conversations: deque(maxlen=50)  # 50 messages per channel
 ### Hybrid Search (Default)
 ```python
 class HybridSearchProvider:
-    # Claude Haiku: Fast, cost-effective query optimization
+    # OpenAI GPT-4o mini: Fast, reliable query optimization
     # Perplexity Sonar: High-quality result analysis
 ```
 
 ### Search Routing Keywords
-**Triggers Claude/Perplexity search:**
+**Triggers OpenAI/Perplexity search:**
 - Current events: `current`, `latest`, `recent`, `today`, `2025`
 - Questions: `what is`, `who is`, `how to`, `when will`
 - Comparisons: `vs`, `versus`, `better`, `compare`
@@ -174,8 +182,8 @@ class HybridSearchProvider:
 
 ### Force Provider Syntax
 - `groq:` or `g:` - Force Groq
-- `claude:` - Hybrid search (default)
-- `pure-claude:` - Claude only
+- `openai:` - Hybrid search (default)
+- `pure-openai:` - OpenAI only
 - `perplexity:` or `p:` - Perplexity only  
 - `search:` - Direct Google search
 
@@ -251,7 +259,7 @@ HISTORY_FILE = 'data/conversation_history.json'
 
 ## Rate Limiting
 - **Global Limit**: 10 requests per 60 seconds per user
-- **Applies To**: All AI providers (Groq, Claude, Perplexity)
+- **Applies To**: All AI providers (Groq, OpenAI, Perplexity)
 - **Reset**: Automatic after window expires
 
 ## Common Development Issues
@@ -267,20 +275,20 @@ HISTORY_FILE = 'data/conversation_history.json'
 - **Impact**: Admin commands requiring user lookup will fail
 
 ### Context Filtering Failures
-- **Dependency**: Requires `ANTHROPIC_API_KEY` for Claude Haiku
-- **Fallback**: Basic context without filtering if Claude unavailable
+- **Dependency**: Requires `OPENAI_API_KEY` for GPT-4o mini
+- **Fallback**: Basic context without filtering if OpenAI unavailable
 - **Debug**: Check API key configuration and rate limits
 
 ### Search System Issues
-- **Hybrid Search**: Requires both Claude and Perplexity API keys for optimal function
-- **Fallbacks**: Pure Claude if Perplexity unavailable
+- **Hybrid Search**: Requires both OpenAI and Perplexity API keys for optimal function
+- **Fallbacks**: Pure OpenAI if Perplexity unavailable
 - **Google Search**: Requires both `GOOGLE_API_KEY` and `GOOGLE_SEARCH_ENGINE_ID`
 
 ## Development Notes
 
 ### Recent Architecture Changes
 - **Admin System**: Split from monolithic parser to modular 2-phase system
-- **Context Filtering**: Migrated from Groq to Claude Haiku for consistency
+- **Context Filtering**: Migrated from Claude Haiku to OpenAI GPT-4o mini for consistency
 - **Crafting Database**: Expanded from 79+ to 250+ recipes
 - **Command Naming**: Settings commands changed from `unfiltered_permanent_context` to `add_setting` etc.
 

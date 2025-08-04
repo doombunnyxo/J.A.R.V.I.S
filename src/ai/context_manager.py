@@ -17,7 +17,7 @@ class ContextManager:
     """Manages conversation context and permanent user data"""
     
     def __init__(self):
-        # No need for groq_client - we'll use Claude Haiku for context filtering
+        # No need for groq_client - we'll use OpenAI GPT-4o mini for context filtering
         
         # Unified conversation context shared between AIs
         self.unified_conversations: Dict[str, deque] = defaultdict(lambda: deque(maxlen=12))
@@ -28,46 +28,31 @@ class ContextManager:
         self.channel_conversations: Dict[int, deque] = defaultdict(lambda: deque(maxlen=50))
         self.channel_last_activity: Dict[int, datetime] = {}
     
-    async def _call_claude_haiku(self, messages: List[dict], max_tokens: int = 300) -> str:
-        """Helper method to call Claude Haiku for context filtering"""
+    async def _call_openai_gpt4o_mini(self, messages: List[dict], max_tokens: int = 300) -> str:
+        """Helper method to call OpenAI GPT-4o mini for context filtering"""
         import aiohttp
         
         headers = {
-            "x-api-key": config.ANTHROPIC_API_KEY,
-            "Content-Type": "application/json",
-            "anthropic-version": "2023-06-01"
+            "Authorization": f"Bearer {config.OPENAI_API_KEY}",
+            "Content-Type": "application/json"
         }
         
-        # Convert messages to Claude format (no system role)
-        claude_messages = []
-        system_content = ""
-        
-        for msg in messages:
-            if msg["role"] == "system":
-                system_content = msg["content"]
-            else:
-                claude_messages.append(msg)
-        
-        # Include system content in first user message
-        if system_content and claude_messages:
-            claude_messages[0]["content"] = f"{system_content}\n\n{claude_messages[0]['content']}"
-        
         payload = {
-            "model": "claude-3-5-haiku-20241022", 
+            "model": "gpt-4o-mini", 
             "max_tokens": max_tokens,
             "temperature": 0.1,
-            "messages": claude_messages
+            "messages": messages
         }
         
         timeout = aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post("https://api.anthropic.com/v1/messages", 
+            async with session.post("https://api.openai.com/v1/chat/completions", 
                                    headers=headers, json=payload) as response:
                 if response.status == 200:
                     result = await response.json()
-                    return result["content"][0]["text"].strip()
+                    return result["choices"][0]["message"]["content"].strip()
                 else:
-                    raise Exception(f"Claude API error {response.status}: {await response.text()}")
+                    raise Exception(f"OpenAI API error {response.status}: {await response.text()}")
     
     def get_conversation_key(self, user_id: int, channel_id: int) -> str:
         """Generate conversation key for tracking"""
@@ -124,9 +109,9 @@ class ContextManager:
         return list(self.unified_conversations.get(key, []))
     
     async def filter_conversation_context(self, query: str, conversation_context: List[dict], user_name: str) -> str:
-        """Filter conversation context for relevance using Claude Haiku"""
-        if not config.has_anthropic_api():
-            # Fallback to basic context if Claude unavailable
+        """Filter conversation context for relevance using OpenAI GPT-4o mini"""
+        if not config.has_openai_api():
+            # Fallback to basic context if OpenAI unavailable
             if not conversation_context:
                 return f"User: {user_name}" if user_name else ""
             
@@ -175,8 +160,8 @@ Return only the filtered previous conversation context - no explanations."""
                 }
             ]
             
-            # Use Claude Haiku for context filtering
-            filtered_context = await self._call_claude_haiku(filter_messages, max_tokens=300)
+            # Use OpenAI GPT-4o mini for context filtering
+            filtered_context = await self._call_openai_gpt4o_mini(filter_messages, max_tokens=300)
             
             # Ensure we always return at least the user name
             if not filtered_context or "no relevant context" in filtered_context.lower():
@@ -198,8 +183,8 @@ Return only the filtered previous conversation context - no explanations."""
             return "\\n\\n".join(context_parts)
     
     async def filter_permanent_context(self, query: str, permanent_context: List[str], user_name: str, message=None) -> List[str]:
-        """Filter permanent context for relevance to current query using Claude Haiku"""
-        if not config.has_anthropic_api() or not permanent_context:
+        """Filter permanent context for relevance to current query using OpenAI GPT-4o mini"""
+        if not config.has_openai_api() or not permanent_context:
             return permanent_context or []
         
         try:
@@ -229,8 +214,8 @@ Return only relevant permanent context items, one per line, in the exact same fo
                 }
             ]
             
-            # Use Claude Haiku for permanent context filtering
-            filtered_response = await self._call_claude_haiku(filter_messages, max_tokens=400)
+            # Use OpenAI GPT-4o mini for permanent context filtering
+            filtered_response = await self._call_openai_gpt4o_mini(filter_messages, max_tokens=400)
             
             logger.debug(f"Permanent context filter for user '{user_name}' (ID: {message.author.id if message else 'unknown'})")
             logger.debug(f"Original items: {len(permanent_context)}")
@@ -292,8 +277,8 @@ Return only relevant permanent context items, one per line, in the exact same fo
                 permanent_text = "\n".join([f"- {item}" for item in permanent_items])
                 context_parts.append(f"Stored information about user:\n{permanent_text}")
         
-        # Filter all context together using Claude
-        if context_parts and config.has_anthropic_api():
+        # Filter all context together using OpenAI
+        if context_parts and config.has_openai_api():
             try:
                 full_context = "\n\n".join(context_parts)
                 filtered_context = await self.filter_all_context(query, full_context, user_name)
@@ -319,7 +304,7 @@ Return only relevant permanent context items, one per line, in the exact same fo
                     return f"{full_context}\n\n{unfiltered_context}" if full_context else unfiltered_context
                 return full_context
         
-        # Return unfiltered context if no Claude API
+        # Return unfiltered context if no OpenAI API
         full_context = "\n\n".join(context_parts) if context_parts else f"User: {user_name}" if user_name else ""
         unfiltered_items = data_manager.get_unfiltered_permanent_context()
         if unfiltered_items:
@@ -330,7 +315,7 @@ Return only relevant permanent context items, one per line, in the exact same fo
         return full_context
     
     async def filter_all_context(self, query: str, full_context: str, user_name: str) -> str:
-        """Filter all context types together for relevance using Claude Haiku"""
+        """Filter all context types together for relevance using OpenAI GPT-4o mini"""
         try:
             filter_messages = [
                 {
@@ -351,8 +336,8 @@ Return only the filtered context - no explanations."""
                 }
             ]
             
-            # Use Claude Haiku for unified context filtering
-            filtered_context = await self._call_claude_haiku(filter_messages, max_tokens=600)
+            # Use OpenAI GPT-4o mini for unified context filtering
+            filtered_context = await self._call_openai_gpt4o_mini(filter_messages, max_tokens=600)
             
             # Ensure we always return at least the user name
             if not filtered_context or "no relevant context" in filtered_context.lower():

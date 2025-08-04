@@ -5,7 +5,7 @@ Separates routing concerns from the main AI handler
 
 import re
 
-# Search routing keywords - triggers Claude web search
+# Search routing keywords - triggers OpenAI web search
 SEARCH_INDICATORS = [
     'current', 'latest', 'recent', 'today', 'now', 'this year', '2024', '2025',
     'news', 'update', 'new', 'what is', 'who is', 'where is', 'when is',
@@ -103,15 +103,15 @@ PERSONAL_KEYWORDS = [
 ]
 
 
-def should_use_claude_for_search(query: str) -> bool:
+def should_use_openai_for_search(query: str) -> bool:
     """
-    Determine if query should be routed to Claude for web search
+    Determine if query should be routed to OpenAI for web search
     
     Args:
         query: User's query string
         
     Returns:
-        bool: True if should use Claude, False if should use Groq
+        bool: True if should use OpenAI, False if should use Groq
     """
     query_lower = query.lower()
     
@@ -119,7 +119,7 @@ def should_use_claude_for_search(query: str) -> bool:
     if query_lower.startswith('craft:') or query_lower.startswith('cr:'):
         return False
     
-    # Check for admin commands - always use Claude
+    # Check for admin commands - always use OpenAI
     if any(keyword in query_lower for keyword in ADMIN_KEYWORDS):
         return True
     
@@ -128,27 +128,27 @@ def should_use_claude_for_search(query: str) -> bool:
         if len(query_lower.split()) <= 3:
             return False
     
-    # Check for search indicators - use Claude
+    # Check for search indicators - use OpenAI
     if any(indicator in query_lower for indicator in SEARCH_INDICATORS):
         return True
     
-    # Check for comparison queries - use Claude
+    # Check for comparison queries - use OpenAI
     if any(indicator in query_lower for indicator in COMPARISON_INDICATORS):
         return True
     
-    # Check for question patterns - use Claude
+    # Check for question patterns - use OpenAI
     if any(pattern in query_lower for pattern in QUESTION_PATTERNS):
         return True
     
-    # Check for current topics - use Claude
+    # Check for current topics - use OpenAI
     if any(topic in query_lower for topic in CURRENT_TOPICS):
         return True
     
-    # Check for comparison topics - use Claude
+    # Check for comparison topics - use OpenAI
     if any(topic in query_lower for topic in COMPARISON_TOPICS):
         return True
     
-    # Default to Claude for most queries (web search preferred)
+    # Default to OpenAI for most queries (web search preferred)
     return True
 
 
@@ -160,7 +160,7 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
         query: User's query string
         
     Returns:
-        tuple: (provider, cleaned_query) - provider is 'groq', 'claude', or None
+        tuple: (provider, cleaned_query) - provider is 'groq', 'openai', or None
     """
     query_lower = query.lower().strip()
     print(f"DEBUG: extract_forced_provider checking query: '{query_lower}'")
@@ -171,18 +171,18 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
         (r'^craft:\s*(.+)', 'crafting'),
         (r'^cr:\s*(.+)', 'crafting'),
         # Pure provider options (for explicit single-provider usage)
-        (r'^pure-claude:\s*(.+)', 'pure-claude'),
-        (r'^claude-only:\s*(.+)', 'pure-claude'),
+        (r'^pure-openai:\s*(.+)', 'pure-openai'),
+        (r'^openai-only:\s*(.+)', 'pure-openai'),
         (r'^pure-perplexity:\s*(.+)', 'pure-perplexity'),
         (r'^perplexity-only:\s*(.+)', 'pure-perplexity'),
         # Hybrid and regular providers
         (r'^groq:\s*(.+)', 'groq'),
         (r'^g:\s*(.+)', 'groq'),
-        (r'^claude:\s*(.+)', 'claude'),  # Uses hybrid by default
-        (r'^hybrid:\s*(.+)', 'claude'),  # Explicitly hybrid
+        (r'^openai:\s*(.+)', 'openai'),  # Uses hybrid by default
+        (r'^hybrid:\s*(.+)', 'openai'),  # Explicitly hybrid
         (r'^perplexity:\s*(.+)', 'perplexity'),
         (r'^p:\s*(.+)', 'perplexity'),
-        (r'^search:\s*(.+)', 'claude'),
+        (r'^search:\s*(.+)', 'openai'),
     ]
     
     for pattern, provider in force_patterns:
@@ -195,9 +195,9 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
     return None, query
 
 
-def extract_claude_model(query: str, user_id: int) -> tuple[str, str]:
+def extract_openai_model(query: str, user_id: int) -> tuple[str, str]:
     """
-    Extract Claude model from admin user queries
+    Extract OpenAI model from admin user queries
     
     Args:
         query: User's query string
@@ -210,33 +210,25 @@ def extract_claude_model(query: str, user_id: int) -> tuple[str, str]:
     
     # Only admins can switch models
     if not is_admin(user_id):
-        return "haiku", query
+        return "gpt-4o-mini", query
     
-    # Available Claude models for search processing (2025 models)
-    claude_models = {
-        'haiku': 'haiku',
-        'claude-haiku': 'haiku',
-        '3.5-haiku': 'haiku',
-        'claude-3.5-haiku': 'haiku',
-        'fast': 'haiku',
-        'quick': 'haiku',
-        'sonnet': 'sonnet',
-        'claude-sonnet': 'sonnet',
-        'sonnet-4': 'sonnet',
-        'claude-sonnet-4': 'sonnet',
-        '4-sonnet': 'sonnet',
-        'balanced': 'sonnet',
-        'sonnet-3.7': 'sonnet-3.7',
-        'claude-3.7-sonnet': 'sonnet-3.7',
-        '3.7-sonnet': 'sonnet-3.7',
-        'thinking': 'sonnet-3.7',
-        'opus': 'opus',
-        'claude-opus': 'opus',
-        'opus-4': 'opus',
-        'claude-opus-4': 'opus',
-        '4-opus': 'opus',
-        'powerful': 'opus',
-        'best': 'opus'
+    # Available OpenAI models for search processing
+    openai_models = {
+        'gpt-4o-mini': 'gpt-4o-mini',
+        '4o-mini': 'gpt-4o-mini',
+        'mini': 'gpt-4o-mini',
+        'fast': 'gpt-4o-mini',
+        'quick': 'gpt-4o-mini',
+        'gpt-4o': 'gpt-4o',
+        '4o': 'gpt-4o',
+        'balanced': 'gpt-4o',
+        'gpt-4-turbo': 'gpt-4-turbo',
+        '4-turbo': 'gpt-4-turbo',
+        'turbo': 'gpt-4-turbo',
+        'gpt-4': 'gpt-4',
+        '4': 'gpt-4',
+        'powerful': 'gpt-4',
+        'best': 'gpt-4o'
     }
     
     # Model switching patterns
@@ -258,13 +250,13 @@ def extract_claude_model(query: str, user_id: int) -> tuple[str, str]:
         if match:
             model_name = match.group(1).lower()
             
-            if model_name in claude_models:
+            if model_name in openai_models:
                 cleaned_query = match.group(query_group).strip() if query_group else query
                 cleaned_query = re.sub(r'\s+', ' ', cleaned_query)
                 cleaned_query = re.sub(r'^[-\s]+', '', cleaned_query)
                 cleaned_query = cleaned_query.strip()
                 
-                actual_model = claude_models[model_name]
+                actual_model = openai_models[model_name]
                 return actual_model, cleaned_query
     
-    return "haiku", query
+    return "gpt-4o-mini", query

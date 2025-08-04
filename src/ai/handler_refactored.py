@@ -133,7 +133,7 @@ class AIHandler:
         Args:
             message: Discord message object
             ai_query: User's query string  
-            force_provider: Optional forced provider ("groq", "claude", or "crafting")
+            force_provider: Optional forced provider ("groq", "openai", or "crafting")
         """
         try:
             # Prevent duplicate processing
@@ -155,10 +155,10 @@ class AIHandler:
             provider, cleaned_query = await self._determine_provider_and_query(message, ai_query, force_provider)
             
             # Route to appropriate handler
-            if provider == "claude":
-                response = await self._handle_with_claude(message, cleaned_query)  # Hybrid by default
-            elif provider == "pure-claude":
-                response = await self._handle_with_pure_claude(message, cleaned_query)
+            if provider == "openai":
+                response = await self._handle_with_openai(message, cleaned_query)  # Hybrid by default
+            elif provider == "pure-openai":
+                response = await self._handle_with_pure_openai(message, cleaned_query)
             elif provider == "perplexity":
                 response = await self._handle_with_perplexity(message, cleaned_query)
             elif provider == "pure-perplexity":
@@ -190,18 +190,18 @@ class AIHandler:
             return force_provider, query
         
         # Use routing logic to determine provider
-        from .routing import should_use_claude_for_search, extract_forced_provider
+        from .routing import should_use_openai_for_search, extract_forced_provider
         
         # Check for forced provider first
         extracted_provider, cleaned_query = extract_forced_provider(query)
         if extracted_provider:
             return extracted_provider, cleaned_query
         
-        # Check if query should use Claude for search
-        should_use_claude = should_use_claude_for_search(query)
+        # Check if query should use OpenAI for search
+        should_use_openai = should_use_openai_for_search(query)
         
-        if should_use_claude:
-            return "claude", query
+        if should_use_openai:
+            return "openai", query
         
         # Default to Groq
         return "groq", query
@@ -211,22 +211,22 @@ class AIHandler:
         if force_provider:
             return force_provider
         
-        from .routing import should_use_claude_for_search, extract_forced_provider
+        from .routing import should_use_openai_for_search, extract_forced_provider
         
         # Check for forced provider first
         extracted_provider, _ = extract_forced_provider(query)
         if extracted_provider:
             return extracted_provider
         
-        # Check if query should use Claude for search
-        if should_use_claude_for_search(query):
-            return "claude"
+        # Check if query should use OpenAI for search
+        if should_use_openai_for_search(query):
+            return "openai"
         
         # Default to Groq
         return "groq"
     
-    async def _handle_with_claude(self, message, query: str) -> str:
-        """Handle query using Claude - either admin actions or hybrid search"""
+    async def _handle_with_openai(self, message, query: str) -> str:
+        """Handle query using OpenAI - either admin actions or hybrid search"""
         try:
             # Check if this is an admin command
             from .routing import ADMIN_KEYWORDS
@@ -235,16 +235,16 @@ class AIHandler:
             
             if is_admin_command:
                 # Admin command path - route to Perplexity-based admin handler
-                return await self._handle_admin_with_claude(message, query)
+                return await self._handle_admin_with_openai(message, query)
             else:
                 # Search command path  
-                return await self._handle_search_with_claude(message, query)
+                return await self._handle_search_with_openai(message, query)
             
         except Exception as e:
-            logger.debug(f"Claude handler failed: {e}")
-            return f"❌ Error with Claude processing: {str(e)}"
+            logger.debug(f"OpenAI handler failed: {e}")
+            return f"❌ Error with OpenAI processing: {str(e)}"
     
-    async def _handle_admin_with_claude(self, message, query: str) -> str:
+    async def _handle_admin_with_openai(self, message, query: str) -> str:
         """Handle admin commands - new Perplexity-based flow"""
         try:
             # Route all admin commands to new Perplexity-based system
@@ -860,13 +860,13 @@ The goal is to find authentic terminology and structure that can be adapted for 
         try:
             logger.debug(f"Using direct confirmation approach for research-enhanced admin action")
             
-            # Step 1: Use Claude to analyze research and create confirmation message
-            confirmation_info = await self._claude_analyze_research_for_confirmation(message, original_query, research_context)
+            # Step 1: Use OpenAI to analyze research and create confirmation message
+            confirmation_info = await self._openai_analyze_research_for_confirmation(message, original_query, research_context)
             
             if not confirmation_info or confirmation_info.get('error'):
                 return confirmation_info.get('error', "❌ Failed to analyze research for confirmation")
             
-            logger.debug(f"Claude analyzed research, creating direct confirmation")
+            logger.debug(f"OpenAI analyzed research, creating direct confirmation")
             
             # Step 2: Send confirmation message directly to Discord (no LLM generation)
             return await self._send_direct_admin_confirmation(message, original_query, confirmation_info, research_context)
@@ -875,13 +875,13 @@ The goal is to find authentic terminology and structure that can be adapted for 
             logger.debug(f"Direct confirmation admin execution failed: {e}")
             return f"❌ Error with direct confirmation admin processing: {str(e)}"
     
-    async def _claude_analyze_research_for_confirmation(self, message, original_query: str, research_context: str) -> dict:
-        """Use Claude to analyze research and create confirmation info (not LLM-generated message)"""
+    async def _openai_analyze_research_for_confirmation(self, message, original_query: str, research_context: str) -> dict:
+        """Use OpenAI to analyze research and create confirmation info (not LLM-generated message)"""
         try:
-            if not config.has_anthropic_api():
-                return {"error": "❌ Claude API not configured"}
+            if not config.has_openai_api():
+                return {"error": "❌ OpenAI API not configured"}
             
-            # Build context for Claude's analysis
+            # Build context for OpenAI's analysis
             user_context = await self.context_manager.build_full_context(
                 original_query, message.author.id, message.channel.id,
                 message.author.display_name, message
@@ -927,7 +927,7 @@ FORMAT your response as JSON:
 Respond with ONLY the JSON, no other text."""
             
             payload = {
-                "model": "claude-3-5-haiku-20241022",
+                "model": "gpt-4o-mini",
                 "max_tokens": 300,
                 "temperature": 0.1,
                 "messages": [
@@ -1053,7 +1053,7 @@ The parser will detect "reorganize roles" and use the description to understand 
 Respond with ONLY the specific command, no other text."""
             
             payload = {
-                "model": "claude-3-5-haiku-20241022",
+                "model": "gpt-4o-mini",
                 "max_tokens": 100,
                 "temperature": 0.1,
                 "messages": [
@@ -1127,7 +1127,7 @@ IMPORTANT: Start with exactly "reorganize roles" followed by a space, then the t
 Respond with ONLY the specific admin command, nothing else."""
             
             payload = {
-                "model": "claude-3-5-haiku-20241022",
+                "model": "gpt-4o-mini",
                 "max_tokens": 200,
                 "temperature": 0.1,
                 "messages": [
@@ -1152,7 +1152,7 @@ Respond with ONLY the specific admin command, nothing else."""
     
     
     
-    async def _handle_search_with_claude(self, message, query: str) -> str:
+    async def _handle_search_with_openai(self, message, query: str) -> str:
         """Handle search queries using the existing hybrid search pipeline"""
         try:
             from ..search.search_pipeline import SearchPipeline
@@ -1164,7 +1164,7 @@ Respond with ONLY the specific admin command, nothing else."""
                 message.author.display_name, message
             )
             
-            # Use the existing hybrid provider (Claude optimization + Perplexity analysis)
+            # Use the existing hybrid provider (OpenAI optimization + Perplexity analysis)
             hybrid_provider = HybridSearchProvider()
             pipeline = SearchPipeline(hybrid_provider)
             
@@ -1205,33 +1205,33 @@ Respond with ONLY the specific admin command, nothing else."""
             logger.debug(f"Perplexity search pipeline failed: {e}")
             return f"❌ Error with Perplexity search: {str(e)}"
     
-    async def _handle_with_pure_claude(self, message, query: str) -> str:
-        """Handle query using pure Claude (not hybrid) search adapter"""
+    async def _handle_with_pure_openai(self, message, query: str) -> str:
+        """Handle query using pure OpenAI (not hybrid) search adapter"""
         try:
             from ..search.search_pipeline import SearchPipeline
-            from ..search.claude_adapter import ClaudeSearchProvider
+            from ..search.openai_adapter import OpenAISearchProvider
             
-            if not config.has_anthropic_api():
-                return "❌ Claude API not configured. Please contact an administrator."
+            if not config.has_openai_api():
+                return "❌ OpenAI API not configured. Please contact an administrator."
             
-            # Build context for Claude
+            # Build context for OpenAI
             context = await self.context_manager.build_full_context(
                 query, message.author.id, message.channel.id,
                 message.author.display_name, message
             )
             
-            # Create pure Claude provider and search pipeline
-            claude_provider = ClaudeSearchProvider()
-            pipeline = SearchPipeline(claude_provider)
+            # Create pure OpenAI provider and search pipeline
+            openai_provider = OpenAISearchProvider()
+            pipeline = SearchPipeline(openai_provider)
             
-            # Execute the unified search pipeline with pure Claude
+            # Execute the unified search pipeline with pure OpenAI
             response = await pipeline.search_and_respond(query, context)
             
             return response
             
         except Exception as e:
-            logger.debug(f"Pure Claude search pipeline failed: {e}")
-            return f"❌ Error with pure Claude search: {str(e)}"
+            logger.debug(f"Pure OpenAI search pipeline failed: {e}")
+            return f"❌ Error with pure OpenAI search: {str(e)}"
 
     async def _handle_with_pure_perplexity(self, message, query: str) -> str:
         """Handle query using pure Perplexity (not hybrid) search adapter"""

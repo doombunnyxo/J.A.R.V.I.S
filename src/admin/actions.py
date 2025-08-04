@@ -371,21 +371,21 @@ For roles that are already appropriate for the context, don't include them.
 Do not include any other text, explanations, or formatting beyond the rename pairs."""
 
             
-            # Make API call to Claude Haiku
+            # Make API call to OpenAI GPT-4o mini
             headers = {
-                "x-api-key": config.ANTHROPIC_API_KEY,
-                "Content-Type": "application/json",
-                "anthropic-version": "2023-06-01"
+                "Authorization": f"Bearer {config.OPENAI_API_KEY}",
+                "Content-Type": "application/json"
             }
             
             system_content = "You are a Discord server management expert who creates appropriate role names based on specific server contexts and descriptions. Always follow the exact output format requested."
             
             payload = {
-                "model": "claude-3-5-haiku-20241022",
+                "model": "gpt-4o-mini",
                 "max_tokens": 800,
                 "temperature": 0.3,
                 "messages": [
-                    {"role": "user", "content": f"{system_content}\n\n{prompt}"}
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": prompt}
                 ]
             }
             

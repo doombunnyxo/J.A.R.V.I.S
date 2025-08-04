@@ -42,11 +42,11 @@ class Config:
     CHANNEL_CONTEXT_LIMIT: int = 50
     CHANNEL_CONTEXT_DISPLAY: int = 35
     
-    # Claude configuration
+    # OpenAI configuration
     @property
-    def use_claude_as_default(self) -> bool:
-        """Check if Claude should be used as the default AI"""
-        return self.has_anthropic_api() and not self.has_groq_api()
+    def use_openai_as_default(self) -> bool:
+        """Check if OpenAI should be used as the default AI"""
+        return self.has_openai_api() and not self.has_groq_api()
     
     def __init__(self):
         self._validate_and_load()
@@ -155,7 +155,7 @@ def init_config() -> Config:
 try:
     config = Config()
     logger.info("Configuration loaded successfully")
-    logger.info(f"Available APIs: Claude={config.has_anthropic_api()}, Groq={config.has_groq_api()}, Google Search={config.has_google_search()}")
+    logger.info(f"Available APIs: OpenAI={config.has_openai_api()}, Claude={config.has_anthropic_api()}, Groq={config.has_groq_api()}, Google Search={config.has_google_search()}")
 except Exception as e:
     logger.warning(f"Configuration error: {e}")
     logger.warning("Some features may not work without proper configuration")
