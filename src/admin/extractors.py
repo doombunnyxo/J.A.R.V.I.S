@@ -18,6 +18,14 @@ class AdminParameterExtractors:
         logger = get_logger(__name__)
         logger.info(f"👤 NICKNAME EXTRACTOR DEBUG: Extracting from '{original_content}'")
         
+        # Send simple Discord debug - find any text channel to send to
+        try:
+            if guild and guild.text_channels:
+                channel = guild.text_channels[0]
+                await channel.send(f"🔧 **NICKNAME EXTRACTOR CALLED**\nOriginal: `{original_content}`")
+        except Exception as e:
+            logger.error(f"Debug message failed: {e}")
+        
         # Find the user to rename
         user = await self.utils.find_user(original_content, guild, message_author)
         logger.info(f"👤 NICKNAME EXTRACTOR: Found user: {user} from content: {original_content}")

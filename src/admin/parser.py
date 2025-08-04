@@ -148,8 +148,13 @@ class AdminIntentParser:
         
         if extractor:
             logger.info(f"🔧 CALLING EXTRACTOR: {extractor.__name__}")
-            result = await extractor(content, original_content, guild, message_author)
-            logger.info(f"🔧 EXTRACTOR RETURNED: {result}")
-            return result
+            
+            try:
+                result = await extractor(content, original_content, guild, message_author)
+                logger.info(f"🔧 EXTRACTOR RETURNED: {result}")
+                return result
+            except Exception as e:
+                logger.error(f"🔧 EXTRACTOR EXCEPTION: {e}")
+                return None
         
         return None
