@@ -20,19 +20,7 @@ class AdminParameterExtractors:
         
         # Find the user to rename
         user = await self.utils.find_user(original_content, guild, message_author)
-        logger.info(f"👤 NICKNAME EXTRACTOR DEBUG: Found user: {user}")
-        
-        # Send debug to Discord - get channel from guild context
-        if guild and hasattr(guild, 'text_channels') and guild.text_channels:
-            # Find the channel where this was called - this is a hack but works for debug
-            import asyncio
-            try:
-                # We'll try to send to the first available text channel for debug
-                debug_channel = guild.text_channels[0] if guild.text_channels else None
-                if debug_channel:
-                    asyncio.create_task(debug_channel.send(f"👤 **NICKNAME EXTRACTOR DEBUG**\nOriginal: `{original_content}`\nFound user: `{user}`"))
-            except:
-                pass
+        logger.info(f"👤 NICKNAME EXTRACTOR: Found user: {user} from content: {original_content}")
         
         if not user:
             return None
@@ -65,17 +53,9 @@ class AdminParameterExtractors:
                 else:
                     logger.info(f"👤 NICKNAME EXTRACTOR: Pattern {i} failed: {pattern}")
         
-        # Send final debug to Discord
-        if guild and hasattr(guild, 'text_channels') and guild.text_channels:
-            import asyncio
-            try:
-                debug_channel = guild.text_channels[0] if guild.text_channels else None
-                if debug_channel:
-                    asyncio.create_task(debug_channel.send(f"👤 **NICKNAME FINAL**\nUser: `{user}`\nNickname: `{nickname}`\nReturning: `{nickname is not None and user is not None}`"))
-            except:
-                pass
-        
-        logger.info(f"👤 NICKNAME EXTRACTOR: Final result - User: {user}, Nickname: '{nickname}'")
+        # Log final result
+        valid_result = nickname is not None and user is not None
+        logger.info(f"👤 NICKNAME EXTRACTOR FINAL: User={user}, Nickname='{nickname}', Valid={valid_result}")
         return {"user": user, "nickname": nickname}
     
     async def extract_kick_params(self, content, original_content, guild, message_author):

@@ -39,6 +39,11 @@ class AdminIntentParser:
                 import asyncio
                 asyncio.create_task(channel.send(f"⚙️ **EXTRACTING PARAMETERS**\nAction: `{action_type}`\nContent: `{content}`\nOriginal: `{message_content}`"))
             
+            # Debug: Confirm we're calling the extractor
+            if channel:
+                import asyncio
+                asyncio.create_task(channel.send(f"🔧 **CALLING EXTRACTOR**\nAction: `{action_type}`"))
+            
             parameters = await self._extract_parameters(action_type, content, message_content, guild, message_author)
             
             # Debug extraction result
