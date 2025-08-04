@@ -276,33 +276,29 @@ class AdminIntentParser:
         if self.debug_channel:
             await self.debug_channel.send(f"DEBUG: _find_user START with text: '{text}'")
         
-        # Quick check for @username format first (most common case)
-        at_mentions = re.findall(r'@([a-zA-Z0-9_.-]+)', text)
-        if self.debug_channel:
-            await self.debug_channel.send(f"DEBUG: Regex found @mentions: {at_mentions}")
-        
-        if at_mentions:
-            # Skip the bot mention (first one) and look for target user
-            target_usernames = at_mentions[1:] if len(at_mentions) > 1 else []
+        # Check for Discord mentions first (proper format: <@123456789>)
+        if '<@' in text:
+            user_ids = re.findall(r'<@!?(\d+)>', text)
             if self.debug_channel:
-                await self.debug_channel.send(f"DEBUG: Target usernames after skipping bot: {target_usernames}")
+                await self.debug_channel.send(f"DEBUG: Found Discord mention IDs: {user_ids}")
             
-            for username in target_usernames:
-                username_lower = username.lower()
-                if self.debug_channel:
-                    await self.debug_channel.send(f"DEBUG: Looking for username: '{username_lower}'")
+            if user_ids:
+                bot_id = str(self.bot.user.id)
                 
-                # Show first few guild members for debugging
-                member_names = [f"{m.name}({m.display_name})" for m in list(guild.members)[:5]]
-                if self.debug_channel:
-                    await self.debug_channel.send(f"DEBUG: First 5 guild members: {member_names}")
-                
-                for member in guild.members:
-                    if (member.name.lower() == username_lower or 
-                        member.display_name.lower() == username_lower):
+                # Find the target user - prioritize non-bot users
+                non_bot_user_ids = [uid for uid in user_ids if uid != bot_id]
+                if non_bot_user_ids:
+                    # Use the last mentioned non-bot user (most likely the target)
+                    target_user_id = int(non_bot_user_ids[-1])
+                    user = guild.get_member(target_user_id)
+                    if user:
                         if self.debug_channel:
-                            await self.debug_channel.send(f"DEBUG: Found user by @username: {member.name}")
-                        return member
+                            await self.debug_channel.send(f"DEBUG: Found user by Discord mention: {user.name}")
+                        return user
+                    else:
+                        if self.debug_channel:
+                            await self.debug_channel.send(f"DEBUG: User {target_user_id} not found in guild")
+                        return None
         
         # Check for first-person pronouns referring to the message author
         if message_author and any(pronoun in text.lower() for pronoun in ['i', 'my', 'me', 'myself', 'mine']):
