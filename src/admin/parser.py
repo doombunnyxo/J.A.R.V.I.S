@@ -417,26 +417,34 @@ class AdminIntentParser:
         # Check for nickname patterns with regex to handle mentions in between
         import re
         nickname_patterns = [
-            r'change\s+.*?\s+nickname',  # "change @user nickname"
-            r'set\s+.*?\s+nickname',     # "set @user nickname"  
-            r'change nickname', 'set nickname', 'nickname to',
-            r'rename\s+.*?\s+to',        # "rename @user to newname"
+            r'change\s+.*?\'?s?\s+nickname',  # "change @user nickname" or "change @user's nickname"
+            r'set\s+.*?\'?s?\s+nickname',     # "set @user nickname" or "set @user's nickname"
+            r'nickname\s+to',                 # "nickname to ..."
+            r'rename\s+.*?\s+to',            # "rename @user to newname"
+            'change nickname', 'set nickname', 
             'rename user', 'rename member', 'change name of',
             'set user\'s nickname', 'set users nickname', 'user\'s nickname to'
         ]
         
         # Check both literal strings and regex patterns
         has_nickname_pattern = False
+        print(f"DEBUG: Checking nickname patterns against: '{content}'")
         for pattern in nickname_patterns:
             if pattern.startswith('r\'') or '\\s+' in pattern:
                 # Regex pattern
-                if re.search(pattern, content, re.IGNORECASE):
+                match_result = re.search(pattern, content, re.IGNORECASE)
+                print(f"DEBUG: Regex pattern '{pattern}' match: {match_result}")
+                if match_result:
                     has_nickname_pattern = True
+                    print(f"DEBUG: MATCHED regex pattern: '{pattern}'")
                     break
             else:
                 # Literal string
-                if pattern in content:
+                literal_match = pattern in content
+                print(f"DEBUG: Literal pattern '{pattern}' in content: {literal_match}")
+                if literal_match:
                     has_nickname_pattern = True
+                    print(f"DEBUG: MATCHED literal pattern: '{pattern}'")
                     break
         
         if has_nickname_pattern:
