@@ -34,7 +34,17 @@ class AdminIntentParser:
         
         # Phase 2: Extract parameters for the specific action type
         try:
+            # Debug parameter extraction
+            if channel:
+                import asyncio
+                asyncio.create_task(channel.send(f"⚙️ **EXTRACTING PARAMETERS**\nAction: `{action_type}`\nContent: `{content}`\nOriginal: `{message_content}`"))
+            
             parameters = await self._extract_parameters(action_type, content, message_content, guild, message_author)
+            
+            # Debug extraction result
+            if channel:
+                import asyncio
+                asyncio.create_task(channel.send(f"⚙️ **EXTRACTION RESULT**\nParameters: `{parameters}`\nValid: `{parameters is not None}`"))
             
             if parameters is not None:
                 return action_type, parameters
