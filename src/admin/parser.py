@@ -52,6 +52,14 @@ class AdminIntentParser:
                 return None, None
                 
         except Exception as e:
+            # Debug exception to Discord
+            if channel:
+                import asyncio
+                asyncio.create_task(channel.send(f"❌ **EXTRACTION EXCEPTION**\nError: `{str(e)}`\nType: `{type(e).__name__}`"))
+            
+            from ..utils.logging import get_logger
+            logger = get_logger(__name__)
+            logger.error(f"Parameter extraction failed: {e}")
             return None, None
     
     def _identify_action_type(self, content: str, channel=None) -> Optional[str]:
