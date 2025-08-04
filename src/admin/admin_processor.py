@@ -315,7 +315,7 @@ Generate role list:"""
             'change_nickname': lambda p: f"✏️ Change **{p['user']}'s** nickname to **{p['nickname']}**",
             'add_role': lambda p: f"➕ Add role **{p['role']}** to **{p['user']}**",
             'remove_role': lambda p: f"➖ Remove role **{p['role']}** from **{p['user']}**",
-            'rename_role': lambda p: f"✏️ Rename role **{p['old_name']}** to **{p['new_name']}**",
+            'rename_role': lambda p: f"✏️ Rename role **{p['role'].name}** to **{p['new_name']}**",
             'bulk_delete': lambda p: self._format_bulk_delete(p),
             'create_channel': lambda p: f"➕ Create {p['type']} channel **{p['name']}**" + (f" in category {p['category']}" if p.get('category') else ""),
             'delete_channel': lambda p: f"🗑️ Delete channel **{p['channel']}**"
@@ -330,9 +330,9 @@ Generate role list:"""
     
     def _format_bulk_delete(self, params: dict) -> str:
         """Format bulk delete confirmation"""
-        base = f"🗑️ Delete {params['count']} messages"
-        if params.get('user'):
-            base += f" from **{params['user']}**"
+        base = f"🗑️ Delete {params.get('limit', 1)} messages"
+        if params.get('user_filter'):
+            base += f" from **{params['user_filter']}**"
         if params.get('channel') and params['channel'] != 'current':
             base += f" in #{params['channel']}"
         return base
