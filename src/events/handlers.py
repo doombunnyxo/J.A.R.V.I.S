@@ -60,8 +60,25 @@ class EventHandlers(commands.Cog):
                 message.content
             )
         
-        # Check if bot is mentioned and message contains "craft:" or crafting shorthand
-        if self.bot.user.mentioned_in(message):
+        # Check if this is a reply to the bot or a direct mention
+        is_reply_to_bot = (message.reference and 
+                          message.reference.resolved and 
+                          message.reference.resolved.author == self.bot.user)
+        is_direct_mention = self.bot.user in message.mentions
+        
+        if is_reply_to_bot or is_direct_mention:
+            # Log the interaction type for debugging
+            interaction_type = "reply" if is_reply_to_bot else "mention"
+            if is_reply_to_bot and is_direct_mention:
+                interaction_type = "reply+mention"
+            logger.debug(f"[EventHandler-{self.instance_id}] Processing {interaction_type} from {message.author.display_name}")
+            
+            # If this is a reply to the bot, automatically use direct AI (conversational mode)
+            if is_reply_to_bot:
+                logger.debug(f"[EventHandler-{self.instance_id}] Auto-routing reply to direct AI: {message.content}")
+                await self.ai_handler.handle_ai_command(message, message.content, force_provider="direct-ai")
+                return
+            
             content = message.content.lower()
             craft_query = None
             
