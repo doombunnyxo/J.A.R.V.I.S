@@ -53,6 +53,14 @@ class CraftingProcessor:
                     if not recipe_info:
                         return f"❌ **Recipe not found for:** {item_name}\n\nThe LLM should have matched this to a valid recipe. Use `@bot craft: list` to see available categories.\n\n**Debug:** Interpreted query '{query}' as item '{item_name}'"
                     
+                    # Check if this is a non-craftable item (no ingredients field or raw_material category)
+                    if 'ingredients' not in recipe_info or recipe_info.get('category') == 'raw_material':
+                        response = f"🚫 **{item_name.replace('_', ' ').title()}**\n\n"
+                        response += f"**Status:** Found Only - Cannot Be Crafted\n\n"
+                        response += f"**Description:** {recipe_info.get('description', 'This item cannot be crafted.')}\n\n"
+                        response += "💡 **How to obtain:** This item can only be found as loot from enemies, structures, or containers in the world."
+                        return response
+                    
                     # Calculate total materials needed
                     total_materials = calculate_materials(item_name, quantity)
                     

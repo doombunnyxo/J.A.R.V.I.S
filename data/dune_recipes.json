@@ -1992,11 +1992,8 @@
       "category": "component"
     },
     "armor_plating": {
-      "ingredients": {"iron_ingot": 9, "plasteel_microflora_fiber": 3, "plant_fiber": 3, "spice_infused_iron_dust": 3},
-      "quantity": 1,
-      "station": "Fabricator",
-      "description": "Strengthened plating can be liberated from those who make use of them in their heavy armor, and repurposed to other ends",
-      "category": "component"
+      "description": "Found only, cannot be crafted. Strengthened plating that can be liberated from those who make use of them in their heavy armor, and repurposed to other ends.",
+      "category": "raw_material"
     }
   }
 }
