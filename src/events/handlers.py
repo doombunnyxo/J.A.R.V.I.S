@@ -60,17 +60,8 @@ class EventHandlers(commands.Cog):
                 message.content
             )
         
-        # Check if bot is mentioned and message contains "search:"
-        if self.bot.user.mentioned_in(message) and "search:" in message.content.lower():
-            content = message.content.lower()
-            search_index = content.find("search:")
-            if search_index != -1:
-                query = message.content[search_index + 7:].strip()
-                if query and self.search_handler:
-                    await self.search_handler.perform_search(message, query)
-        
         # Check if bot is mentioned and message contains "craft:" or crafting shorthand
-        elif self.bot.user.mentioned_in(message):
+        if self.bot.user.mentioned_in(message):
             content = message.content.lower()
             craft_query = None
             
@@ -127,14 +118,6 @@ class EventHandlers(commands.Cog):
                     logger.debug(f"[EventHandler-{self.instance_id}] Calling AI handler for message {message.id}")
                     await self.ai_handler.handle_ai_command(message, ai_query)
         
-        # Direct search command (legacy support)
-        elif self.bot.user.mentioned_in(message) and "search:" in message.content.lower():
-            content = message.content.lower()
-            search_index = content.find("search:")
-            if search_index != -1:
-                query = message.content[search_index + 7:].strip()
-                if query and self.search_handler:
-                    await self.search_handler.perform_search(message, query)
         
         # Process commands
         await self.bot.process_commands(message)
