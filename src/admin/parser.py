@@ -273,7 +273,8 @@ class AdminIntentParser:
     
     async def _find_user(self, text: str, guild, message_author=None) -> Optional:
         """Helper function to find user mentions or names"""
-        print(f"DEBUG: Looking for user in text: '{text}'")
+        if self.debug_channel:
+            await self.debug_channel.send(f"DEBUG: _find_user START with text: '{text}'")
         
         # Check for first-person pronouns referring to the message author
         if message_author and any(pronoun in text.lower() for pronoun in ['i', 'my', 'me', 'myself', 'mine']):
