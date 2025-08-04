@@ -1156,26 +1156,10 @@ Respond with ONLY the specific admin command, nothing else."""
     async def _handle_search_with_openai(self, message, query: str) -> str:
         """Handle search queries using the existing hybrid search pipeline"""
         try:
-            # Check if this is a search: command that should use GPT-4o mini for summarization
+            # Check if this is a search: command that should use direct Perplexity web search
             if "search:" in message.content.lower():
-                # Use pure OpenAI for both optimization and summarization
-                from ..search.search_pipeline import SearchPipeline
-                from ..search.openai_adapter import OpenAISearchProvider
-                
-                # Build context for search
-                context = await self.context_manager.build_full_context(
-                    query, message.author.id, message.channel.id,
-                    message.author.display_name, message
-                )
-                
-                # Use pure OpenAI provider with gpt-4o-mini
-                openai_provider = OpenAISearchProvider(model="gpt-4o-mini")
-                pipeline = SearchPipeline(openai_provider)
-                
-                # Execute search pipeline with OpenAI only
-                response = await pipeline.search_and_respond(query, context)
-                
-                return response
+                # Direct Perplexity web search
+                return await self._handle_direct_perplexity_web_search(message, query)
             else:
                 # Regular hybrid search (OpenAI optimization + Perplexity analysis)
                 from ..search.search_pipeline import SearchPipeline
@@ -1315,6 +1299,83 @@ Respond with ONLY the specific admin command, nothing else."""
         
         except Exception as e:
             return f"Error processing with Groq: {str(e)}"
+    
+    async def _handle_direct_perplexity_web_search(self, message, query: str) -> str:
+        """Handle direct web search using Perplexity with context"""
+        try:
+            if not config.has_perplexity_api():
+                return "❌ Perplexity API not configured for search functionality."
+            
+            # Build context including settings
+            context = await self.context_manager.build_full_context(
+                query, message.author.id, message.channel.id,
+                message.author.display_name, message
+            )
+            
+            # Direct Perplexity API call with context
+            import aiohttp
+            from ..config import config
+            
+            # System message that includes the context
+            system_message = f"""You are a helpful search assistant. Use web search to find current information and provide a comprehensive answer.
+
+{context}
+
+Instructions:
+1. Search for and synthesize current information from the web
+2. Provide a well-structured, informative response
+3. Focus on accuracy and relevance to the user's query
+4. Cite sources when providing specific facts
+5. Consider the context and any user preferences mentioned above"""
+            
+            messages = [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": query}
+            ]
+            
+            payload = {
+                "model": "sonar",
+                "messages": messages,
+                "max_tokens": 1000,
+                "temperature": 0.2,
+                "top_p": 0.9,
+                "return_images": False,
+                "return_related_questions": False,
+                "search_recency_filter": "month",
+                "top_k": 0,
+                "stream": False,
+                "presence_penalty": 0,
+                "frequency_penalty": 1
+            }
+            
+            headers = {
+                "Authorization": f"Bearer {config.PERPLEXITY_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    "https://api.perplexity.ai/chat/completions",
+                    headers=headers,
+                    json=payload
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        return f"❌ Perplexity API error ({response.status}): {error_text}"
+                    
+                    result = await response.json()
+                    
+                    if 'choices' in result and len(result['choices']) > 0:
+                        answer = result['choices'][0]['message']['content']
+                        # Add model prefix for consistency
+                        return f"**Perplexity Sonar (Web Search):** {answer}"
+                    else:
+                        return "❌ No response from Perplexity search."
+            
+        except Exception as e:
+            logger.error(f"Direct Perplexity web search failed: {e}")
+            return f"❌ Error performing web search: {str(e)}"
     
     async def _handle_with_crafting(self, message, query: str) -> str:
         """Handle query with crafting system using the dedicated crafting module"""
