@@ -45,6 +45,7 @@ async def setup_bot():
         # Setup Discord bot
         intents = discord.Intents.default()
         intents.message_content = True
+        intents.members = True  # Required for admin commands that look up users
         
         bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
         
