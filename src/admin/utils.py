@@ -14,15 +14,23 @@ class AdminUtils:
     async def find_user(self, text: str, guild, message_author=None) -> Optional:
         """Fast user lookup - optimized for Discord mentions"""
         
+        from ..utils.logging import get_logger
+        logger = get_logger(__name__)
+        
         # Fast path: Discord mentions (<@123456789>) - most common case
         if '<@' in text:
             user_ids = re.findall(r'<@!?(\d+)>', text)
+            logger.info(f"🔍 FIND_USER: Found user IDs: {user_ids} in text: '{text}'")
             if user_ids:
                 bot_id = str(self.bot.user.id)
+                logger.info(f"🔍 FIND_USER: Bot ID: {bot_id}")
                 # Get the last non-bot user mentioned (most likely the target)
                 for user_id in reversed(user_ids):
+                    logger.info(f"🔍 FIND_USER: Checking user_id: {user_id} != bot_id: {bot_id}")
                     if user_id != bot_id:
-                        return guild.get_member(int(user_id))
+                        member = guild.get_member(int(user_id))
+                        logger.info(f"🔍 FIND_USER: Found member: {member}")
+                        return member
         
         # Fallback: Self-reference (if author is targeting themselves)
         if message_author and any(word in text.lower() for word in ['my', 'me', 'i']):
