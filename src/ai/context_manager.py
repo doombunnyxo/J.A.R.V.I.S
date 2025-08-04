@@ -265,10 +265,20 @@ Return only relevant permanent context items, one per line, in the exact same fo
         if user_key:
             user_settings = data_manager.get_user_settings(user_key)
             if user_settings.get("use_channel_context", True):
+                # Get context from current channel
                 channel_messages = self.get_channel_context(channel_id, limit=35)
                 if channel_messages:
                     channel_context_text = "\n".join(channel_messages)
                     context_parts.append(f"Recent channel discussion:\n{channel_context_text}")
+                
+                # Check if user mentioned other channels and include their context
+                if message and message.channel_mentions:
+                    for mentioned_channel in message.channel_mentions:
+                        if mentioned_channel.id != channel_id:  # Don't duplicate current channel
+                            mentioned_messages = self.get_channel_context(mentioned_channel.id, limit=20)
+                            if mentioned_messages:
+                                mentioned_context_text = "\n".join(mentioned_messages)
+                                context_parts.append(f"Recent discussion in #{mentioned_channel.name}:\n{mentioned_context_text}")
         
         # Get ALL permanent context without filtering
         if user_key:
@@ -311,10 +321,20 @@ Return only relevant permanent context items, one per line, in the exact same fo
         if user_key:
             user_settings = data_manager.get_user_settings(user_key)
             if user_settings.get("use_channel_context", True):
+                # Get context from current channel
                 channel_messages = self.get_channel_context(channel_id, limit=35)
                 if channel_messages:
                     channel_context_text = "\n".join(channel_messages)
                     context_parts.append(f"Recent channel discussion:\n{channel_context_text}")
+                
+                # Check if user mentioned other channels and include their context
+                if message and message.channel_mentions:
+                    for mentioned_channel in message.channel_mentions:
+                        if mentioned_channel.id != channel_id:  # Don't duplicate current channel
+                            mentioned_messages = self.get_channel_context(mentioned_channel.id, limit=20)
+                            if mentioned_messages:
+                                mentioned_context_text = "\n".join(mentioned_messages)
+                                context_parts.append(f"Recent discussion in #{mentioned_channel.name}:\n{mentioned_context_text}")
         
         # Get permanent context
         if user_key:
