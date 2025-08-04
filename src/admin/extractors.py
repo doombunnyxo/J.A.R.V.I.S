@@ -232,18 +232,26 @@ class AdminParameterExtractors:
         # Check if targeting a specific user
         user_filter = None
         
-        # Check for bot-targeting pronouns (whole words only)
+        # Count user mentions in the message
+        user_mentions = re.findall(r'<@!?(\d+)>', original_content)
+        
+        # Check for pronouns first (these always indicate targeted deletion)
         if re.search(r'\b(your|you|bot)\b', content, re.IGNORECASE):
             user_filter = guild.get_member(self.utils.bot.user.id)
-        
-        # Check for self-targeting pronouns (user's own messages, whole words only)
         elif re.search(r'\b(my|me|i|mine)\b', content, re.IGNORECASE):
             if message_author:
                 user_filter = message_author
-        
-        # Check for specific user mentions (only if there's a mention symbol)
-        elif '<@' in content:
-            user_filter = await self.utils.find_user(content, guild, message_author)
+        # If there are 2+ mentions, or 1 mention that isn't the bot, it's targeted
+        elif len(user_mentions) >= 2:
+            # Multiple mentions - find the non-bot user
+            user_filter = await self.utils.find_user(original_content, guild, message_author)
+        elif len(user_mentions) == 1:
+            # Single mention - check if it's the bot
+            mentioned_id = user_mentions[0]
+            if mentioned_id != str(self.utils.bot.user.id):
+                # It's not the bot, so this is a targeted deletion
+                user_filter = guild.get_member(int(mentioned_id))
+            # If it's only the bot mention, treat as general channel deletion (no filter)
         
         if user_filter:
             parameters["user_filter"] = user_filter
