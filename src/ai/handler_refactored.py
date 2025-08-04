@@ -1314,7 +1314,6 @@ Respond with ONLY the specific admin command, nothing else."""
             
             # Direct Perplexity API call with context
             import aiohttp
-            from ..config import config
             
             # System message that includes the context
             system_message = f"""You are a helpful search assistant. Use web search to find current information and provide a comprehensive answer.
