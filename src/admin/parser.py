@@ -429,8 +429,19 @@ class AdminIntentParser:
     
     async def _parse_nickname_action(self, content: str, original_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict]]:
         """Parse nickname change action"""
+        debug_msg = f"DEBUG: _parse_nickname_action called with content: '{content}'"
+        print(debug_msg)
+        if self.debug_channel:
+            await self.debug_channel.send(debug_msg)
+            
         # Exclude role-related commands to prevent conflicts
-        if any(role_word in content for role_word in ['role', 'roles']):
+        role_words = ['role', 'roles']
+        role_found = [word for word in role_words if word in content]
+        if role_found:
+            debug_msg = f"DEBUG: Nickname parser excluded due to role words: {role_found}"
+            print(debug_msg)
+            if self.debug_channel:
+                await self.debug_channel.send(debug_msg)
             return None, None
             
         # Check for nickname patterns with regex to handle mentions in between
