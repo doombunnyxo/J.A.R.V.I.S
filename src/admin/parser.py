@@ -276,6 +276,20 @@ class AdminIntentParser:
         if self.debug_channel:
             await self.debug_channel.send(f"DEBUG: _find_user START with text: '{text}'")
         
+        # Quick check for @username format first (most common case)
+        at_mentions = re.findall(r'@([a-zA-Z0-9_.-]+)', text)
+        if at_mentions:
+            # Skip the bot mention (first one) and look for target user
+            target_usernames = at_mentions[1:] if len(at_mentions) > 1 else []
+            for username in target_usernames:
+                username_lower = username.lower()
+                for member in guild.members:
+                    if (member.name.lower() == username_lower or 
+                        member.display_name.lower() == username_lower):
+                        if self.debug_channel:
+                            await self.debug_channel.send(f"DEBUG: Found user by @username: {member.name}")
+                        return member
+        
         # Check for first-person pronouns referring to the message author
         if message_author and any(pronoun in text.lower() for pronoun in ['i', 'my', 'me', 'myself', 'mine']):
             # Make sure it's in a context that suggests the user is the target
