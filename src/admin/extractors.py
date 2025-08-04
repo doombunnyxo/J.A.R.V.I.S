@@ -14,37 +14,10 @@ class AdminParameterExtractors:
     async def extract_nickname_params(self, content: str, original_content: str, guild, message_author) -> Optional[Dict[str, Any]]:
         """Extract parameters for nickname change action"""
         
-        from ..utils.logging import get_logger
-        logger = get_logger(__name__)
-        logger.info(f"👤 NICKNAME EXTRACTOR DEBUG: Extracting from '{original_content}'")
-        
-        # Send simple Discord debug - find any text channel to send to
-        try:
-            if guild and guild.text_channels:
-                channel = guild.text_channels[0]
-                await channel.send(f"🔧 **NICKNAME EXTRACTOR CALLED**\nOriginal: `{original_content}`")
-        except Exception as e:
-            logger.error(f"Debug message failed: {e}")
         
         # Find the user to rename
         user = await self.utils.find_user(original_content, guild, message_author)
-        logger.info(f"👤 NICKNAME EXTRACTOR: Found user: {user} from content: {original_content}")
-        
-        # Debug user finding
-        try:
-            if guild and guild.text_channels:
-                channel = guild.text_channels[0]
-                await channel.send(f"👤 **USER LOOKUP**\nFound: `{user}`\nType: `{type(user)}`")
-        except:
-            pass
-        
         if not user:
-            try:
-                if guild and guild.text_channels:
-                    channel = guild.text_channels[0]
-                    await channel.send(f"❌ **USER NOT FOUND**\nReturning None")
-            except:
-                pass
             return None
         
         # Extract the new nickname using multiple patterns
@@ -54,7 +27,6 @@ class AdminParameterExtractors:
         nick_match = re.search(r'["\']([^"\']+)["\']', original_content)
         if nick_match:
             nickname = nick_match.group(1)
-            logger.info(f"👤 NICKNAME EXTRACTOR: Found nickname in quotes: '{nickname}'")
         else:
             # Try various patterns for nickname extraction
             patterns = [
@@ -65,27 +37,11 @@ class AdminParameterExtractors:
                 r'name\s+to\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s|$)', # "change name to NewName"
             ]
             
-            logger.info(f"👤 NICKNAME EXTRACTOR: Trying patterns on '{original_content}'")
-            for i, pattern in enumerate(patterns):
+            for pattern in patterns:
                 match = re.search(pattern, original_content, re.IGNORECASE)
                 if match:
                     nickname = match.group(1).strip()
-                    logger.info(f"👤 NICKNAME EXTRACTOR: Pattern {i} matched: '{nickname}'")
                     break
-                else:
-                    logger.info(f"👤 NICKNAME EXTRACTOR: Pattern {i} failed: {pattern}")
-        
-        # Log final result
-        valid_result = nickname is not None and user is not None
-        logger.info(f"👤 NICKNAME EXTRACTOR FINAL: User={user}, Nickname='{nickname}', Valid={valid_result}")
-        
-        # Debug final result
-        try:
-            if guild and guild.text_channels:
-                channel = guild.text_channels[0]
-                await channel.send(f"📋 **FINAL RESULT**\nUser: `{user}`\nNickname: `{nickname}`\nReturning: `{{'user': {user}, 'nickname': {nickname}}}`")
-        except:
-            pass
         
         return {"user": user, "nickname": nickname}
     

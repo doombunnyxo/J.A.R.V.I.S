@@ -17,7 +17,7 @@ class AdminIntentParser:
         self.utils = AdminUtils(bot)
         self.extractors = AdminParameterExtractors(self.utils)
     
-    async def parse_admin_intent(self, message_content: str, guild, message_author=None, channel=None) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+    async def parse_admin_intent(self, message_content: str, guild, message_author=None) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         """Parse user message to detect admin intentions and extract parameters"""
         content = message_content.lower()
         
@@ -26,30 +26,15 @@ class AdminIntentParser:
         logger.info(f"Parsing admin intent from: '{message_content}'")
         
         # Phase 1: Quickly identify action type
-        action_type = self._identify_action_type(content, channel)
-        logger.info(f"🎯 ADMIN PARSER DEBUG: Action type identified: {action_type} for content: '{content}'")
+        action_type = self._identify_action_type(content)
+        logger.info(f"Admin action type identified: {action_type}")
         
         if not action_type:
             return None, None
         
         # Phase 2: Extract parameters for the specific action type
         try:
-            # Debug parameter extraction
-            if channel:
-                import asyncio
-                asyncio.create_task(channel.send(f"⚙️ **EXTRACTING PARAMETERS**\nAction: `{action_type}`\nContent: `{content}`\nOriginal: `{message_content}`"))
-            
-            # Debug: Confirm we're calling the extractor
-            if channel:
-                import asyncio
-                asyncio.create_task(channel.send(f"🔧 **CALLING EXTRACTOR**\nAction: `{action_type}`"))
-            
             parameters = await self._extract_parameters(action_type, content, message_content, guild, message_author)
-            
-            # Debug extraction result
-            if channel:
-                import asyncio
-                asyncio.create_task(channel.send(f"⚙️ **EXTRACTION RESULT**\nParameters: `{parameters}`\nValid: `{parameters is not None}`"))
             
             if parameters is not None:
                 return action_type, parameters
@@ -57,17 +42,10 @@ class AdminIntentParser:
                 return None, None
                 
         except Exception as e:
-            # Debug exception to Discord
-            if channel:
-                import asyncio
-                asyncio.create_task(channel.send(f"❌ **EXTRACTION EXCEPTION**\nError: `{str(e)}`\nType: `{type(e).__name__}`"))
-            
-            from ..utils.logging import get_logger
-            logger = get_logger(__name__)
             logger.error(f"Parameter extraction failed: {e}")
             return None, None
     
-    def _identify_action_type(self, content: str, channel=None) -> Optional[str]:
+    def _identify_action_type(self, content: str) -> Optional[str]:
         """Phase 1: Quickly identify what type of admin action this is"""
         
         # Check for specific action keywords (order matters - more specific first)
@@ -106,15 +84,6 @@ class AdminIntentParser:
                     if action_type == 'bulk_delete' and not any(msg_word in content for msg_word in ['message', 'messages', 'msg', 'msgs']):
                         continue  # Delete without message context might not be bulk delete
                     
-                    # Debug: log which keyword matched
-                    from ..utils.logging import get_logger
-                    logger = get_logger(__name__)
-                    logger.info(f"🔍 PATTERN MATCH: '{keyword}' in '{content}' → {action_type}")
-                    
-                    # Send debug to Discord if channel available
-                    if channel:
-                        import asyncio
-                        asyncio.create_task(channel.send(f"🔍 **PATTERN MATCH**\nKeyword: `{keyword}`\nContent: `{content}`\nAction: `{action_type}`"))
                     
                     return action_type
         
@@ -141,20 +110,7 @@ class AdminIntentParser:
         }
         
         extractor = extractor_map.get(action_type)
-        
-        from ..utils.logging import get_logger
-        logger = get_logger(__name__)
-        logger.info(f"🔧 EXTRACTOR LOOKUP: action_type='{action_type}', extractor_found={extractor is not None}")
-        
         if extractor:
-            logger.info(f"🔧 CALLING EXTRACTOR: {extractor.__name__}")
-            
-            try:
-                result = await extractor(content, original_content, guild, message_author)
-                logger.info(f"🔧 EXTRACTOR RETURNED: {result}")
-                return result
-            except Exception as e:
-                logger.error(f"🔧 EXTRACTOR EXCEPTION: {e}")
-                return None
+            return await extractor(content, original_content, guild, message_author)
         
         return None
