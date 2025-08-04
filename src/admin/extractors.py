@@ -30,11 +30,11 @@ class AdminParameterExtractors:
         else:
             # Try various patterns for nickname extraction
             patterns = [
-                r'\bto\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s|$)',  # "change nick to NewName"
-                r'\bas\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s|$)',  # "set nick as NewName"  
-                r'nickname\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s|$)',  # "change John nickname NewName"
-                r'nick\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s|$)',      # "change John nick NewName"
-                r'name\s+to\s+([^\s]+(?:\s+[^\s]+)*?)(?:\s|$)', # "change name to NewName"
+                r'\bto\s+(.+?)$',  # "change nick to NewName" - captures everything after "to" until end
+                r'\bto\s+(.+?)(?=\s*$)',  # Alternative: captures until end with optional trailing spaces
+                r'\bas\s+(.+?)$',  # "set nick as NewName"
+                r'nickname\s+(.+?)$',  # "change John nickname NewName"
+                r'nick\s+(.+?)$',  # "change John nick NewName"
             ]
             
             for pattern in patterns:
