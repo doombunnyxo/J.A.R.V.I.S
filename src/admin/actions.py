@@ -280,9 +280,18 @@ class AdminActionHandler:
         nickname = parameters.get("nickname")
         
         if user:
-            old_nick = user.display_name
-            await user.edit(nick=nickname)
-            return f"✅ **Nickname Changed**: {user.mention} nickname changed from '{old_nick}' to '{nickname or user.name}'.\n**Requested by**: {admin_user.mention}"
+            # Check if user is a Member object (required for editing nicknames)
+            if not isinstance(user, discord.Member):
+                return f"❌ **Error**: Cannot change nickname - user must be a server member, not a User object.\n**Requested by**: {admin_user.mention}"
+            
+            try:
+                old_nick = user.display_name
+                await user.edit(nick=nickname, reason=f"Nickname changed by {admin_user.name}")
+                return f"✅ **Nickname Changed**: {user.mention} nickname changed from '{old_nick}' to '{nickname or user.name}'.\n**Requested by**: {admin_user.mention}"
+            except discord.Forbidden:
+                return f"❌ **Permission Error**: I don't have permission to change {user.mention}'s nickname. Make sure the bot's role is higher than the user's highest role.\n**Requested by**: {admin_user.mention}"
+            except discord.HTTPException as e:
+                return f"❌ **Error**: Failed to change nickname: {str(e)}\n**Requested by**: {admin_user.mention}"
         return "❌ **Error**: No user specified for nickname change."
     
     async def _handle_reorganize_roles(self, parameters: dict, admin_user) -> str:

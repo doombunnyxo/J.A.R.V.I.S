@@ -83,13 +83,10 @@ class AdminIntentParser:
                         print(f"DEBUG: Found member by mention: {user}")
                         return user
                     else:
-                        try:
-                            user = await self.bot.fetch_user(target_user_id)
-                            print(f"DEBUG: Found user by mention: {user}")
-                            return user
-                        except Exception as e:
-                            print(f"DEBUG: Failed to fetch user {target_user_id}: {e}")
-                            return None
+                        print(f"DEBUG: User {target_user_id} not found as member in guild {guild.name}")
+                        # For admin actions, we need Member objects, not User objects
+                        # Don't fall back to fetch_user as it returns User objects that can't be edited
+                        return None
         
         # Check for username/display name matching
         words = text.split()
