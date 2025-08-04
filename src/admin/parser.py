@@ -122,9 +122,23 @@ class AdminIntentParser:
     async def _extract_nickname_params(self, content: str, original_content: str, guild, message_author) -> Optional[Dict[str, Any]]:
         """Extract parameters for nickname change action"""
         
+        debug_msg = f"DEBUG: _extract_nickname_params called with content: '{content}'"
+        print(debug_msg)
+        if self.debug_channel:
+            await self.debug_channel.send(debug_msg)
+        
         # Find the user to rename
         user = await self._find_user(content, guild, message_author)
+        debug_msg = f"DEBUG: Found user in nickname extraction: {user}"
+        print(debug_msg)
+        if self.debug_channel:
+            await self.debug_channel.send(debug_msg)
+            
         if not user:
+            debug_msg = f"DEBUG: No user found, returning None from nickname extraction"
+            print(debug_msg)
+            if self.debug_channel:
+                await self.debug_channel.send(debug_msg)
             return None
         
         # Extract the new nickname
@@ -135,13 +149,27 @@ class AdminIntentParser:
         nick_match = re.search(r'["\']([^"\']+)["\']', original_content)
         if nick_match:
             nickname = nick_match.group(1)
+            debug_msg = f"DEBUG: Found nickname in quotes: '{nickname}'"
         else:
             # Try to extract nickname after "to" keyword
             to_match = re.search(r'\bto\s+(\w+)', content, re.IGNORECASE)
             if to_match:
                 nickname = to_match.group(1)
+                debug_msg = f"DEBUG: Found nickname after 'to': '{nickname}'"
+            else:
+                debug_msg = f"DEBUG: No nickname found in content: '{content}' or original: '{original_content}'"
         
-        return {"user": user, "nickname": nickname}
+        print(debug_msg)
+        if self.debug_channel:
+            await self.debug_channel.send(debug_msg)
+        
+        result = {"user": user, "nickname": nickname}
+        debug_msg = f"DEBUG: Nickname extraction result: {result}"
+        print(debug_msg)
+        if self.debug_channel:
+            await self.debug_channel.send(debug_msg)
+        
+        return result
     
     # TODO: Add other parameter extractors for different action types
     async def _extract_kick_params(self, content, original_content, guild, message_author):
