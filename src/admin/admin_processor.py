@@ -396,7 +396,10 @@ Generate role list:"""
             # Get manageable roles (exclude @everyone and bot's highest role)
             manageable_roles = [r for r in guild.roles[1:] if r < guild.me.top_role]
             
-            # Rename roles
+            # Sort roles by position (highest position first - most important roles first)
+            manageable_roles.sort(key=lambda r: r.position, reverse=True)
+            
+            # Rename roles from highest to lowest
             for i, role in enumerate(manageable_roles):
                 if i < len(role_list):
                     try:
