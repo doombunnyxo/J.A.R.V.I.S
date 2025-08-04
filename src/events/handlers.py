@@ -44,6 +44,14 @@ class EventHandlers(commands.Cog):
         
         print(f'[{message.channel}] {message.author}: {message.content} (msg_id: {message.id})')
         
+        # Capture channel message for context (non-empty messages only)
+        if message.content.strip() and self.ai_handler and hasattr(self.ai_handler, 'context_manager'):
+            self.ai_handler.context_manager.add_channel_message(
+                message.channel.id, 
+                message.author.display_name, 
+                message.content
+            )
+        
         # Check if bot is mentioned and message contains "search:"
         if self.bot.user.mentioned_in(message) and "search:" in message.content.lower():
             content = message.content.lower()

@@ -11,7 +11,7 @@ class DataManager:
         self.conversation_history: Dict[str, list] = {}
         self.user_settings: Dict[str, dict] = {}
         self.permanent_context: Dict[str, list] = {}
-        self.unfiltered_permanent_context: Dict[str, list] = {}
+        self.unfiltered_permanent_context: list = []
         self._lock = asyncio.Lock()
     
     async def load_all_data(self):
@@ -67,10 +67,10 @@ class DataManager:
                 with open(config.UNFILTERED_PERMANENT_CONTEXT_FILE, 'r', encoding='utf-8') as f:
                     self.unfiltered_permanent_context = json.load(f)
             else:
-                self.unfiltered_permanent_context = {}
+                self.unfiltered_permanent_context = []
         except Exception as e:
             print(f"Error loading unfiltered permanent context: {e}")
-            self.unfiltered_permanent_context = {}
+            self.unfiltered_permanent_context = []
     
     async def save_conversation_history(self):
         """Save conversation history to file"""
@@ -175,29 +175,25 @@ class DataManager:
             return count
         return 0
     
-    def get_unfiltered_permanent_context(self, user_key: str) -> list:
-        """Get unfiltered permanent context for a user"""
-        return self.unfiltered_permanent_context.get(user_key, [])
+    def get_unfiltered_permanent_context(self) -> list:
+        """Get global unfiltered permanent context"""
+        return self.unfiltered_permanent_context
     
-    def add_unfiltered_permanent_context(self, user_key: str, context: str):
-        """Add unfiltered permanent context for a user"""
-        if user_key not in self.unfiltered_permanent_context:
-            self.unfiltered_permanent_context[user_key] = []
-        self.unfiltered_permanent_context[user_key].append(context)
+    def add_unfiltered_permanent_context(self, context: str):
+        """Add global unfiltered permanent context"""
+        self.unfiltered_permanent_context.append(context)
     
-    def remove_unfiltered_permanent_context(self, user_key: str, index: int) -> Optional[str]:
-        """Remove unfiltered permanent context item by index"""
-        if user_key in self.unfiltered_permanent_context and 0 <= index < len(self.unfiltered_permanent_context[user_key]):
-            return self.unfiltered_permanent_context[user_key].pop(index)
+    def remove_unfiltered_permanent_context(self, index: int) -> Optional[str]:
+        """Remove global unfiltered permanent context item by index"""
+        if 0 <= index < len(self.unfiltered_permanent_context):
+            return self.unfiltered_permanent_context.pop(index)
         return None
     
-    def clear_unfiltered_permanent_context(self, user_key: str) -> int:
-        """Clear all unfiltered permanent context for a user"""
-        if user_key in self.unfiltered_permanent_context:
-            count = len(self.unfiltered_permanent_context[user_key])
-            self.unfiltered_permanent_context[user_key] = []
-            return count
-        return 0
+    def clear_unfiltered_permanent_context(self) -> int:
+        """Clear all global unfiltered permanent context"""
+        count = len(self.unfiltered_permanent_context)
+        self.unfiltered_permanent_context = []
+        return count
     
     def get_stats(self) -> dict:
         """Get storage statistics"""

@@ -20,6 +20,10 @@ class ContextManager:
         self.unified_conversations: Dict[str, deque] = defaultdict(lambda: deque(maxlen=12))
         self.last_activity: Dict[str, datetime] = {}
         self.context_expiry_minutes = 30
+        
+        # Channel conversation storage - keyed by channel_id
+        self.channel_conversations: Dict[int, deque] = defaultdict(lambda: deque(maxlen=50))
+        self.channel_last_activity: Dict[int, datetime] = {}
     
     async def _call_claude_haiku(self, messages: List[dict], max_tokens: int = 300) -> str:
         """Helper method to call Claude Haiku for context filtering"""
@@ -90,6 +94,23 @@ class ContextManager:
         key = self.get_conversation_key(user_id, channel_id)
         self.unified_conversations.pop(key, None)
         self.last_activity.pop(key, None)
+    
+    def add_channel_message(self, channel_id: int, user_name: str, message_content: str):
+        """Add message to channel conversation history"""
+        channel_messages = self.channel_conversations[channel_id]
+        
+        # Format message as "Username: content"
+        formatted_message = f"{user_name}: {message_content[:100]}"
+        channel_messages.append(formatted_message)
+        self.channel_last_activity[channel_id] = datetime.now()
+    
+    def get_channel_context(self, channel_id: int, limit: int = 35) -> List[str]:
+        """Get recent channel messages for context"""
+        channel_messages = self.channel_conversations.get(channel_id, deque())
+        
+        # Return most recent messages up to limit
+        recent_messages = list(channel_messages)[-limit:] if len(channel_messages) > limit else list(channel_messages)
+        return recent_messages
     
     def get_conversation_context(self, user_id: int, channel_id: int) -> List[dict]:
         """Get conversation context if fresh"""
@@ -233,45 +254,113 @@ Return only relevant permanent context items, one per line, in the exact same fo
             return permanent_context
     
     async def build_full_context(self, query: str, user_id: int, channel_id: int, user_name: str, message=None) -> str:
-        """Build complete filtered context for AI"""
+        """Build complete filtered context for AI (conversation + channel + permanent context filtered together)"""
         user_key = data_manager.get_user_key(message.author) if message else None
+        
+        # Gather all available context
+        context_parts = []
+        
+        # Always include user name
+        if user_name:
+            context_parts.append(f"User: {user_name}")
         
         # Get conversation context
         conversation_context = self.get_conversation_context(user_id, channel_id)
-        filtered_conversation = await self.filter_conversation_context(
-            query, conversation_context, user_name
-        )
+        if conversation_context:
+            conversation_text = "\n".join([
+                f"[Previous] {msg['role']}: {msg['content']}" 
+                for msg in conversation_context[-6:]
+            ])
+            context_parts.append(f"Previous conversation:\n{conversation_text}")
         
-        context_parts = []
-        
-        # Add filtered conversation context
-        if filtered_conversation and filtered_conversation.strip():
-            context_parts.append(filtered_conversation)
-        elif user_name:
-            context_parts.append(f"User: {user_name}")
-        
-        # Add unfiltered permanent context (always included)
+        # Get channel context if enabled
         if user_key:
-            unfiltered_items = data_manager.get_unfiltered_permanent_context(user_key)
-            if unfiltered_items:
-                context_parts.append("User preferences (always apply):\\n" + "\\n".join([
-                    f"- [MANDATORY] {item}" for item in unfiltered_items
-                ]))
+            user_settings = data_manager.get_user_settings(user_key)
+            if user_settings.get("use_channel_context", True):
+                channel_messages = self.get_channel_context(channel_id, limit=35)
+                if channel_messages:
+                    channel_context_text = "\n".join(channel_messages)
+                    context_parts.append(f"Recent channel discussion:\n{channel_context_text}")
         
-        # Add filtered permanent context
+        # Get permanent context
         if user_key:
             permanent_items = data_manager.get_permanent_context(user_key)
             if permanent_items:
-                relevant_permanent = await self.filter_permanent_context(
-                    query, permanent_items, user_name, message
-                )
-                
-                if relevant_permanent:
-                    context_parts.append("Stored information about user:\\n" + "\\n".join([
-                        f"- {item}" for item in relevant_permanent
-                    ]))
+                permanent_text = "\n".join([f"- {item}" for item in permanent_items])
+                context_parts.append(f"Stored information about user:\n{permanent_text}")
         
-        return "\\n\\n".join(context_parts)
+        # Filter all context together using Claude
+        if context_parts and config.has_anthropic_api():
+            try:
+                full_context = "\n\n".join(context_parts)
+                filtered_context = await self.filter_all_context(query, full_context, user_name)
+                
+                # Add global unfiltered permanent context after filtering
+                unfiltered_items = data_manager.get_unfiltered_permanent_context()
+                if unfiltered_items:
+                    unfiltered_context = "Global preferences (always apply):\n" + "\n".join([
+                        f"- [MANDATORY] {item}" for item in unfiltered_items
+                    ])
+                    return f"{filtered_context}\n\n{unfiltered_context}" if filtered_context else unfiltered_context
+                
+                return filtered_context
+            except Exception as e:
+                print(f"DEBUG: Context filtering failed: {e}")
+                # Fallback to unfiltered context
+                full_context = "\n\n".join(context_parts)
+                unfiltered_items = data_manager.get_unfiltered_permanent_context()
+                if unfiltered_items:
+                    unfiltered_context = "Global preferences (always apply):\n" + "\n".join([
+                        f"- [MANDATORY] {item}" for item in unfiltered_items
+                    ])
+                    return f"{full_context}\n\n{unfiltered_context}" if full_context else unfiltered_context
+                return full_context
+        
+        # Return unfiltered context if no Claude API
+        full_context = "\n\n".join(context_parts) if context_parts else f"User: {user_name}" if user_name else ""
+        unfiltered_items = data_manager.get_unfiltered_permanent_context()
+        if unfiltered_items:
+            unfiltered_context = "Global preferences (always apply):\n" + "\n".join([
+                f"- [MANDATORY] {item}" for item in unfiltered_items
+            ])
+            return f"{full_context}\n\n{unfiltered_context}" if full_context else unfiltered_context
+        return full_context
+    
+    async def filter_all_context(self, query: str, full_context: str, user_name: str) -> str:
+        """Filter all context types together for relevance using Claude Haiku"""
+        try:
+            filter_messages = [
+                {
+                    "role": "system",
+                    "content": """You are a context filter. Extract information from ALL available context that is relevant to the user's current query.
+
+INSTRUCTIONS:
+1. ALWAYS include the user's name/identity
+2. Extract only context that helps answer the CURRENT query
+3. Be concise and factual, no frivolities
+4. If no context is relevant to the query, just return the user's name
+
+Return only the filtered context - no explanations."""
+                },
+                {
+                    "role": "user", 
+                    "content": f"CURRENT QUERY: {query}\n\nAVAILABLE CONTEXT:\n{full_context}\n\nExtract and summarize context relevant to this query:"
+                }
+            ]
+            
+            # Use Claude Haiku for unified context filtering
+            filtered_context = await self._call_claude_haiku(filter_messages, max_tokens=600)
+            
+            # Ensure we always return at least the user name
+            if not filtered_context or "no relevant context" in filtered_context.lower():
+                return f"User: {user_name}" if user_name else ""
+            
+            return filtered_context
+            
+        except Exception as e:
+            print(f"DEBUG: Unified context filtering failed: {e}")
+            # Fallback to basic context
+            return f"User: {user_name}\n\n{full_context[:500]}..." if full_context else f"User: {user_name}" if user_name else ""
     
     async def _resolve_user_mentions(self, text: str, message) -> str:
         """Resolve Discord user mentions in text"""

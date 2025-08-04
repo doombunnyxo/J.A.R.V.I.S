@@ -1310,13 +1310,7 @@ Respond with ONLY the specific admin command, nothing else."""
             message.author.id, message.channel.id
         )
         
-        # Add channel context if no conversation and enabled
-        if not conversation_context and user_settings.get("use_channel_context", True):
-            channel_context = await self._get_channel_context(message.channel)
-            if channel_context:
-                conversation_context = [{"role": "system", "content": channel_context}]
-        
-        # Build full context
+        # Build full context (includes conversation, channel, and permanent context)
         return await self.context_manager.build_full_context(
             query, message.author.id, message.channel.id,
             message.author.display_name, message
@@ -1474,31 +1468,6 @@ Be concise and clear about what the action will do."""
         await confirmation_msg.add_reaction("❌")
         
         return True
-    
-    async def _get_channel_context(self, channel) -> Optional[str]:
-        """Get recent channel context for queries"""
-        try:
-            # Get last 50 messages from channel
-            messages = []
-            async for msg in channel.history(limit=50):
-                if not msg.author.bot and len(msg.content) > 0:
-                    # Format: "Username: message content"
-                    formatted_msg = f"{msg.author.display_name}: {msg.content[:100]}"
-                    messages.append(formatted_msg)
-            
-            if not messages:
-                return None
-            
-            # Reverse to chronological order and take last 35
-            messages.reverse()
-            recent_messages = messages[-35:] if len(messages) > 35 else messages
-            
-            context_text = "\\n".join(recent_messages)
-            return f"Recent channel discussion:\\n{context_text}"
-            
-        except Exception as e:
-            print(f"Error getting channel context: {e}")
-            return None
     
     async def _send_response(self, message, response: str):
         """Send response, handling Discord's message limits"""
