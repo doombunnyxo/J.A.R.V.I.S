@@ -53,44 +53,31 @@ class WebContentExtractor:
             failed_sites = []  # Collect failures for batch processing later
             slow_sites = []    # Collect slow sites for batch processing later
             
-            # Progressive timeouts: 2s, 4s, 6s - collect fast results first
-            for timeout_stage in [2, 4, 6]:
-                if not tasks:
-                    break
-                    
-                print(f"DEBUG: Web extraction stage: waiting {timeout_stage}s for remaining {len(tasks)} sites")
+            # Wait for all tasks to complete with a reasonable total timeout
+            try:
+                results = await asyncio.wait_for(
+                    asyncio.gather(*tasks, return_exceptions=True),
+                    timeout=8.0  # 8 seconds total for all tasks
+                )
                 
-                try:
-                    done, pending = await asyncio.wait(
-                        tasks, timeout=timeout_stage, return_when=asyncio.FIRST_COMPLETED
-                    )
+                # Process all results
+                for result in results:
+                    if isinstance(result, Exception):
+                        # Track exceptions
+                        failed_sites.append(('unknown', str(result)))
+                        continue
                     
-                    # Collect completed results and track failures/slow sites
-                    for task in done:
-                        try:
-                            result = await task
-                            if result and result.get('content'):
-                                extracted_pages.append(result)
-                                # Track slow sites (>3s response time)
-                                if result.get('response_time', 0) > 3.0:
-                                    slow_sites.append((result['url'], result['response_time']))
-                            else:
-                                # Track failed extractions
-                                failed_sites.append((task.get_name() if hasattr(task, 'get_name') else 'unknown', 'extraction_failed'))
-                        except Exception as e:
-                            # Track exceptions
-                            failed_sites.append(('unknown', str(e)))
-                            continue
-                    
-                    tasks = list(pending)
-                    
-                    # Let all tasks complete naturally - no early cancellation
+                    if result and result.get('content'):
+                        extracted_pages.append(result)
+                        # Track slow sites (>3s response time)
+                        if result.get('response_time', 0) > 3.0:
+                            slow_sites.append((result['url'], result['response_time']))
+                    else:
+                        # Track failed extractions
+                        failed_sites.append(('unknown', 'extraction_failed'))
                         
-                except asyncio.TimeoutError:
-                    # Continue to next stage
-                    continue
-            
-            # All tasks should complete naturally through timeouts - no cancellation needed
+            except asyncio.TimeoutError:
+                print(f"DEBUG: Some sites timed out after 8s, proceeding with {len(extracted_pages)} results")
                 
             print(f"DEBUG: Web extraction completed with {len(extracted_pages)} successful results")
             
@@ -147,8 +134,8 @@ class WebContentExtractor:
                 
                 html_content = await response.text()
                 
-                # Parse with BeautifulSoup
-                soup = BeautifulSoup(html_content, 'html.parser')
+                # Parse with BeautifulSoup using faster parser if available
+                soup = BeautifulSoup(html_content, 'lxml' if 'lxml' in str(BeautifulSoup) else 'html.parser')
                 
                 # Extract title
                 title = soup.find('title')
