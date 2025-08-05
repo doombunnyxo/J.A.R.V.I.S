@@ -42,6 +42,15 @@ class SearchPipeline:
         Returns:
             AI-generated response based on search results
         """
+        # TEST: Verify channel is working
+        if channel:
+            try:
+                await channel.send("🔥 **PIPELINE DEBUG**: search_and_respond called with channel!")
+            except Exception as e:
+                print(f"DEBUG: Channel test in pipeline failed: {e}")
+        else:
+            print("DEBUG: search_and_respond called with NO channel")
+            
         try:
             # Parallel approach: Start query optimization and fallback search simultaneously
             print(f"DEBUG: Starting parallel query optimization and fallback search")
