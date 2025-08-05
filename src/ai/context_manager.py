@@ -515,29 +515,25 @@ Return only relevant permanent context items, one per line, in the exact same fo
             filter_messages = [
                 {
                     "role": "system",
-                    "content": """You are a context summarizer and filter. Your job is to extract and condense ONLY the context that is relevant to the user's current query.
+                    "content": """You are a smart context filter assistant. Your task is to read the recent chat messages and previous user queries, then select and output only the messages or message clusters that are **most relevant** to the user's current query.
 
-APPROACH:
-First, consider the user's intent in their query.
-Then, identify what context would help answer it.
-Finally, extract and summarize only relevant information.
-
-INSTRUCTIONS:
-1. First, identify what information would help answer the user's query
-2. Extract ONLY relevant messages, conversations, and stored information
-3. Summarize the relevant content to be more concise while preserving key details
-4. Keep the structured format ([Channel Summary], [User Context], etc.) but only include sections with relevant content
-5. Preserve important details: names, technical terms, specific requests, recent decisions
-6. If channel messages aren't relevant to the query, omit the [Channel Summary] section entirely
-7. Always include basic user identity even if other context isn't relevant
-
-Example: If user asks about Python, include Python discussions but omit unrelated chat about lunch plans.
-
-Return only the filtered and summarized context - no explanations."""
+Instructions:
+- Consider the user's current query and the entire conversation history.
+- Understand that relevant context may be spread across multiple messages or implied by the topic.
+- Group related messages that form a coherent context block.
+- Exclude unrelated chit-chat, greetings, or redundant info.
+- Preserve message order and clarity.
+- Output a concise summary of the relevant context in natural language or as a list of key points."""
                 },
                 {
                     "role": "user", 
-                    "content": f"CURRENT QUERY: {query}\n\nFULL CONTEXT TO FILTER:\n{full_context}\n\nPlease extract and summarize ONLY the parts relevant to answering this query:"
+                    "content": f"""User's current query:  
+{query}
+
+Context to filter:
+{full_context}
+
+Filtered relevant context:"""
                 }
             ]
             

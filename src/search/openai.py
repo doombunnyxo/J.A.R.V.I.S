@@ -63,34 +63,26 @@ async def openai_optimize_search_query(user_query: str, filtered_context: str = 
         openai_client = OpenAIAPI(config.OPENAI_API_KEY, model)
         
         # Build system message for search query optimization
-        system_message = """You are a search query optimizer. Your job is to transform user questions into optimized Google search queries that will return the most relevant and current results. The results will be processed and formatted for Discord chat.
+        system_message = """You are a search assistant. Your task is to take a user's question or request and rewrite it into a concise, highly effective search engine query that would return the most relevant and accurate results.
 
-INSTRUCTIONS:
-1. Convert conversational questions into effective search terms
-2. Remove unnecessary words like "can you", "please", "I want to know"
-3. Focus on the core information being sought
-4. Add relevant keywords that would improve search results
-5. Keep queries concise but comprehensive
-6. Use current year (2025) for time-sensitive queries
-7. Return ONLY the optimized search query, nothing else
-8. Prioritize sources that provide clear, factual information suitable for Discord formatting
+Rules:
+- Focus on **keywords** and important concepts only.
+- Remove filler words, pronouns, or vague modifiers.
+- If the request is vague, **infer the likely intent**.
+- Don't use quotes, punctuation, or special operators unless necessary.
+- Output ONLY the search query. No explanations."""
 
-EXAMPLES:
-- "What's the weather like today?" → "weather today [current location]"
-- "Can you tell me about the latest iPhone?" → "iPhone 2025 latest model specs features"
-- "I want to know how to cook pasta" → "how to cook pasta recipe instructions"
-- "What are the best laptops for gaming?" → "best gaming laptops 2025 reviews comparison"
-
-USER CONTEXT (if provided):
-Use this context to make the search query more specific and personalized."""
-
-        # Add user context if provided
-        context_info = ""
+        # Build user message in the specified format
         if filtered_context and filtered_context.strip():
-            context_info = f"\n\nUSER CONTEXT:\n{filtered_context.strip()}\n\nUse this context to make the search query more specific and personalized."
-        
-        # Build user message
-        user_message = f"""Optimize this search query: {user_query}{context_info}"""
+            user_message = f"""User request: {user_query}
+
+Context: {filtered_context.strip()}
+
+Search query:"""
+        else:
+            user_message = f"""User request: {user_query}
+
+Search query:"""
         
         messages = [
             {"role": "system", "content": system_message},
