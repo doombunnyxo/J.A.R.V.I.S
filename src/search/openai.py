@@ -148,7 +148,7 @@ Summary:"""
         # Call OpenAI API with optimized settings for speed
         summary = await openai_client.create_completion(
             messages=messages,
-            max_tokens=200,  # Back to 200 for better quality summaries
+            max_tokens=300,  # More detailed summaries for better final synthesis
             temperature=0.0  # Deterministic for faster processing
         )
         
@@ -335,7 +335,7 @@ Discord-formatted Answer:"""
         ]
         
         # Set reasonable output token limits based on model
-        max_tokens = 2048 if model == "gpt-4o" else 1024
+        max_tokens = 2048 if model == "gpt-4o" else 512
         
         # Call OpenAI API
         response = await openai_client.create_completion(
