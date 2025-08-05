@@ -9,8 +9,9 @@ openai==1.57.0
 # Google Search Integration  
 google-api-python-client==2.108.0
 
-# Web Requests (for Perplexity API)
+# Web Requests and Content Extraction
 aiohttp==3.9.1
+beautifulsoup4==4.13.4
 
 # Crafting System (local module)
 # dune_crafting.py is included in the project

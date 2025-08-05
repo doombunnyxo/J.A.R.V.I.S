@@ -195,20 +195,8 @@ Please analyze these search results and provide a comprehensive answer to the us
             temperature=0.2
         )
         
-        # Add prompt debug info for curiosity
-        system_content = messages[0]["content"]
-        user_content = messages[1]["content"]
-        
-        prompt_debug = f"""```
-SYSTEM PROMPT:
-{system_content}
-
-USER MESSAGE:
-{user_content}
-```"""
-        
         print(f"DEBUG: OpenAI search analysis completed successfully")
-        return f"{prompt_debug}\n\n**Analysis:** {response}"
+        return f"**Web Search Analysis:** {response}"
         
     except Exception as e:
         print(f"DEBUG: OpenAI search analysis failed: {e}")

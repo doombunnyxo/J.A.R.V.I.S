@@ -459,8 +459,7 @@ Return only relevant permanent context items, one per line, in the exact same fo
         if context_parts and config.has_openai_api():
             try:
                 full_context = "\n\n".join(context_parts)
-                debug_channel = message.channel if message else None
-                filtered_context = await self.filter_all_context(query, full_context, user_name, debug_channel)
+                filtered_context = await self.filter_all_context(query, full_context, user_name)
                 
                 # Add reply context after filtering (always preserved, unfiltered)
                 reply_context = self.extract_reply_context(message)
@@ -510,7 +509,7 @@ Return only relevant permanent context items, one per line, in the exact same fo
             return f"{full_context}\n\n{unfiltered_context}" if full_context else unfiltered_context
         return full_context
     
-    async def filter_all_context(self, query: str, full_context: str, user_name: str, debug_channel=None) -> str:
+    async def filter_all_context(self, query: str, full_context: str, user_name: str) -> str:
         """Filter all context types together for relevance using OpenAI GPT-4o mini"""
         try:
             filter_messages = [
@@ -542,18 +541,8 @@ Return only the filtered and summarized context - no explanations."""
                 }
             ]
             
-            # Debug: Show context filtering process
-            if debug_channel:
-                debug_msg = f"**Context Filtering Debug**\n\n**Original Context** ({len(full_context)} chars):\n```\n{full_context[:1000]}{'...' if len(full_context) > 1000 else ''}\n```\n\n**Query**: {query}\n\n**Filtering in progress...**"
-                debug_message = await debug_channel.send(debug_msg)
-            
             # Use OpenAI GPT-4o mini for unified context filtering
             filtered_context = await self._call_openai_gpt4o_mini(filter_messages, max_tokens=600)
-            
-            # Debug: Show filtered result
-            if debug_channel:
-                result_msg = f"**Filtered Context** ({len(filtered_context)} chars):\n```\n{filtered_context}\n```"
-                await debug_message.edit(content=f"{debug_msg}\n\n{result_msg}")
             
             # Ensure we always return at least the user name
             if not filtered_context or "no relevant context" in filtered_context.lower():

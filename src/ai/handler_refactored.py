@@ -333,19 +333,7 @@ Finally, respond with a clear answer.
             user_message_tokens = len(query) // 4
             total_estimated_tokens = context_tokens + system_prompt_tokens + user_message_tokens
             
-            # Show the actual prompt for debugging/curiosity
-            system_content = messages[0]["content"]
-            user_content = messages[1]["content"]
-            
-            prompt_debug = f"""```
-SYSTEM PROMPT:
-{system_content}
-
-USER MESSAGE:
-{user_content}
-```"""
-            
-            return f"**AI Response** (~{total_estimated_tokens} tokens):\n\n{prompt_debug}\n\n**Response:** {response}"
+            return f"**AI Response** (~{total_estimated_tokens} tokens):\n\n{response}"
             
         except Exception as e:
             logger.debug(f"Direct AI failed: {e}")
