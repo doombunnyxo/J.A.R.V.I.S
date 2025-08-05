@@ -278,7 +278,7 @@ class AIHandler:
             pipeline = SearchPipeline(openai_provider, enable_full_extraction=True)
             
             # Execute search pipeline - this will trigger two-stage summarization
-            response = await pipeline.search_and_respond(query, context)
+            response = await pipeline.search_and_respond(query, context, message.channel)
             
             return response
             
@@ -304,7 +304,7 @@ class AIHandler:
             pipeline = SearchPipeline(openai_provider, enable_full_extraction=True, debug_channel=None)
             
             # Execute search pipeline - GPT-4o will handle full content directly
-            response = await pipeline.search_and_respond(query, context)
+            response = await pipeline.search_and_respond(query, context, message.channel)
             
             return response
             
