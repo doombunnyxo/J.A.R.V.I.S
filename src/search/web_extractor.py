@@ -131,9 +131,15 @@ class WebContentExtractor:
                 except asyncio.TimeoutError:
                     continue
             
-            # Let remaining tasks complete naturally (no cancellation)
+            # Handle remaining tasks - either cancelled due to timeout or still pending
             if pending_tasks:
-                print(f"DEBUG: Waiting for remaining {len(pending_tasks)} tasks to complete naturally")
+                print(f"DEBUG: Handling remaining {len(pending_tasks)} tasks")
+                # Cancel remaining tasks to prevent RuntimeWarning
+                for task in pending_tasks:
+                    if not task.done():
+                        task.cancel()
+                
+                # Gather results including cancelled ones
                 remaining_results = await asyncio.gather(*pending_tasks, return_exceptions=True)
                 
                 # Process remaining results
