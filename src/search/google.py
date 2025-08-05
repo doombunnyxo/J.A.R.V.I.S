@@ -95,7 +95,7 @@ class GoogleSearch(commands.Cog):
                 
                 search_results += f"{i}. **{title}**\n"
                 search_results += f"   {snippet}\n"
-                search_results += f"   Source: <{link}>\n\n"
+                search_results += f"   Source: {link}\n\n"
             
             return search_results
             

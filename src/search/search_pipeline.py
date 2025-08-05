@@ -230,7 +230,7 @@ class SearchPipeline:
                     
                     search_results += f"{index}. **{title}**\n"
                     search_results += f"   {snippet[:400]}...\n"
-                    search_results += f"   Source: <{link}>\n\n"
+                    search_results += f"   Source: {link}\n\n"
             
             return search_results
         
