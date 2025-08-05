@@ -64,8 +64,8 @@ class SearchPipeline:
             )
             
             try:
-                # Wait for optimization with aggressive timeout
-                optimized_query = await asyncio.wait_for(optimization_task, timeout=2.0)
+                # Wait for optimization with timeout longer than web extraction
+                optimized_query = await asyncio.wait_for(optimization_task, timeout=10.0)
                 print(f"DEBUG: Query optimization completed: {optimized_query}")
                 
                 # Make sure fallback is properly cancelled
