@@ -159,7 +159,7 @@ class SearchPipeline:
                     print(f"DEBUG: Extracting full content from {len(urls)} pages...")
                     
                     extractor = WebContentExtractor()
-                    extracted_pages, tracking_data = await extractor.extract_multiple_pages(urls)
+                    extracted_pages, tracking_data = await extractor.extract_multiple_pages(urls, channel)
                     print(f"DEBUG: Successfully extracted {len(extracted_pages)} pages")
                     
                     # Store tracking data for later blacklist updates
