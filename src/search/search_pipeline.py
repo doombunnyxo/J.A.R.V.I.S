@@ -118,7 +118,7 @@ class SearchPipeline:
                     print(f"DEBUG: Successfully extracted {len(extracted_pages)} pages")
                     
                     # Build enhanced search results with full content
-                    search_results = f"Full page web search results for '{query}':\n\n"
+                    search_results = f"Web search results for '{query}':\n\n"
                     extracted_by_url = {page['url']: page for page in extracted_pages}
                     
                 except Exception as e:
