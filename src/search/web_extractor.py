@@ -71,7 +71,18 @@ class WebContentExtractor:
                     await debug_channel.send(f"🔍 **Web Extraction Started**: {len(allowed_urls)} URLs, target: {target_summary_tokens} tokens")
                 except: pass
             
+            max_total_time = 8.0  # Maximum 8 seconds total for web extraction
+            
             while pending_tasks and estimated_summary_tokens < target_summary_tokens:
+                # Check total elapsed time
+                total_elapsed = asyncio.get_event_loop().time() - timeout_start
+                if total_elapsed >= max_total_time:
+                    print(f"DEBUG: Hitting 8s total time limit with {len(pending_tasks)} tasks remaining - exiting extraction")
+                    if debug_channel:
+                        try:
+                            await debug_channel.send(f"⏰ **WEB EXTRACTION TIMEOUT**: Hit 8s limit, stopping with {len(extracted_pages)} pages")
+                        except: pass
+                    break
                 # Check if we've hit the 6 second mark to identify slow sites (but don't exit)
                 elapsed = asyncio.get_event_loop().time() - timeout_start
                 if elapsed >= max_timeout and not marked_slow_at_6s:

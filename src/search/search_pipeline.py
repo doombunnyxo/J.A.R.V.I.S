@@ -68,8 +68,14 @@ class SearchPipeline:
                 optimized_query = await asyncio.wait_for(optimization_task, timeout=2.0)
                 print(f"DEBUG: Query optimization completed: {optimized_query}")
                 
-                # Cancel fallback and use optimized query
-                fallback_search_task.cancel()
+                # Make sure fallback is properly cancelled
+                if not fallback_search_task.done():
+                    fallback_search_task.cancel()
+                    try:
+                        await fallback_search_task
+                    except asyncio.CancelledError:
+                        pass
+                
                 print(f"DEBUG: Performing Google search for optimized query: {optimized_query}")
                 search_results = await self._perform_google_search(optimized_query, self.enable_full_extraction, context_size, channel)
                 
