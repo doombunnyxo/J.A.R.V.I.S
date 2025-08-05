@@ -8,6 +8,7 @@ import asyncio
 from typing import List, Dict, Optional
 from urllib.parse import urljoin, urlparse
 import re
+import json
 
 try:
     from bs4 import BeautifulSoup
@@ -78,6 +79,10 @@ class WebContentExtractor:
     async def _extract_single_page(self, session: aiohttp.ClientSession, url: str, debug_channel=None) -> Optional[Dict[str, str]]:
         """Extract content from a single URL"""
         try:
+            # Check if this is a Reddit URL and use API instead
+            if 'reddit.com' in url:
+                return await self._extract_reddit_content(session, url, debug_channel)
+            
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
@@ -133,6 +138,96 @@ class WebContentExtractor:
             print(f"DEBUG: {error_msg}")
             if debug_channel:
                 await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Exception: {str(e)}")
+            return None
+    
+    async def _extract_reddit_content(self, session: aiohttp.ClientSession, url: str, debug_channel=None) -> Optional[Dict[str, str]]:
+        """Extract content from Reddit using authenticated API"""
+        try:
+            from ..config import config
+            from .reddit_client import RedditClient
+            
+            if debug_channel:
+                await debug_channel.send(f"🔧 **Debug**: ✅ <{url}> - Using authenticated Reddit API")
+            
+            # Check if Reddit API is configured
+            if not config.has_reddit_api():
+                if debug_channel:
+                    await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Reddit API not configured, trying public JSON")
+                # Fallback to public JSON endpoint
+                return await self._extract_reddit_json_fallback(session, url, debug_channel)
+            
+            # Use authenticated Reddit client
+            reddit_client = RedditClient()
+            data = await reddit_client.get_post_data(session, url)
+            
+            if not data:
+                if debug_channel:
+                    await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Reddit API returned no data")
+                return None
+            
+            # Extract content from API response
+            result = await reddit_client.extract_content_from_data(data)
+            
+            if result:
+                # Truncate if too long
+                if len(result['content']) > self.max_content_length:
+                    result['content'] = result['content'][:self.max_content_length] + "..."
+                    result['length'] = len(result['content'])
+                
+                if debug_channel:
+                    await debug_channel.send(f"🔧 **Debug**: ✅ <{url}> - Reddit API extracted {result['length']} chars")
+                
+                return result
+            else:
+                if debug_channel:
+                    await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Failed to extract content from Reddit data")
+                return None
+                
+        except Exception as e:
+            error_msg = f"Reddit API extraction failed for {url}: {e}"
+            print(f"DEBUG: {error_msg}")
+            if debug_channel:
+                await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Reddit API error: {str(e)}")
+            return None
+    
+    async def _extract_reddit_json_fallback(self, session: aiohttp.ClientSession, url: str, debug_channel=None) -> Optional[Dict[str, str]]:
+        """Fallback method using public Reddit JSON endpoints"""
+        try:
+            # Try public JSON endpoint
+            json_url = url.rstrip('/') + '.json'
+            
+            headers = {
+                'User-Agent': 'J.A.R.V.I.S Discord Bot 1.0 by /u/CarinXO'
+            }
+            
+            if debug_channel:
+                await debug_channel.send(f"🔧 **Debug**: ✅ <{url}> - Trying public JSON: {json_url}")
+            
+            async with session.get(json_url, headers=headers) as response:
+                if response.status != 200:
+                    if debug_channel:
+                        await debug_channel.send(f"🔧 **Debug**: ❌ <{json_url}> - Public JSON HTTP {response.status}")
+                    return None
+                
+                data = await response.json()
+                
+                # Use the same extraction logic as the authenticated client
+                from .reddit_client import RedditClient
+                reddit_client = RedditClient()
+                result = await reddit_client.extract_content_from_data(data)
+                
+                if result:
+                    if debug_channel:
+                        await debug_channel.send(f"🔧 **Debug**: ✅ <{url}> - Public JSON extracted {result['length']} chars")
+                    return result
+                else:
+                    if debug_channel:
+                        await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Failed to extract from public JSON")
+                    return None
+                
+        except Exception as e:
+            if debug_channel:
+                await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Public JSON error: {str(e)}")
             return None
     
     def _clean_html_content(self, soup: BeautifulSoup) -> str:

@@ -23,6 +23,11 @@ class Config:
     GOOGLE_API_KEY: Optional[str]
     GOOGLE_SEARCH_ENGINE_ID: Optional[str]
     
+    # Reddit API Configuration
+    REDDIT_CLIENT_ID: Optional[str]
+    REDDIT_CLIENT_SECRET: Optional[str]
+    REDDIT_USER_AGENT: str = 'J.A.R.V.I.S Discord Bot 1.0 by /u/CarinXO'
+    
     # File Paths
     SETTINGS_FILE: str = 'data/user_settings.json'
     PERMANENT_CONTEXT_FILE: str = 'data/permanent_context.json'
@@ -77,6 +82,13 @@ class Config:
         self.GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
         self.GOOGLE_SEARCH_ENGINE_ID = os.getenv('GOOGLE_SEARCH_ENGINE_ID')
         
+        # Reddit API configuration
+        self.REDDIT_CLIENT_ID = os.getenv('REDDIT_CLIENT_ID')
+        self.REDDIT_CLIENT_SECRET = os.getenv('REDDIT_CLIENT_SECRET')
+        reddit_user_agent = os.getenv('REDDIT_USER_AGENT')
+        if reddit_user_agent:
+            self.REDDIT_USER_AGENT = reddit_user_agent
+        
         # Override defaults with environment variables if provided
         if os.getenv('AI_MODEL'):
             self.AI_MODEL = os.getenv('AI_MODEL')
@@ -121,6 +133,10 @@ class Config:
     def has_google_search(self) -> bool:
         """Check if Google Search is configured"""
         return bool(self.GOOGLE_API_KEY and self.GOOGLE_SEARCH_ENGINE_ID)
+    
+    def has_reddit_api(self) -> bool:
+        """Check if Reddit API is configured"""
+        return bool(self.REDDIT_CLIENT_ID and self.REDDIT_CLIENT_SECRET)
     
     def get_file_paths(self) -> dict:
         """Get all data file paths"""
