@@ -198,6 +198,8 @@ Please analyze these search results and provide a comprehensive answer to the us
         # Determine search mode based on search results content
         if "Full page web search results" in search_results:
             mode_indicator = "🔍 **Full Page Search**"
+        elif "Full extraction failed" in search_results:
+            mode_indicator = "⚠️ **Full Search Failed - Using Snippets**"
         elif "Web search results" in search_results:
             mode_indicator = "📄 **Snippet Search**"
         else:

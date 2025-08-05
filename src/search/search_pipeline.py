@@ -93,19 +93,28 @@ class SearchPipeline:
             
             if enable_full_extraction:
                 # Full page extraction mode
-                from .web_extractor import WebContentExtractor
-                
-                urls = [result['link'] for result in basic_results]
-                print(f"DEBUG: Extracting full content from {len(urls)} pages...")
-                
-                extractor = WebContentExtractor()
-                extracted_pages = await extractor.extract_multiple_pages(urls)
-                print(f"DEBUG: Successfully extracted {len(extracted_pages)} pages")
-                
-                # Build enhanced search results with full content
-                search_results = f"Full page web search results for '{query}':\n\n"
-                extracted_by_url = {page['url']: page for page in extracted_pages}
-                
+                try:
+                    from .web_extractor import WebContentExtractor
+                    
+                    urls = [result['link'] for result in basic_results]
+                    print(f"DEBUG: Extracting full content from {len(urls)} pages...")
+                    
+                    extractor = WebContentExtractor()
+                    extracted_pages = await extractor.extract_multiple_pages(urls)
+                    print(f"DEBUG: Successfully extracted {len(extracted_pages)} pages")
+                    
+                    # Build enhanced search results with full content
+                    search_results = f"Full page web search results for '{query}':\n\n"
+                    extracted_by_url = {page['url']: page for page in extracted_pages}
+                    
+                except Exception as e:
+                    print(f"DEBUG: Full page extraction failed: {e}")
+                    # Fall back to snippet mode and include error info
+                    search_results = f"⚠️ **Full extraction failed**: {str(e)}\n\nFalling back to snippet search for '{query}':\n\n"
+                    enable_full_extraction = False
+            
+            if enable_full_extraction:
+                # Continue with full extraction processing
                 for basic_result in basic_results:
                     link = basic_result['link']
                     title = basic_result['title']

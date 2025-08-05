@@ -5,10 +5,16 @@ Fetches full page content and cleans it for AI processing
 
 import aiohttp
 import asyncio
-from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 from urllib.parse import urljoin, urlparse
 import re
+
+try:
+    from bs4 import BeautifulSoup
+    HAS_BS4 = True
+except ImportError as e:
+    HAS_BS4 = False
+    BeautifulSoup = None
 
 class WebContentExtractor:
     """Extract and clean web page content"""
@@ -20,6 +26,9 @@ class WebContentExtractor:
     
     async def extract_multiple_pages(self, urls: List[str]) -> List[Dict[str, str]]:
         """Extract content from multiple URLs concurrently"""
+        if not HAS_BS4:
+            raise ImportError("BeautifulSoup4 is required for web content extraction. Install with: pip install beautifulsoup4")
+        
         async with aiohttp.ClientSession(timeout=self.session_timeout) as session:
             tasks = [self._extract_single_page(session, url) for url in urls]
             results = await asyncio.gather(*tasks, return_exceptions=True)
