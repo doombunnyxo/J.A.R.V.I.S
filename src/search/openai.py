@@ -267,8 +267,11 @@ Answer:"""
         temperature=0.2
     )
     
+    # Calculate actual tokens used in final synthesis (much smaller than raw search results)
+    final_prompt_tokens = len(combined_summaries) // 4 + len(user_message) // 4 + len(system_message) // 4
+    
     print(f"DEBUG: Two-stage analysis completed successfully")
-    return response
+    return f"**OpenAI GPT-4o Mini Web Search** (~{final_prompt_tokens} tokens): {response}"
 
 
 async def openai_search_analysis(user_query: str, search_results: str, filtered_context: str = "", model: str = "gpt-4o-mini") -> str:
@@ -341,8 +344,20 @@ Discord-formatted Answer:"""
             temperature=0.2
         )
         
+        # Calculate actual tokens used in single-stage approach
+        single_stage_tokens = len(user_message) // 4 + len(system_message) // 4
+        
+        # Get model display name
+        model_names = {
+            "gpt-4o-mini": "OpenAI GPT-4o Mini",
+            "gpt-4o": "OpenAI GPT-4o", 
+            "gpt-4-turbo": "OpenAI GPT-4 Turbo",
+            "gpt-4": "OpenAI GPT-4"
+        }
+        model_display = model_names.get(model, f"OpenAI {model}")
+        
         print(f"DEBUG: OpenAI search analysis completed successfully")
-        return response
+        return f"**{model_display} Web Search** (~{single_stage_tokens} tokens): {response}"
         
     except Exception as e:
         print(f"DEBUG: OpenAI search analysis failed: {e}")
