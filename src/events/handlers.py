@@ -127,7 +127,13 @@ class EventHandlers(commands.Cog):
             
             # Default AI processing
             else:
+                # Clean bot mentions from the query
                 ai_query = message.content
+                for mention in message.mentions:
+                    if mention == self.bot.user:
+                        ai_query = ai_query.replace(f"<@{mention.id}>", "").replace(f"<@!{mention.id}>", "")
+                ai_query = ai_query.strip()
+                
                 logger.debug(f"AI query: {ai_query}")
                 
                 if ai_query and self.ai_handler:

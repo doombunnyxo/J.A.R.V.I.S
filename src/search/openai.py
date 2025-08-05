@@ -166,10 +166,10 @@ Finally, respond with a clear answer.
 [Context Note]
 The user context below has been filtered and summarized to include only information relevant to the current query. It includes pertinent conversation history, related channel discussions, and applicable user preferences."""
 
-        # Add user context if provided
+        # Add user context if provided (context already has its own headers)
         context_info = ""
         if filtered_context and filtered_context.strip():
-            context_info = f"\n\nUSER CONTEXT:\n{filtered_context.strip()}"
+            context_info = f"\n\n{filtered_context.strip()}"
         
         # Build user message with search results
         user_message = f"""USER QUESTION: {user_query}
