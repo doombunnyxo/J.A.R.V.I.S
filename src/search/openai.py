@@ -195,8 +195,16 @@ Please analyze these search results and provide a comprehensive answer to the us
             temperature=0.2
         )
         
+        # Determine search mode based on search results content
+        if "Full page web search results" in search_results:
+            mode_indicator = "🔍 **Full Page Search**"
+        elif "Web search results" in search_results:
+            mode_indicator = "📄 **Snippet Search**"
+        else:
+            mode_indicator = "❓ **Unknown Search Mode**"
+        
         print(f"DEBUG: OpenAI search analysis completed successfully")
-        return f"**Web Search Analysis:** {response}"
+        return f"{mode_indicator}: {response}"
         
     except Exception as e:
         print(f"DEBUG: OpenAI search analysis failed: {e}")
