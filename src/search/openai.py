@@ -208,7 +208,14 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
     
     print(f"DEBUG: Starting parallel summarization of {len(webpage_sections)} webpages")
     
+    if channel:
+        try:
+            await channel.send(f"📝 **Starting {len(webpage_sections)} parallel summaries**")
+        except: pass
+    
     # Stage 1: Parallel summarization of individual webpages
+    import time
+    summary_start = time.time()
     summarization_tasks = [
         summarize_webpage_content(section['content'], section['title'], section['url'], channel)
         for section in webpage_sections
@@ -216,6 +223,12 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
     
     # Execute all summarizations in parallel
     webpage_summaries = await asyncio.gather(*summarization_tasks, return_exceptions=True)
+    summary_time = time.time() - summary_start
+    
+    if channel:
+        try:
+            await channel.send(f"✅ **Individual summaries**: {summary_time:.2f}s")
+        except: pass
     
     # Filter out exceptions and combine summaries
     valid_summaries = []
@@ -231,8 +244,13 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
     combined_summaries = "\n\n".join(valid_summaries)
     print(f"DEBUG: Completed parallel summarization, now synthesizing final answer")
     
+    if channel:
+        try:
+            await channel.send(f"🔄 **Starting final synthesis**")
+        except: pass
     
     # Stage 2: Synthesize final answer using cleaner prompt structure
+    synthesis_start = time.time()
     openai_client = OpenAIAPI(config.OPENAI_API_KEY, "gpt-4o-mini")
     
     system_message = """You are a helpful assistant. Below are summaries of multiple webpages related to a user's question.
@@ -276,6 +294,12 @@ Answer:"""
         max_tokens=max_tokens,
         temperature=0.2
     )
+    synthesis_time = time.time() - synthesis_start
+    
+    if channel:
+        try:
+            await channel.send(f"🎯 **Final synthesis**: {synthesis_time:.2f}s")
+        except: pass
     
     # Calculate actual input tokens for the final synthesis prompt (combined_summaries is already in user_message)
     final_prompt_tokens = (len(system_message) + len(user_message)) // 4
