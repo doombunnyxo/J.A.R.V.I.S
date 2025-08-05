@@ -5,6 +5,7 @@ Maintains a dynamic blacklist of domains that fail extraction
 
 import json
 import asyncio
+import time
 from datetime import datetime
 from typing import Dict, List, Set, Optional
 from urllib.parse import urlparse
@@ -107,6 +108,42 @@ class DomainFilter:
             return True, f"blocked: {reason}"
         
         return False, "allowed"
+    
+    async def record_slow_site(self, url: str, response_time: float):
+        """Record a slow response for a domain and potentially block it"""
+        domain = self.extract_domain(url)
+        
+        # Skip if whitelisted
+        if domain in self.whitelist:
+            return
+        
+        # Don't auto-block if disabled
+        if not self.config.get('auto_block_enabled', True):
+            return
+        
+        # Only consider it slow if over threshold
+        slow_threshold = self.config.get('slow_threshold_seconds', 4.0)
+        if response_time < slow_threshold:
+            return
+        
+        # Track slow responses
+        if domain not in self.temporary_failures:
+            self.temporary_failures[domain] = []
+        
+        slow_reason = f"slow response ({response_time:.1f}s)"
+        self.temporary_failures[domain].append({
+            'timestamp': time.time(),
+            'error': slow_reason,
+            'url': url
+        })
+        
+        # Check if we should block this domain for being consistently slow
+        max_slow_strikes = self.config.get('max_slow_strikes_before_block', 2)  # More lenient than failures
+        if len(self.temporary_failures[domain]) >= max_slow_strikes:
+            await self._block_domain(domain, f"consistently slow (avg {response_time:.1f}s)")
+            
+            # Clear temporary failures since it's now blocked
+            del self.temporary_failures[domain]
     
     async def record_failure(self, url: str, error_message: str):
         """Record a failure for a domain and potentially block it"""

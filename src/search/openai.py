@@ -227,15 +227,15 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
     
     system_message = """You are a helpful assistant. Below are summaries of multiple webpages related to a user's question.
 
-Please carefully combine the information from these summaries to provide a clear, concise, and accurate answer to the user's question.
+Please provide a clear, concise, and accurate answer to the user's question using the summaries.
 
-- Focus only on information relevant to the question.
-- Avoid repeating information.
-- Highlight any important points or differences if they exist.
-- Use Discord markdown formatting (**bold**, bullet points, `code` blocks).
-- Keep paragraphs short for readability.
-- Integrate any provided context to maintain conversation continuity.
-- Keep the answer focused and comprehensive (aim for 200-500 words)."""
+- Focus only on the most important information relevant to the question
+- Be accurate - only include information explicitly stated in the summaries
+- Be concise - aim for 300-400 words maximum
+- Use Discord markdown formatting (**bold**, bullet points)
+- Keep paragraphs short (2-3 sentences max)
+- Avoid repetition between sources
+- Integrate context naturally"""
     
     context_section = f"\n\nPrevious Context:\n{filtered_context.strip()}" if filtered_context and filtered_context.strip() else ""
     
@@ -257,8 +257,8 @@ Answer:"""
         {"role": "user", "content": user_message}
     ]
     
-    # Set reasonable output token limits - always use 1024 for GPT-4o mini in two-stage
-    max_tokens = 1024
+    # Set shorter output limits for more concise final responses
+    max_tokens = 512
     
     # Call OpenAI API for final synthesis
     response = await openai_client.create_completion(

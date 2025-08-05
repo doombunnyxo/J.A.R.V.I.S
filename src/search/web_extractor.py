@@ -47,20 +47,62 @@ class WebContentExtractor:
         )
         
         async with aiohttp.ClientSession(timeout=timeout) as session:
+            # Progressive timeout approach - collect results as they complete
             tasks = [self._extract_single_page(session, url) for url in allowed_urls]
-            # Use timeout for the entire gather operation as well
-            try:
-                results = await asyncio.wait_for(
-                    asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=self.timeout + 2  # 7s total for all requests
-                )
-            except asyncio.TimeoutError:
-                print(f"DEBUG: Web extraction timed out after {self.timeout + 2}s, some sites too slow")
-                # Return partial results - gather what we can quickly
-                results = []
-            
-            # Filter out exceptions and return successful extractions
             extracted_pages = []
+            failed_sites = []  # Collect failures for batch processing later
+            slow_sites = []    # Collect slow sites for batch processing later
+            
+            # Progressive timeouts: 2s, 4s, 6s - collect fast results first
+            for timeout_stage in [2, 4, 6]:
+                if not tasks:
+                    break
+                    
+                print(f"DEBUG: Web extraction stage: waiting {timeout_stage}s for remaining {len(tasks)} sites")
+                
+                try:
+                    done, pending = await asyncio.wait(
+                        tasks, timeout=timeout_stage, return_when=asyncio.FIRST_COMPLETED
+                    )
+                    
+                    # Collect completed results and track failures/slow sites
+                    for task in done:
+                        try:
+                            result = await task
+                            if result and result.get('content'):
+                                extracted_pages.append(result)
+                                # Track slow sites (>3s response time)
+                                if result.get('response_time', 0) > 3.0:
+                                    slow_sites.append((result['url'], result['response_time']))
+                            else:
+                                # Track failed extractions
+                                failed_sites.append((task.get_name() if hasattr(task, 'get_name') else 'unknown', 'extraction_failed'))
+                        except Exception as e:
+                            # Track exceptions
+                            failed_sites.append(('unknown', str(e)))
+                            continue
+                    
+                    tasks = list(pending)
+                    
+                    # Early exit if we have enough good results (diminishing returns)
+                    if len(extracted_pages) >= 6:
+                        print(f"DEBUG: Got {len(extracted_pages)} results, cancelling remaining {len(tasks)} slow sites")
+                        for task in pending:
+                            task.cancel()
+                        break
+                        
+                except asyncio.TimeoutError:
+                    # Continue to next stage
+                    continue
+            
+            # Cancel any remaining tasks
+            for task in tasks:
+                task.cancel()
+                
+            print(f"DEBUG: Web extraction completed with {len(extracted_pages)} successful results")
+            
+            # Return results immediately - let caller handle blacklist updates later
+            return extracted_pages, {'failed_sites': failed_sites, 'slow_sites': slow_sites}
             
             # Get domain filter for recording failures
             from .domain_filter import get_domain_filter

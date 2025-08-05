@@ -42,15 +42,31 @@ class SearchPipeline:
             AI-generated response based on search results
         """
         try:
-            # Step 1: Optimize the search query
-            print(f"DEBUG: Optimizing query with {self.provider.__class__.__name__}")
-            optimized_query = await self.provider.optimize_query(query, context)
-            print(f"DEBUG: Optimized query: {optimized_query}")
-            
-            # Step 2: Perform Google search with context size for token estimation
-            print(f"DEBUG: Performing Google search for: {optimized_query}")
+            # Parallel approach: Start query optimization and fallback search simultaneously
+            print(f"DEBUG: Starting parallel query optimization and fallback search")
             context_size = len(context) if context else 0
-            search_results = await self._perform_google_search(optimized_query, self.enable_full_extraction, context_size)
+            
+            optimization_task = asyncio.create_task(
+                self.provider.optimize_query(query, context)
+            )
+            fallback_search_task = asyncio.create_task(
+                self._perform_google_search(query, self.enable_full_extraction, context_size)
+            )
+            
+            try:
+                # Wait for optimization with aggressive timeout
+                optimized_query = await asyncio.wait_for(optimization_task, timeout=2.0)
+                print(f"DEBUG: Query optimization completed: {optimized_query}")
+                
+                # Cancel fallback and use optimized query
+                fallback_search_task.cancel()
+                print(f"DEBUG: Performing Google search for optimized query: {optimized_query}")
+                search_results = await self._perform_google_search(optimized_query, self.enable_full_extraction, context_size)
+                
+            except asyncio.TimeoutError:
+                # Use fallback results if optimization is slow
+                print(f"DEBUG: Query optimization timed out, using fallback search results")
+                search_results = await fallback_search_task
             
             if not search_results or "Search failed" in search_results:
                 return f"Web search unavailable: {search_results}"
@@ -59,11 +75,40 @@ class SearchPipeline:
             print(f"DEBUG: Analyzing results with {self.provider.__class__.__name__}")
             response = await self.provider.analyze_results(query, search_results, context)
             
+            # Step 4: Fire-and-forget blacklist updates AFTER getting response
+            if hasattr(self, '_tracking_data') and self._tracking_data:
+                # Don't await - let it run in background without blocking the response
+                asyncio.create_task(self._update_blacklist_async(self._tracking_data))
+            
             return response
             
         except Exception as e:
             provider_name = self.provider.__class__.__name__
             return f"Error in {provider_name} search pipeline: {str(e)}"
+    
+    async def _update_blacklist_async(self, tracking_data: dict):
+        """Update blacklist in background after search completion"""
+        try:
+            from .domain_filter import get_domain_filter
+            domain_filter = get_domain_filter()
+            
+            failed_sites = tracking_data.get('failed_sites', [])
+            slow_sites = tracking_data.get('slow_sites', [])
+            
+            # Process failed sites
+            for url, error in failed_sites:
+                if url != 'unknown':
+                    await domain_filter.record_failure(url, error)
+            
+            # Process slow sites
+            for url, response_time in slow_sites:
+                await domain_filter.record_slow_site(url, response_time)
+                
+            if failed_sites or slow_sites:
+                print(f"DEBUG: Background blacklist update - {len(failed_sites)} failures, {len(slow_sites)} slow sites")
+                
+        except Exception as e:
+            print(f"DEBUG: Background blacklist update failed: {e}")  # Don't crash anything
     
     async def _perform_google_search(self, query: str, enable_full_extraction: bool = False, context_size: int = 0) -> str:
         """Perform Google search with optional full page content extraction"""
@@ -114,8 +159,11 @@ class SearchPipeline:
                     print(f"DEBUG: Extracting full content from {len(urls)} pages...")
                     
                     extractor = WebContentExtractor()
-                    extracted_pages = await extractor.extract_multiple_pages(urls)
+                    extracted_pages, tracking_data = await extractor.extract_multiple_pages(urls)
                     print(f"DEBUG: Successfully extracted {len(extracted_pages)} pages")
+                    
+                    # Store tracking data for later blacklist updates
+                    self._tracking_data = tracking_data
                     
                     # Build enhanced search results with full content
                     search_results = f"Web search results for '{query}':\n\n"
