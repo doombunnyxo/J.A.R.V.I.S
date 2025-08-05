@@ -326,10 +326,26 @@ Finally, respond with a clear answer.
             
             response = completion.choices[0].message.content.strip()
             
-            # Estimate token count for context (rough: 4 characters per token)
-            estimated_tokens = len(context) // 4
+            # Estimate total prompt tokens (context + system prompt + user message)
+            # Rough estimation: 4 characters per token
+            context_tokens = len(context) // 4
+            system_prompt_tokens = 150  # Estimated system prompt structure size
+            user_message_tokens = len(query) // 4
+            total_estimated_tokens = context_tokens + system_prompt_tokens + user_message_tokens
             
-            return f"**AI Response** (~{estimated_tokens} tokens): {response}"
+            # Show the actual prompt for debugging/curiosity
+            system_content = messages[0]["content"]
+            user_content = messages[1]["content"]
+            
+            prompt_debug = f"""```
+SYSTEM PROMPT:
+{system_content}
+
+USER MESSAGE:
+{user_content}
+```"""
+            
+            return f"**AI Response** (~{total_estimated_tokens} tokens):\n\n{prompt_debug}\n\n**Response:** {response}"
             
         except Exception as e:
             logger.debug(f"Direct AI failed: {e}")

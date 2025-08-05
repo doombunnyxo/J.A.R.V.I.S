@@ -32,8 +32,12 @@ class OpenAISearchProvider:
         """Use OpenAI to analyze search results"""
         response = await openai_search_analysis(query, search_results, context, self.model)
         
-        # Estimate token count (rough: 4 characters per token)
-        estimated_tokens = len(context) // 4
+        # Estimate total prompt tokens (context + system prompt + search results + user query)
+        # Rough estimation: 4 characters per token
+        context_tokens = len(context) // 4
+        system_prompt_tokens = 200  # Estimated system prompt size
+        search_results_tokens = len(search_results) // 4
+        total_estimated_tokens = context_tokens + system_prompt_tokens + search_results_tokens
         
-        # Prepend response type with token count
-        return f"**Web Search** (~{estimated_tokens} tokens): {response}"
+        # Prepend response type with total token count
+        return f"**Web Search** (~{total_estimated_tokens} tokens): {response}"
