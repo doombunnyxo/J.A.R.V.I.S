@@ -84,21 +84,13 @@ class WebContentExtractor:
                     
                     tasks = list(pending)
                     
-                    # Only exit early if we have good results and remaining tasks are taking too long
-                    # Wait for all 10 results in early stages, only quit in final stage if we have decent coverage
-                    if len(extracted_pages) >= 7 and timeout_stage >= 6:
-                        print(f"DEBUG: Got {len(extracted_pages)} results in final stage, cancelling remaining {len(tasks)} very slow sites")
-                        for task in pending:
-                            task.cancel()
-                        break
+                    # Let all tasks complete naturally - no early cancellation
                         
                 except asyncio.TimeoutError:
                     # Continue to next stage
                     continue
             
-            # Cancel any remaining tasks
-            for task in tasks:
-                task.cancel()
+            # All tasks should complete naturally through timeouts - no cancellation needed
                 
             print(f"DEBUG: Web extraction completed with {len(extracted_pages)} successful results")
             
