@@ -84,9 +84,10 @@ class WebContentExtractor:
                     
                     tasks = list(pending)
                     
-                    # Early exit if we have enough good results (diminishing returns)
-                    if len(extracted_pages) >= 6:
-                        print(f"DEBUG: Got {len(extracted_pages)} results, cancelling remaining {len(tasks)} slow sites")
+                    # Only exit early if we have good results and remaining tasks are taking too long
+                    # Wait for all 10 results in early stages, only quit in final stage if we have decent coverage
+                    if len(extracted_pages) >= 7 and timeout_stage >= 6:
+                        print(f"DEBUG: Got {len(extracted_pages)} results in final stage, cancelling remaining {len(tasks)} very slow sites")
                         for task in pending:
                             task.cancel()
                         break
