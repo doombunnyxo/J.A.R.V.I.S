@@ -31,5 +31,9 @@ class OpenAISearchProvider:
     async def analyze_results(self, query: str, search_results: str, context: str) -> str:
         """Use OpenAI to analyze search results"""
         response = await openai_search_analysis(query, search_results, context, self.model)
-        # Prepend response type
-        return f"**Web Search:** {response}"
+        
+        # Estimate token count (rough: 4 characters per token)
+        estimated_tokens = len(context) // 4
+        
+        # Prepend response type with token count
+        return f"**Web Search** (~{estimated_tokens} tokens): {response}"

@@ -520,6 +520,11 @@ Return only relevant permanent context items, one per line, in the exact same fo
                     "role": "system",
                     "content": """You are a context summarizer and filter. Your job is to extract and condense ONLY the context that is relevant to the user's current query.
 
+APPROACH:
+First, consider the user's intent in their query.
+Then, identify what context would help answer it.
+Finally, extract and summarize only relevant information.
+
 INSTRUCTIONS:
 1. First, identify what information would help answer the user's query
 2. Extract ONLY relevant messages, conversations, and stored information

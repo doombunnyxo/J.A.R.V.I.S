@@ -297,11 +297,18 @@ class AIHandler:
             client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
             
             messages = [
-                {"role": "system", "content": f"""You are a helpful AI assistant in a Discord server.
+                {"role": "system", "content": f"""[Role]
+You are a helpful AI assistant in a Discord server.
 
+[Context Information]
 {context}
 
-[Instructions]
+[Thinking Process]
+First, consider the user's intent.  
+Then, analyze the relevant context.  
+Finally, respond with a clear answer.
+
+[Response Guidelines]
 - Use the channel and user context to provide helpful, relevant responses
 - Be aware of ongoing conversations and reference them when appropriate
 - Apply any global settings consistently
@@ -318,7 +325,11 @@ class AIHandler:
             )
             
             response = completion.choices[0].message.content.strip()
-            return f"**AI Response:** {response}"
+            
+            # Estimate token count for context (rough: 4 characters per token)
+            estimated_tokens = len(context) // 4
+            
+            return f"**AI Response** (~{estimated_tokens} tokens): {response}"
             
         except Exception as e:
             logger.debug(f"Direct AI failed: {e}")
