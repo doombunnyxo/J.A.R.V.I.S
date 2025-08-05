@@ -107,9 +107,8 @@ class WebContentExtractor:
                             slow_sites.append((url, elapsed))  # Use elapsed time as response time
                     marked_slow_at_6s = True  # Don't mark again
                 
-                # Wait for next completion with remaining time limit
-                remaining_time = max_total_time - total_elapsed
-                wait_timeout = min(1.0, remaining_time)  # Don't wait longer than remaining time
+                # Wait for next completion - use full request timeout
+                wait_timeout = 8.0  # Wait up to 8 seconds for any task to complete
                 
                 # Debug: About to wait
                 if debug_channel and len(extracted_pages) < 2:  # Limit spam
