@@ -31,5 +31,5 @@ class OpenAISearchProvider:
     async def analyze_results(self, query: str, search_results: str, context: str) -> str:
         """Use OpenAI to analyze search results"""
         response = await openai_search_analysis(query, search_results, context, self.model)
-        # Prepend model name to response
-        return f"**{self.model_name}:** {response}"
+        # Prepend response type
+        return f"**Web Search:** {response}"

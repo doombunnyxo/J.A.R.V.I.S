@@ -323,6 +323,21 @@ Return only relevant permanent context items, one per line, in the exact same fo
             logger.debug(f"Permanent context filtering failed: {e}")
             return permanent_context
     
+    def extract_reply_context(self, message) -> str:
+        """Extract the original message being replied to"""
+        if not message or not message.reference:
+            return ""
+        
+        try:
+            original_message = message.reference.resolved
+            if original_message and original_message.content:
+                author_name = original_message.author.display_name
+                return f"[REPLYING TO] {author_name}: {original_message.content}"
+        except Exception as e:
+            logger.debug(f"Failed to extract reply context: {e}")
+        
+        return ""
+
     async def build_unfiltered_context(self, user_id: int, channel_id: int, user_name: str, message=None) -> str:
         """Build complete unfiltered context for casual AI chat"""
         user_key = data_manager.get_user_key(message.author) if message else None
@@ -333,6 +348,11 @@ Return only relevant permanent context items, one per line, in the exact same fo
         # Always include user name
         if user_name:
             context_parts.append(f"User: {user_name}")
+        
+        # Include reply context if this is a reply (highest priority, unfiltered)
+        reply_context = self.extract_reply_context(message)
+        if reply_context:
+            context_parts.append(reply_context)
         
         # Get conversation context (last 6 exchanges)
         conversation_context = self.get_conversation_context(user_id, channel_id)
@@ -455,6 +475,11 @@ Return only relevant permanent context items, one per line, in the exact same fo
                 full_context = "\n\n".join(context_parts)
                 filtered_context = await self.filter_all_context(query, full_context, user_name)
                 
+                # Add reply context after filtering (always preserved, unfiltered)
+                reply_context = self.extract_reply_context(message)
+                if reply_context:
+                    filtered_context = f"{reply_context}\n\n{filtered_context}" if filtered_context else reply_context
+                
                 # Add global unfiltered permanent context after filtering
                 unfiltered_items = data_manager.get_unfiltered_permanent_context()
                 if unfiltered_items:
@@ -468,6 +493,12 @@ Return only relevant permanent context items, one per line, in the exact same fo
                 logger.debug(f"Context filtering failed: {e}")
                 # Fallback to unfiltered context
                 full_context = "\n\n".join(context_parts)
+                
+                # Add reply context to fallback as well
+                reply_context = self.extract_reply_context(message)
+                if reply_context:
+                    full_context = f"{reply_context}\n\n{full_context}" if full_context else reply_context
+                
                 unfiltered_items = data_manager.get_unfiltered_permanent_context()
                 if unfiltered_items:
                     unfiltered_context = "Global preferences (always apply):\n" + "\n".join([
@@ -478,6 +509,12 @@ Return only relevant permanent context items, one per line, in the exact same fo
         
         # Return unfiltered context if no OpenAI API
         full_context = "\n\n".join(context_parts) if context_parts else f"User: {user_name}" if user_name else ""
+        
+        # Add reply context even when no OpenAI API
+        reply_context = self.extract_reply_context(message)
+        if reply_context:
+            full_context = f"{reply_context}\n\n{full_context}" if full_context else reply_context
+        
         unfiltered_items = data_manager.get_unfiltered_permanent_context()
         if unfiltered_items:
             unfiltered_context = "Global preferences (always apply):\n" + "\n".join([

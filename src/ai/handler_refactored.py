@@ -234,7 +234,16 @@ class AIHandler:
                 logger.info(f"Detected admin command, routing to admin processor: {query}")
                 admin_response = await self.admin_processor.process_admin_command(message, query)
                 logger.info(f"Admin processor returned: {admin_response[:100] if admin_response else 'None/Empty'}...")
-                return admin_response
+                # Admin processor returns None if no valid admin action found
+                if admin_response:
+                    return admin_response
+                else:
+                    # Admin keywords detected but no valid action - handle as AI response
+                    response = await self._handle_search_with_openai(message, query)
+                    # Don't double-label if it already has a label
+                    if response and not response.startswith("**"):
+                        return f"**AI Response:** {response}"
+                    return response
             else:
                 # Search command path  
                 return await self._handle_search_with_openai(message, query)
@@ -299,7 +308,8 @@ class AIHandler:
                 temperature=0.8  # Higher temperature for more creative, fun conversation
             )
             
-            return completion.choices[0].message.content.strip()
+            response = completion.choices[0].message.content.strip()
+            return f"**AI Response:** {response}"
             
         except Exception as e:
             logger.debug(f"Direct AI failed: {e}")

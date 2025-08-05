@@ -73,12 +73,32 @@ def smart_split_message(text: str, max_length: int = 2000) -> list[str]:
 
 def suppress_link_previews(text: str) -> str:
     """Suppress Discord link previews by wrapping URLs in angle brackets"""
-    # Pattern to match URLs that aren't already wrapped in angle brackets
-    # This matches http(s):// URLs that don't have < before them or > after them
-    url_pattern = r'(?<!<)(https?://[^\s<>]+)(?!>)'
+    if not text:
+        return text
     
-    # Replace unprotected URLs with angle-bracket wrapped versions
-    return re.sub(url_pattern, r'<\1>', text)
+    # Find all URLs (http or https)
+    url_pattern = r'https?://[^\s<>]+'
+    
+    def replace_url(match):
+        url = match.group(0)
+        start_pos = match.start()
+        end_pos = match.end()
+        
+        # Check if URL is already wrapped in angle brackets
+        has_opening_bracket = start_pos > 0 and text[start_pos - 1] == '<'
+        has_closing_bracket = end_pos < len(text) and text[end_pos] == '>'
+        
+        # Only wrap if not already wrapped
+        if has_opening_bracket and has_closing_bracket:
+            return url  # Already wrapped, leave as-is
+        elif has_opening_bracket and not has_closing_bracket:
+            return f'{url}>'  # Has opening but missing closing
+        elif not has_opening_bracket and has_closing_bracket:
+            return f'<{url}'  # Has closing but missing opening (shouldn't happen)
+        else:
+            return f'<{url}>'  # Not wrapped, add both brackets
+    
+    return re.sub(url_pattern, replace_url, text)
 
 
 async def send_long_message(channel, text: str, max_length: int = 2000):
