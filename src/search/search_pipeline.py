@@ -16,7 +16,7 @@ class SearchProvider(Protocol):
         """Optimize the search query based on context"""
         ...
     
-    async def analyze_results(self, query: str, search_results: str, context: str) -> str:
+    async def analyze_results(self, query: str, search_results: str, context: str, channel=None) -> str:
         """Analyze search results and provide a response"""
         ...
 
@@ -28,7 +28,7 @@ class SearchPipeline:
         self.enable_full_extraction = enable_full_extraction
         self.debug_channel = debug_channel
     
-    async def search_and_respond(self, query: str, context: str = "") -> str:
+    async def search_and_respond(self, query: str, context: str = "", channel=None) -> str:
         """
         Execute the full search pipeline:
         1. Optimize the query using the AI provider
@@ -74,7 +74,7 @@ class SearchPipeline:
             
             # Step 3: Analyze results with context
             print(f"DEBUG: Analyzing results with {self.provider.__class__.__name__}")
-            response = await self.provider.analyze_results(query, search_results, context)
+            response = await self.provider.analyze_results(query, search_results, context, channel)
             
             # Step 4: Update blacklist immediately after getting response
             if hasattr(self, '_tracking_data') and self._tracking_data:

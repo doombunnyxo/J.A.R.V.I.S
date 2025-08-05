@@ -159,7 +159,7 @@ Summary:"""
         return f"**{title}** ({url}): Summarization failed - {str(e)}"
 
 
-async def _two_stage_analysis(user_query: str, search_results: str, filtered_context: str) -> str:
+async def _two_stage_analysis(user_query: str, search_results: str, filtered_context: str, channel=None) -> str:
     """
     Two-stage analysis: First summarize each webpage, then synthesize final answer
     """
@@ -222,6 +222,20 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
     combined_summaries = "\n\n".join(valid_summaries)
     print(f"DEBUG: Completed parallel summarization, now synthesizing final answer")
     
+    # Post combined summaries to Discord
+    if channel:
+        try:
+            # Split long summaries into chunks to avoid Discord's 2000 char limit
+            if len(combined_summaries) > 1800:
+                chunks = [combined_summaries[i:i+1800] for i in range(0, len(combined_summaries), 1800)]
+                await channel.send(f"**Combined Website Summaries ({len(chunks)} parts):**")
+                for i, chunk in enumerate(chunks, 1):
+                    await channel.send(f"```\nPart {i}/{len(chunks)}:\n{chunk}\n```")
+            else:
+                await channel.send(f"**Combined Website Summaries:**\n```\n{combined_summaries}\n```")
+        except Exception as e:
+            print(f"DEBUG: Failed to post summaries to Discord: {e}")
+    
     # Stage 2: Synthesize final answer using cleaner prompt structure
     openai_client = OpenAIAPI(config.OPENAI_API_KEY, "gpt-4o-mini")
     
@@ -267,14 +281,14 @@ Answer:"""
         temperature=0.2
     )
     
-    # Calculate actual tokens used in final synthesis (much smaller than raw search results)
-    final_prompt_tokens = len(combined_summaries) // 4 + len(user_message) // 4 + len(system_message) // 4
+    # Calculate actual input tokens for the final synthesis prompt (combined_summaries is already in user_message)
+    final_prompt_tokens = (len(system_message) + len(user_message)) // 4
     
     print(f"DEBUG: Two-stage analysis completed successfully")
     return f"**OpenAI GPT-4o Mini Web Search** ({len(webpage_sections)} sites, ~{final_prompt_tokens} tokens): {response}"
 
 
-async def openai_search_analysis(user_query: str, search_results: str, filtered_context: str = "", model: str = "gpt-4o-mini") -> str:
+async def openai_search_analysis(user_query: str, search_results: str, filtered_context: str = "", model: str = "gpt-4o-mini", channel=None) -> str:
     """
     Use OpenAI to analyze search results and provide a comprehensive answer
     - GPT-4o mini: Uses two-stage approach (summarize pages, then synthesize)
@@ -288,7 +302,7 @@ async def openai_search_analysis(user_query: str, search_results: str, filtered_
         if "Full Content (" in search_results:
             if model == "gpt-4o-mini":
                 # Use two-stage approach for cost optimization
-                return await _two_stage_analysis(user_query, search_results, filtered_context)
+                return await _two_stage_analysis(user_query, search_results, filtered_context, channel)
             else:
                 # GPT-4o can handle full content directly - use single-stage approach
                 pass  # Fall through to single-stage processing
@@ -344,8 +358,8 @@ Discord-formatted Answer:"""
             temperature=0.2
         )
         
-        # Calculate actual tokens used in single-stage approach
-        single_stage_tokens = len(user_message) // 4 + len(system_message) // 4
+        # Calculate actual input tokens for the single-stage approach
+        single_stage_tokens = (len(system_message) + len(user_message)) // 4
         
         # Count websites in search results (look for numbered results like "1. **Title**")
         import re

@@ -28,10 +28,10 @@ class OpenAISearchProvider:
         """Use OpenAI to optimize the search query"""
         return await openai_optimize_search_query(query, context, self.model)
     
-    async def analyze_results(self, query: str, search_results: str, context: str) -> str:
+    async def analyze_results(self, query: str, search_results: str, context: str, channel=None) -> str:
         """Use OpenAI to analyze search results"""
         # Use the model specified during initialization
-        response = await openai_search_analysis(query, search_results, context, self.model)
+        response = await openai_search_analysis(query, search_results, context, self.model, channel)
         
         # Token estimation is now handled inside openai_search_analysis 
         # based on what was actually sent to the API, not the raw search results
