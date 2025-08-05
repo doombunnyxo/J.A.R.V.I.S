@@ -109,7 +109,7 @@ Search query:"""
         print(f"DEBUG: OpenAI search query optimization failed: {e}")
         return user_query  # Fallback to original query
 
-async def summarize_webpage_content(webpage_content: str, title: str, url: str) -> str:
+async def summarize_webpage_content(webpage_content: str, title: str, url: str, channel=None) -> str:
     """
     Summarize individual webpage content using GPT-4o mini
     """
@@ -152,7 +152,17 @@ Summary:"""
             temperature=0.0  # Deterministic for faster processing
         )
         
-        return f"**{title}** ({url}):\n{summary}"
+        result = f"**{title}** ({url}):\n{summary}"
+        
+        # Post individual summary to Discord
+        if channel:
+            try:
+                from ..utils.message_utils import send_long_message
+                await send_long_message(channel, f"📄 **Individual Summary**:\n{result}")
+            except Exception as e:
+                print(f"DEBUG: Failed to post individual summary to Discord: {e}")
+        
+        return result
         
     except Exception as e:
         print(f"DEBUG: Webpage summarization failed for {url}: {e}")
@@ -201,7 +211,7 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
     
     # Stage 1: Parallel summarization of individual webpages
     summarization_tasks = [
-        summarize_webpage_content(section['content'], section['title'], section['url'])
+        summarize_webpage_content(section['content'], section['title'], section['url'], channel)
         for section in webpage_sections
     ]
     
@@ -225,16 +235,10 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
     # Post combined summaries to Discord
     if channel:
         try:
-            # Split long summaries into chunks to avoid Discord's 2000 char limit
-            if len(combined_summaries) > 1800:
-                chunks = [combined_summaries[i:i+1800] for i in range(0, len(combined_summaries), 1800)]
-                await channel.send(f"**Combined Website Summaries ({len(chunks)} parts):**")
-                for i, chunk in enumerate(chunks, 1):
-                    await channel.send(f"```\nPart {i}/{len(chunks)}:\n{chunk}\n```")
-            else:
-                await channel.send(f"**Combined Website Summaries:**\n```\n{combined_summaries}\n```")
+            from ..utils.message_utils import send_long_message
+            await send_long_message(channel, f"📋 **All Combined Website Summaries**:\n{combined_summaries}")
         except Exception as e:
-            print(f"DEBUG: Failed to post summaries to Discord: {e}")
+            print(f"DEBUG: Failed to post combined summaries to Discord: {e}")
     
     # Stage 2: Synthesize final answer using cleaner prompt structure
     openai_client = OpenAIAPI(config.OPENAI_API_KEY, "gpt-4o-mini")

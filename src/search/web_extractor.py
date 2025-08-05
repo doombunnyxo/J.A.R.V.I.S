@@ -25,7 +25,7 @@ class WebContentExtractor:
         self.max_content_length = max_content_length
         self.session_timeout = aiohttp.ClientTimeout(total=timeout)
     
-    async def extract_multiple_pages(self, urls: List[str]) -> List[Dict[str, str]]:
+    async def extract_multiple_pages(self, urls: List[str], debug_channel=None) -> List[Dict[str, str]]:
         """Extract content from multiple URLs concurrently"""
         if not HAS_BS4:
             raise ImportError("BeautifulSoup4 is required for web content extraction. Install with: pip install beautifulsoup4")
@@ -64,6 +64,12 @@ class WebContentExtractor:
             url_by_task = {task: url for task, url in zip(tasks, allowed_urls)}  # Track which URL belongs to which task
             
             marked_slow_at_6s = False  # Track if we've already marked slow sites
+            
+            # Debug to Discord
+            if debug_channel:
+                try:
+                    await debug_channel.send(f"🔍 **Web Extraction Started**: {len(allowed_urls)} URLs, target: {target_summary_tokens} tokens")
+                except: pass
             
             while pending_tasks and estimated_summary_tokens < target_summary_tokens:
                 # Check if we've hit the 6 second mark to identify slow sites (but don't exit)
