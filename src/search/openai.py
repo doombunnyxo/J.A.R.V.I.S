@@ -201,10 +201,6 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
         return "Error: Could not parse webpage content for summarization."
     
     
-    if channel:
-        try:
-            await channel.send(f"📝 **Starting {len(webpage_sections)} parallel summaries**")
-        except: pass
     
     # Stage 1: Parallel summarization of individual webpages
     import time
@@ -218,10 +214,6 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
     webpage_summaries = await asyncio.gather(*summarization_tasks, return_exceptions=True)
     summary_time = time.time() - summary_start
     
-    if channel:
-        try:
-            await channel.send(f"✅ **Individual summaries**: {summary_time:.2f}s")
-        except: pass
     
     # Filter out exceptions and combine summaries
     valid_summaries = []
@@ -235,10 +227,6 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
     
     combined_summaries = "\n\n".join(valid_summaries)
     
-    if channel:
-        try:
-            await channel.send(f"🔄 **Starting final synthesis**")
-        except: pass
     
     # Stage 2: Synthesize final answer using cleaner prompt structure
     synthesis_start = time.time()
@@ -287,10 +275,6 @@ Answer:"""
     )
     synthesis_time = time.time() - synthesis_start
     
-    if channel:
-        try:
-            await channel.send(f"🎯 **Final synthesis**: {synthesis_time:.2f}s")
-        except: pass
     
     # Calculate actual input tokens for the final synthesis prompt (combined_summaries is already in user_message)
     final_prompt_tokens = (len(system_message) + len(user_message)) // 4
@@ -377,10 +361,6 @@ Discord-formatted Answer:"""
         )
         single_stage_time = time.time() - single_stage_start
         
-        if channel:
-            try:
-                await channel.send(f"⚡ **Single-stage complete**: {single_stage_time:.2f}s")
-            except: pass
         
         # Calculate actual input tokens for the single-stage approach
         single_stage_tokens = (len(system_message) + len(user_message)) // 4

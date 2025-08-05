@@ -48,47 +48,27 @@ class SearchPipeline:
             start_time = time.time()
             
             # Simple approach: Optimize query first, then search
-            if channel:
-                try:
-                    await channel.send(f"⏱️ **Starting search pipeline**")
-                except: pass
             context_size = len(context) if context else 0
             
             # Optimize the query
             opt_start = time.time()
             optimized_query = await self.provider.optimize_query(query, context)
             opt_time = time.time() - opt_start
-            if channel:
-                try:
-                    await channel.send(f"🔍 **Query optimization**: {opt_time:.2f}s")
-                except: pass
             
             # Perform search with optimized query
             search_start = time.time()
             search_results = await self._perform_google_search(optimized_query, self.enable_full_extraction, context_size, channel)
             search_time = time.time() - search_start
-            if channel:
-                try:
-                    await channel.send(f"🌐 **Web extraction**: {search_time:.2f}s")
-                except: pass
             
             if not search_results or "Search failed" in search_results:
                 return f"Web search unavailable: {search_results}"
             
             # Step 3: Analyze results with context
             analysis_start = time.time()
-            if channel:
-                try:
-                    await channel.send(f"🤖 **Starting AI analysis**")
-                except: pass
             response = await self.provider.analyze_results(query, search_results, context, channel)
             analysis_time = time.time() - analysis_start
             
             total_time = time.time() - start_time
-            if channel:
-                try:
-                    await channel.send(f"📊 **AI analysis**: {analysis_time:.2f}s | **Total**: {total_time:.2f}s")
-                except: pass
             
             # Step 4: Update blacklist immediately after getting response
             if hasattr(self, '_tracking_data') and self._tracking_data:
