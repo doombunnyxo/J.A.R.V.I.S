@@ -137,10 +137,9 @@ class SearchPipeline:
                     search_results += f"{index}. **{title}**\n"
                     
                     if link in extracted_by_url:
-                        # Use extracted content
+                        # Use full extracted content (no truncation for GPT-4o)
                         page_data = extracted_by_url[link]
-                        content_preview = page_data['content'][:1000] + "..." if len(page_data['content']) > 1000 else page_data['content']
-                        search_results += f"   Full Content ({page_data['length']} chars): {content_preview}\n"
+                        search_results += f"   Full Content ({page_data['length']} chars): {page_data['content']}\n"
                     else:
                         # Fallback to snippet
                         search_results += f"   Snippet: {snippet[:400]}...\n"
