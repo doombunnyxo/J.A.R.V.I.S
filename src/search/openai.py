@@ -121,56 +121,36 @@ async def openai_search_analysis(user_query: str, search_results: str, filtered_
         openai_client = OpenAIAPI(config.OPENAI_API_KEY, model)
         
         # Build system message for search result analysis
-        system_message = """[Role]
-You are an AI assistant that analyzes web search results to provide comprehensive, accurate answers to user questions. You are responding in a Discord chat environment.
+        system_message = """You are an expert assistant. Using all the information provided below—including the user's query, previous context, and a large set of website content—generate a clear, concise, and comprehensive answer.
 
-[Thinking Process]
-First, consider the user's intent.  
-Then, analyze the relevant context.  
-Finally, respond with a clear answer.
+Instructions:
+- Consider all the provided text carefully.
+- Focus only on information relevant to the user's query.
+- Integrate prior context to maintain continuity.
+- Avoid repeating information.
+- If conflicting information exists, note it briefly.
+- Write the answer clearly and in a well-organized manner.
+- Format the answer using Discord markdown:
+  - Use **bold** for key points.
+  - Use bullet points or numbered lists to organize information.
+  - Use inline code blocks (`code`) for technical terms or code snippets.
+  - Keep paragraphs short for readability.
+- Keep the answer focused and as concise as possible given the input size.
+- Optionally, limit your answer length to 1000 tokens."""
 
-[Analysis Instructions]
-1. **Analyze the provided search results** thoroughly
-2. **Extract the most relevant and current information** to answer the user's question
-3. **Synthesize information** from multiple sources when helpful
-4. **Provide specific details** like dates, numbers, names when available
-5. **Cite sources** when possible (mention website names)
-6. **Be concise but comprehensive** - aim for helpful, actionable answers
-7. **If search results are insufficient**, acknowledge limitations
-8. **Use user context** to personalize the response when relevant
-
-[Discord Formatting]
-- Use **bold** for emphasis (not numbered lists)
-- Use simple bullet points with • instead of 1., 2., 3.
-- Keep paragraphs short (2-3 sentences max)
-- Use line breaks between different topics
-- Avoid complex nested lists or numbering
-- Use Discord markdown: **bold**, *italic*, `code`, ```code blocks```
-- When listing items, use • or - for bullets, never numbers
-
-[Response Structure]
-- Lead with a direct answer to the user's question
-- Support with relevant details from search results
-- Use Discord-friendly formatting (bullets, bold, line breaks)
-- End with source attribution when applicable
-- Keep tone conversational and helpful
-
-[Context Note]
-The user context below has been filtered and summarized to include only information relevant to the current query. It includes pertinent conversation history, related channel discussions, and applicable user preferences."""
-
-        # Add user context if provided (context already has its own headers)
-        context_info = ""
-        if filtered_context and filtered_context.strip():
-            context_info = f"\n\n{filtered_context.strip()}"
+        # Build user message in the specified format
+        context_section = filtered_context.strip() if filtered_context and filtered_context.strip() else "No previous context available."
         
-        # Build user message with search results
-        user_message = f"""USER QUESTION: {user_query}
+        user_message = f"""User Query:
+{user_query}
 
-SEARCH RESULTS:
+Previous Context:
+{context_section}
+
+Website Content:
 {search_results}
-{context_info}
 
-Please analyze these search results and provide a comprehensive answer to the user's question."""
+Discord-formatted Answer:"""
         
         messages = [
             {"role": "system", "content": system_message},
