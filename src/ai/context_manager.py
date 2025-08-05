@@ -151,7 +151,7 @@ class ContextManager:
         return self.get_smart_channel_context(channel_id, limit)
     
     def get_smart_channel_context(self, channel_id: int, limit: int = 35, include_weights: bool = False) -> List[str]:
-        """Get channel messages with optional recency weights"""
+        """Get channel messages (weights parameter kept for compatibility but ignored)"""
         channel_messages = self.channel_conversations.get(channel_id, deque())
         
         if not channel_messages:
@@ -160,22 +160,8 @@ class ContextManager:
         # Just get all messages (already limited to 35 by storage)
         messages = list(channel_messages)
         
-        # Return content strings with optional weight information
-        if include_weights:
-            result = []
-            now = datetime.now()
-            for msg in messages:
-                # Calculate recency weight for display
-                hours_old = (now - msg.timestamp).total_seconds() / 3600
-                recency_score = math.exp(-hours_old / 12)
-                weight_percent = int(recency_score * 100)
-                
-                # Format: [Weight: 85%] Username: message content
-                result.append(f"[Weight: {weight_percent}%] {msg.content}")
-            return result
-        else:
-            # Return just the content strings
-            return [msg.content for msg in messages]
+        # Return just the content strings (no more weights)
+        return [msg.content for msg in messages]
     
     def get_thread_context(self, thread_id: int) -> List[str]:
         """Get thread messages (parent context already inherited when thread was first seen)"""
@@ -342,28 +328,15 @@ Return only relevant permanent context items, one per line, in the exact same fo
         """Build complete unfiltered context for casual AI chat"""
         user_key = data_manager.get_user_key(message.author) if message else None
         
-        # Gather all available context without filtering
-        context_parts = []
+        # Build structured context
+        structured_context = []
         
-        # Always include user name
-        if user_name:
-            context_parts.append(f"User: {user_name}")
-        
-        # Include reply context if this is a reply (highest priority, unfiltered)
+        # [Reply Context] - If this is a reply, show what they're replying to
         reply_context = self.extract_reply_context(message)
         if reply_context:
-            context_parts.append(reply_context)
+            structured_context.append(f"[Reply Context]\n{reply_context}")
         
-        # Get conversation context (last 6 exchanges)
-        conversation_context = self.get_conversation_context(user_id, channel_id)
-        if conversation_context:
-            conversation_text = "\n".join([
-                f"[Previous] {msg['role']}: {msg['content']}" 
-                for msg in conversation_context[-6:]
-            ])
-            context_parts.append(f"Previous conversation:\n{conversation_text}")
-        
-        # Get channel context if enabled
+        # [Channel Summary] - Recent channel/thread messages
         if user_key:
             user_settings = data_manager.get_user_settings(user_key)
             if user_settings.get("use_channel_context", True):
@@ -373,43 +346,59 @@ Return only relevant permanent context items, one per line, in the exact same fo
                         mentioned_messages = self.get_channel_context(mentioned_channel.id, limit=35)
                         if mentioned_messages:
                             mentioned_context_text = "\n".join(mentioned_messages)
-                            context_parts.append(f"Recent discussion in #{mentioned_channel.name}:\n{mentioned_context_text}")
+                            structured_context.append(f"[Channel Summary - #{mentioned_channel.name}]\nRecent messages:\n{mentioned_context_text}")
                 else:
                     # Check if current channel is a thread
                     is_current_thread = (message and hasattr(message.channel, 'type') and 
                                        str(message.channel.type) in ['public_thread', 'private_thread'])
                     
                     if is_current_thread:
-                        # Use thread context (parent context already inherited when thread was created)
+                        # Use thread context
                         thread_messages = self.get_thread_context(channel_id)
                         if thread_messages:
                             thread_context_text = "\n".join(thread_messages)
                             thread_name = message.channel.name if hasattr(message.channel, 'name') else "current thread"
-                            context_parts.append(f"Thread discussion in {thread_name}:\n{thread_context_text}")
+                            structured_context.append(f"[Thread Summary - {thread_name}]\nThis is a thread conversation. Recent messages:\n{thread_context_text}")
                     else:
-                        # No channels mentioned, use current channel context with weights
-                        channel_messages = self.get_smart_channel_context(channel_id, limit=35, include_weights=True)
+                        # Regular channel context
+                        channel_messages = self.get_channel_context(channel_id, limit=35)
                         if channel_messages:
                             channel_context_text = "\n".join(channel_messages)
                             current_channel_name = message.channel.name if message and hasattr(message.channel, 'name') else "current channel"
-                            context_parts.append(f"Recent discussion in #{current_channel_name} (with recency weights):\n{channel_context_text}")
+                            structured_context.append(f"[Channel Summary - #{current_channel_name}]\nRecent messages in this channel:\n{channel_context_text}")
         
-        # Get ALL permanent context without filtering
+        # [User Context] - Information about the user and their preferences
+        user_context_parts = []
+        
+        # Add user name
+        if user_name:
+            user_context_parts.append(f"Current user: {user_name}")
+        
+        # Add conversation history
+        conversation_context = self.get_conversation_context(user_id, channel_id)
+        if conversation_context:
+            user_context_parts.append(f"Recent conversation with this user ({len(conversation_context)} messages in memory)")
+            for msg in conversation_context[-4:]:  # Show last 2 exchanges
+                user_context_parts.append(f"- {msg['role'].title()}: {msg['content'][:100]}...")
+        
+        # Add permanent context about user
         if user_key:
             permanent_items = data_manager.get_permanent_context(user_key)
             if permanent_items:
-                permanent_text = "\n".join([f"- {item}" for item in permanent_items])
-                context_parts.append(f"Stored information about user:\n{permanent_text}")
+                user_context_parts.append("Stored information about this user:")
+                for item in permanent_items:
+                    user_context_parts.append(f"- {item}")
         
-        # Add global unfiltered permanent context
+        if user_context_parts:
+            structured_context.append(f"[User Context]\n" + "\n".join(user_context_parts))
+        
+        # [Global Settings] - System-wide preferences
         unfiltered_items = data_manager.get_unfiltered_permanent_context()
         if unfiltered_items:
-            unfiltered_context = "Global preferences (always apply):\n" + "\n".join([
-                f"- [MANDATORY] {item}" for item in unfiltered_items
-            ])
-            context_parts.append(unfiltered_context)
+            settings_text = "\n".join([f"- {item}" for item in unfiltered_items])
+            structured_context.append(f"[Global Settings]\nAlways apply these preferences:\n{settings_text}")
         
-        return "\n\n".join(context_parts) if context_parts else ""
+        return "\n\n".join(structured_context) if structured_context else ""
 
     async def build_full_context(self, query: str, user_id: int, channel_id: int, user_name: str, message=None) -> str:
         """Build complete filtered context for AI (conversation + channel + permanent context filtered together)"""
@@ -455,12 +444,12 @@ Return only relevant permanent context items, one per line, in the exact same fo
                             thread_name = message.channel.name if hasattr(message.channel, 'name') else "current thread"
                             context_parts.append(f"Thread discussion in {thread_name}:\n{thread_context_text}")
                     else:
-                        # No channels mentioned, use current channel context with weights
-                        channel_messages = self.get_smart_channel_context(channel_id, limit=35, include_weights=True)
+                        # No channels mentioned, use current channel context
+                        channel_messages = self.get_smart_channel_context(channel_id, limit=35)
                         if channel_messages:
                             channel_context_text = "\n".join(channel_messages)
                             current_channel_name = message.channel.name if message and hasattr(message.channel, 'name') else "current channel"
-                            context_parts.append(f"Recent discussion in #{current_channel_name} (with recency weights):\n{channel_context_text}")
+                            context_parts.append(f"Recent discussion in #{current_channel_name}:\n{channel_context_text}")
         
         # Get permanent context
         if user_key:
@@ -529,19 +518,24 @@ Return only relevant permanent context items, one per line, in the exact same fo
             filter_messages = [
                 {
                     "role": "system",
-                    "content": """You are a context filter. Extract information from ALL available context that is relevant to the user's current query.
+                    "content": """You are a context summarizer and filter. Your job is to extract and condense ONLY the context that is relevant to the user's current query.
 
 INSTRUCTIONS:
-1. ALWAYS include the user's name/identity
-2. Extract only context that helps answer the CURRENT query
-3. Be concise and factual, no frivolities
-4. If no context is relevant to the query, just return the user's name
+1. First, identify what information would help answer the user's query
+2. Extract ONLY relevant messages, conversations, and stored information
+3. Summarize the relevant content to be more concise while preserving key details
+4. Keep the structured format ([Channel Summary], [User Context], etc.) but only include sections with relevant content
+5. Preserve important details: names, technical terms, specific requests, recent decisions
+6. If channel messages aren't relevant to the query, omit the [Channel Summary] section entirely
+7. Always include basic user identity even if other context isn't relevant
 
-Return only the filtered context - no explanations."""
+Example: If user asks about Python, include Python discussions but omit unrelated chat about lunch plans.
+
+Return only the filtered and summarized context - no explanations."""
                 },
                 {
                     "role": "user", 
-                    "content": f"CURRENT QUERY: {query}\n\nAVAILABLE CONTEXT:\n{full_context}\n\nExtract and summarize context relevant to this query:"
+                    "content": f"CURRENT QUERY: {query}\n\nFULL CONTEXT TO FILTER:\n{full_context}\n\nPlease extract and summarize ONLY the parts relevant to answering this query:"
                 }
             ]
             

@@ -158,9 +158,7 @@ RESPONSE FORMAT:
 - Keep tone conversational and helpful
 
 USER CONTEXT (if provided):
-Carefully review and use the provided user context to make your response more personalized and relevant. The context includes conversation history, channel activity, and stored user preferences that should inform your answer. Reference the context when relevant to provide continuity with previous discussions.
-
-IMPORTANT: Some context messages include recency weights like [Weight: 85%]. Higher percentages indicate more recent/relevant messages. Use these weights to prioritize information - messages with higher weights are more current and likely more relevant to the user's question."""
+The context below has been filtered and summarized to include only information relevant to the current query. It includes pertinent conversation history, related channel discussions, and applicable user preferences. Use this context to provide personalized and contextually aware responses."""
 
         # Add user context if provided
         context_info = ""
