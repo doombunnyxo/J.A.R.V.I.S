@@ -41,7 +41,7 @@ class OpenAIAPI:
             "temperature": temperature
         }
         
-        timeout = aiohttp.ClientTimeout(total=30)
+        timeout = aiohttp.ClientTimeout(total=15)  # Faster timeout for API calls
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(self.base_url, headers=headers, json=payload) as response:
                 if response.status == 200:
@@ -145,11 +145,11 @@ Summary:"""
             {"role": "user", "content": user_message}
         ]
         
-        # Call OpenAI API with reasonable limits for summarization
+        # Call OpenAI API with optimized settings for speed
         summary = await openai_client.create_completion(
             messages=messages,
-            max_tokens=300,  # Keep summaries concise
-            temperature=0.1  # Low temperature for consistent summarization
+            max_tokens=200,  # Back to 200 for better quality summaries
+            temperature=0.0  # Deterministic for faster processing
         )
         
         return f"**{title}** ({url}):\n{summary}"

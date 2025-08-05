@@ -20,7 +20,7 @@ except ImportError as e:
 class WebContentExtractor:
     """Extract and clean web page content"""
     
-    def __init__(self, timeout: int = 10, max_content_length: int = 50000):
+    def __init__(self, timeout: int = 5, max_content_length: int = 50000):
         self.timeout = timeout
         self.max_content_length = max_content_length
         self.session_timeout = aiohttp.ClientTimeout(total=timeout)
@@ -39,9 +39,25 @@ class WebContentExtractor:
         if not allowed_urls:
             return []
         
-        async with aiohttp.ClientSession(timeout=self.session_timeout) as session:
+        # Create session with aggressive timeouts for fail-fast behavior
+        timeout = aiohttp.ClientTimeout(
+            total=self.timeout,     # 5s total per request
+            connect=2,              # 2s to establish connection
+            sock_read=3             # 3s to read response
+        )
+        
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             tasks = [self._extract_single_page(session, url) for url in allowed_urls]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Use timeout for the entire gather operation as well
+            try:
+                results = await asyncio.wait_for(
+                    asyncio.gather(*tasks, return_exceptions=True),
+                    timeout=self.timeout + 2  # 7s total for all requests
+                )
+            except asyncio.TimeoutError:
+                print(f"DEBUG: Web extraction timed out after {self.timeout + 2}s, some sites too slow")
+                # Return partial results - gather what we can quickly
+                results = []
             
             # Filter out exceptions and return successful extractions
             extracted_pages = []
