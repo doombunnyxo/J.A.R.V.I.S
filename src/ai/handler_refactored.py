@@ -294,22 +294,27 @@ class AIHandler:
         await message.channel.send(f"🔧 **Debug**: _handle_full_search called with query: `{query}`")
         logger.debug(f"_handle_full_search called with query: '{query}'")
         try:
+            await message.channel.send(f"🔧 **Debug**: Importing search modules...")
             from ..search.search_pipeline import SearchPipeline
             from ..search.openai_adapter import OpenAISearchProvider
             
+            await message.channel.send(f"🔧 **Debug**: Building context for search...")
             # Build context for search
             context = await self.context_manager.build_full_context(
                 query, message.author.id, message.channel.id,
                 message.author.display_name, message
             )
             
+            await message.channel.send(f"🔧 **Debug**: Context built ({len(context)} chars), creating GPT-4o provider...")
             # Use GPT-4o provider with full page extraction enabled
             openai_provider = OpenAISearchProvider(model="gpt-4o")
             pipeline = SearchPipeline(openai_provider, enable_full_extraction=True, debug_channel=message.channel)
             
+            await message.channel.send(f"🔧 **Debug**: Starting search pipeline with full extraction...")
             # Execute search pipeline with full page scraping
             response = await pipeline.search_and_respond(query, context)
             
+            await message.channel.send(f"🔧 **Debug**: Search completed, response length: {len(response)} chars")
             return response
             
         except Exception as e:
