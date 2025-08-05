@@ -271,7 +271,7 @@ Answer:"""
     final_prompt_tokens = len(combined_summaries) // 4 + len(user_message) // 4 + len(system_message) // 4
     
     print(f"DEBUG: Two-stage analysis completed successfully")
-    return f"**OpenAI GPT-4o Mini Web Search** (~{final_prompt_tokens} tokens): {response}"
+    return f"**OpenAI GPT-4o Mini Web Search** ({len(webpage_sections)} sites, ~{final_prompt_tokens} tokens): {response}"
 
 
 async def openai_search_analysis(user_query: str, search_results: str, filtered_context: str = "", model: str = "gpt-4o-mini") -> str:

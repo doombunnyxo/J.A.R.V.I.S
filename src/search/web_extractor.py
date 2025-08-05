@@ -91,9 +91,14 @@ class WebContentExtractor:
                             if result and result.get('content'):
                                 extracted_pages.append(result)
                                 
-                                # Each summary will be ~300 tokens
-                                estimated_summary_tokens += 300
-                                print(f"DEBUG: Got page {len(extracted_pages)}, estimated summary tokens: {estimated_summary_tokens}")
+                                # Estimate actual summary tokens based on content length
+                                # Summaries are capped at 300 tokens, but might be shorter for brief content
+                                content_length = len(result['content'])
+                                content_tokens = content_length // 4  # Rough token estimate
+                                expected_summary_tokens = min(content_tokens // 3, 300)  # Summaries are ~1/3 of original content, capped at 300
+                                
+                                estimated_summary_tokens += expected_summary_tokens
+                                print(f"DEBUG: Got page {len(extracted_pages)}, content: {content_length} chars, estimated summary: {expected_summary_tokens} tokens (total: {estimated_summary_tokens})")
                                 
                                 # Track slow sites (>3s response time) 
                                 if result.get('response_time', 0) > 3.0:
