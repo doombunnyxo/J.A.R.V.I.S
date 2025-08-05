@@ -36,7 +36,7 @@ class WebContentExtractor:
             await debug_channel.send(f"🔧 **Debug**: Attempting to extract from URLs:\n```\n{url_list}\n```")
         
         async with aiohttp.ClientSession(timeout=self.session_timeout) as session:
-            tasks = [self._extract_single_page(session, url) for url in urls]
+            tasks = [self._extract_single_page(session, url, debug_channel) for url in urls]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             
             # Filter out exceptions and return successful extractions
@@ -75,7 +75,7 @@ class WebContentExtractor:
             
             return extracted_pages
     
-    async def _extract_single_page(self, session: aiohttp.ClientSession, url: str) -> Optional[Dict[str, str]]:
+    async def _extract_single_page(self, session: aiohttp.ClientSession, url: str, debug_channel=None) -> Optional[Dict[str, str]]:
         """Extract content from a single URL"""
         try:
             headers = {
@@ -84,14 +84,20 @@ class WebContentExtractor:
             
             async with session.get(url, headers=headers) as response:
                 if response.status != 200:
+                    if debug_channel:
+                        await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - HTTP {response.status}")
                     return None
                 
                 # Check content type
                 content_type = response.headers.get('content-type', '').lower()
                 if 'text/html' not in content_type:
+                    if debug_channel:
+                        await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Not HTML content: {content_type}")
                     return None
                 
                 html_content = await response.text()
+                if debug_channel:
+                    await debug_channel.send(f"🔧 **Debug**: ✅ <{url}> - Got HTML ({len(html_content)} chars)")
                 
                 # Parse with BeautifulSoup
                 soup = BeautifulSoup(html_content, 'html.parser')
@@ -104,11 +110,16 @@ class WebContentExtractor:
                 cleaned_content = self._clean_html_content(soup)
                 
                 if not cleaned_content or len(cleaned_content.strip()) < 100:
+                    if debug_channel:
+                        await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Content too short ({len(cleaned_content) if cleaned_content else 0} chars) after cleaning")
                     return None
                 
                 # Truncate if too long
                 if len(cleaned_content) > self.max_content_length:
                     cleaned_content = cleaned_content[:self.max_content_length] + "..."
+                
+                if debug_channel:
+                    await debug_channel.send(f"🔧 **Debug**: ✅ <{url}> - Successfully extracted {len(cleaned_content)} chars")
                 
                 return {
                     'url': url,
@@ -118,7 +129,10 @@ class WebContentExtractor:
                 }
                 
         except Exception as e:
-            print(f"DEBUG: Error extracting {url}: {e}")
+            error_msg = f"Error extracting {url}: {e}"
+            print(f"DEBUG: {error_msg}")
+            if debug_channel:
+                await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Exception: {str(e)}")
             return None
     
     def _clean_html_content(self, soup: BeautifulSoup) -> str:
