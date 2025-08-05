@@ -29,6 +29,12 @@ class WebContentExtractor:
         if not HAS_BS4:
             raise ImportError("BeautifulSoup4 is required for web content extraction. Install with: pip install beautifulsoup4")
         
+        if debug_channel:
+            url_list = '\n'.join([f"{i+1}. {url}" for i, url in enumerate(urls[:5])])  # Show first 5 URLs
+            if len(urls) > 5:
+                url_list += f"\n... and {len(urls)-5} more URLs"
+            await debug_channel.send(f"🔧 **Debug**: Attempting to extract from URLs:\n```\n{url_list}\n```")
+        
         async with aiohttp.ClientSession(timeout=self.session_timeout) as session:
             tasks = [self._extract_single_page(session, url) for url in urls]
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -39,8 +45,12 @@ class WebContentExtractor:
             
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
-                    print(f"DEBUG: Failed to extract {urls[i]}: {result}")
+                    error_msg = f"Failed to extract {urls[i]}: {result}"
+                    print(f"DEBUG: {error_msg}")
+                    if debug_channel:
+                        await debug_channel.send(f"🔧 **Debug**: ❌ {error_msg}")
                     continue
+                
                 if result and result.get('content'):
                     extracted_pages.append(result)
                     
@@ -53,6 +63,15 @@ class WebContentExtractor:
                             first_page_posted = True
                         except Exception as e:
                             print(f"DEBUG: Failed to post scraped content to Discord: {e}")
+                else:
+                    # Debug why page returned no content
+                    if debug_channel:
+                        if result is None:
+                            await debug_channel.send(f"🔧 **Debug**: ❌ URL {urls[i]} returned None")
+                        elif not result.get('content'):
+                            await debug_channel.send(f"🔧 **Debug**: ❌ URL {urls[i]} returned empty content - Title: {result.get('title', 'No title')}")
+                        else:
+                            await debug_channel.send(f"🔧 **Debug**: ❌ URL {urls[i]} - Unknown issue with result: {str(result)[:200]}")
             
             return extracted_pages
     
