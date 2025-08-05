@@ -159,8 +159,18 @@ class SearchPipeline:
                     'index': i
                 })
             
+            # Debug extraction mode
+            if channel:
+                try:
+                    await channel.send(f"🔧 **EXTRACTION MODE CHECK**: enable_full_extraction={enable_full_extraction}")
+                except: pass
+            
             if enable_full_extraction:
                 # Full page extraction mode
+                if channel:
+                    try:
+                        await channel.send("📝 **ENTERING FULL EXTRACTION MODE**")
+                    except: pass
                 try:
                     from .web_extractor import WebContentExtractor
                     
