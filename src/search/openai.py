@@ -257,8 +257,8 @@ Answer:"""
         {"role": "user", "content": user_message}
     ]
     
-    # Set shorter output limits for more concise final responses
-    max_tokens = 512
+    # Set output limits for final responses
+    max_tokens = 1024
     
     # Call OpenAI API for final synthesis
     response = await openai_client.create_completion(
