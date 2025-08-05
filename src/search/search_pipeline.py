@@ -42,47 +42,19 @@ class SearchPipeline:
         Returns:
             AI-generated response based on search results
         """
-        # TEST: Verify channel is working
-        if channel:
-            try:
-                await channel.send("🔥 **PIPELINE DEBUG**: search_and_respond called with channel!")
-            except Exception as e:
-                print(f"DEBUG: Channel test in pipeline failed: {e}")
-        else:
-            print("DEBUG: search_and_respond called with NO channel")
             
         try:
-            # Parallel approach: Start query optimization and fallback search simultaneously
-            print(f"DEBUG: Starting parallel query optimization and fallback search")
+            # Simple approach: Optimize query first, then search
+            print(f"DEBUG: Starting query optimization")
             context_size = len(context) if context else 0
             
-            optimization_task = asyncio.create_task(
-                self.provider.optimize_query(query, context)
-            )
-            fallback_search_task = asyncio.create_task(
-                self._perform_google_search(query, self.enable_full_extraction, context_size, channel)
-            )
+            # Optimize the query
+            optimized_query = await self.provider.optimize_query(query, context)
+            print(f"DEBUG: Query optimization completed: {optimized_query}")
             
-            try:
-                # Wait for optimization with timeout longer than web extraction
-                optimized_query = await asyncio.wait_for(optimization_task, timeout=10.0)
-                print(f"DEBUG: Query optimization completed: {optimized_query}")
-                
-                # Make sure fallback is properly cancelled
-                if not fallback_search_task.done():
-                    fallback_search_task.cancel()
-                    try:
-                        await fallback_search_task
-                    except asyncio.CancelledError:
-                        pass
-                
-                print(f"DEBUG: Performing Google search for optimized query: {optimized_query}")
-                search_results = await self._perform_google_search(optimized_query, self.enable_full_extraction, context_size, channel)
-                
-            except asyncio.TimeoutError:
-                # Use fallback results if optimization is slow
-                print(f"DEBUG: Query optimization timed out, using fallback search results")
-                search_results = await fallback_search_task
+            # Perform search with optimized query
+            print(f"DEBUG: Performing Google search for optimized query: {optimized_query}")
+            search_results = await self._perform_google_search(optimized_query, self.enable_full_extraction, context_size, channel)
             
             if not search_results or "Search failed" in search_results:
                 return f"Web search unavailable: {search_results}"
@@ -165,39 +137,17 @@ class SearchPipeline:
                     'index': i
                 })
             
-            # Debug extraction mode
-            if channel:
-                try:
-                    await channel.send(f"🔧 **EXTRACTION MODE CHECK**: enable_full_extraction={enable_full_extraction}")
-                except: pass
-            
             if enable_full_extraction:
                 # Full page extraction mode
-                if channel:
-                    try:
-                        await channel.send("📝 **ENTERING FULL EXTRACTION MODE**")
-                    except: pass
                 try:
                     from .web_extractor import WebContentExtractor
                     
                     urls = [result['link'] for result in basic_results]
                     print(f"DEBUG: Extracting full content from {len(urls)} pages...")
                     
-                    # Debug to Discord
-                    if channel:
-                        try:
-                            await channel.send(f"🌐 **STARTING WEB EXTRACTION**: {len(urls)} URLs")
-                        except: pass
-                    
                     extractor = WebContentExtractor()
                     extracted_pages, tracking_data = await extractor.extract_multiple_pages(urls, channel)
                     print(f"DEBUG: Successfully extracted {len(extracted_pages)} pages")
-                    
-                    # Debug extraction results
-                    if channel:
-                        try:
-                            await channel.send(f"📊 **WEB EXTRACTION COMPLETED**: {len(extracted_pages)} pages returned")
-                        except: pass
                     
                     # Store tracking data for later blacklist updates
                     self._tracking_data = tracking_data

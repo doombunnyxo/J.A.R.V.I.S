@@ -154,13 +154,6 @@ Summary:"""
         
         result = f"**{title}** ({url}):\n{summary}"
         
-        # Post individual summary to Discord
-        if channel:
-            try:
-                from ..utils.message_utils import send_long_message
-                await send_long_message(channel, f"📄 **Individual Summary**:\n{result}")
-            except Exception as e:
-                print(f"DEBUG: Failed to post individual summary to Discord: {e}")
         
         return result
         
@@ -188,18 +181,24 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
             title = sections[i + 1]
             content_block = sections[i + 2]
             
-            # Extract the full content from between "Full Content (...): " and "Source:"
+            # Extract snippet and full content
+            snippet_match = re.search(r'Snippet: (.*?)(?=\n)', content_block)
+            snippet = snippet_match.group(1).strip() if snippet_match else ""
+            
             full_content_match = re.search(r'Full Content \(\d+ chars\): (.*?)(?=\n\s*Source:)', content_block, re.DOTALL)
-            if full_content_match:
-                webpage_content = full_content_match.group(1).strip()
-                
+            full_content = full_content_match.group(1).strip() if full_content_match else ""
+            
+            # Combine snippet and full content
+            combined_content = f"Google Snippet: {snippet}\n\nFull Page Content: {full_content}" if snippet else full_content
+            
+            if combined_content:
                 # Extract URL from Source line
                 source_match = re.search(r'Source: (.+)', content_block)
                 url = source_match.group(1).strip() if source_match else "Unknown URL"
                 
                 webpage_sections.append({
                     'title': title,
-                    'content': webpage_content,
+                    'content': combined_content,
                     'url': url
                 })
     
@@ -302,16 +301,6 @@ async def openai_search_analysis(user_query: str, search_results: str, filtered_
         return "OpenAI API not configured - cannot process search results"
     
     try:
-        # Debug: Check what we got in search results
-        if channel:
-            try:
-                has_full_content = "Full Content (" in search_results
-                await channel.send(f"🔍 **SEARCH RESULTS DEBUG**: Full content found: {has_full_content}, Model: {model}")
-                if has_full_content:
-                    await channel.send("✅ **TRIGGERING TWO-STAGE ANALYSIS**")
-                else:
-                    await channel.send("❌ **NO FULL CONTENT - USING SINGLE STAGE**")
-            except: pass
         
         # Check if we have full webpage content and decide approach based on model
         if "Full Content (" in search_results:

@@ -27,12 +27,6 @@ class WebContentExtractor:
     
     async def extract_multiple_pages(self, urls: List[str], debug_channel=None) -> List[Dict[str, str]]:
         """Extract content from multiple URLs concurrently"""
-        # Debug: Show we entered the extractor
-        if debug_channel:
-            try:
-                await debug_channel.send(f"🚀 **EXTRACTOR STARTED**: Processing {len(urls)} URLs")
-            except Exception as e:
-                print(f"DEBUG: Failed to send extractor start message: {e}")
         
         if not HAS_BS4:
             raise ImportError("BeautifulSoup4 is required for web content extraction. Install with: pip install beautifulsoup4")
@@ -72,22 +66,12 @@ class WebContentExtractor:
             
             marked_slow_at_6s = False  # Track if we've already marked slow sites
             
-            # Debug to Discord
-            if debug_channel:
-                try:
-                    await debug_channel.send(f"🔍 **Web Extraction Started**: {len(allowed_urls)} URLs, target: {target_summary_tokens} tokens")
-                except: pass
             
             max_total_time = 8.0  # Maximum 8 seconds total for web extraction
             
             # Simple timeout approach - just wait max 8 seconds total
             start_time = asyncio.get_event_loop().time()
             
-            # Debug: Show we're starting extraction
-            if debug_channel:
-                try:
-                    await debug_channel.send(f"🔁 **STARTING EXTRACTION**: {len(pending_tasks)} tasks, 8s timeout")
-                except: pass
             
             try:
                 # Wait for all tasks with 8 second timeout
@@ -115,21 +99,9 @@ class WebContentExtractor:
                     if not task.done():
                         task.cancel()
                 
-                if debug_channel:
-                    try:
-                        await debug_channel.send(f"⏰ **EXTRACTION TIMEOUT**: 8s limit hit, got {len(extracted_pages)} pages")
-                    except: pass
             
             print(f"DEBUG: Web extraction completed with {len(extracted_pages)} successful results")
             
-            # Debug to Discord
-            if debug_channel:
-                try:
-                    if extracted_pages:
-                        await debug_channel.send(f"✅ **Web Extraction SUCCESS**: {len(extracted_pages)} pages extracted, {len(failed_sites)} failed, {len(slow_sites)} slow")
-                    else:
-                        await debug_channel.send(f"❌ **Web Extraction FAILED**: 0 pages extracted, {len(failed_sites)} failed, {len(slow_sites)} slow")
-                except: pass
             
             # Return results immediately - let caller handle blacklist updates later
             return extracted_pages, {'failed_sites': failed_sites, 'slow_sites': slow_sites}
