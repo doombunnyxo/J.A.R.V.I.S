@@ -156,7 +156,7 @@ class SearchPipeline:
                         # Note extraction failure
                         result_content += f"   (Full content extraction failed)\n"
                     
-                    result_content += f"   Source: <{link}>\n\n"
+                    result_content += f"   Source: {link}\n\n"
                     
                     # Estimate tokens for this result (roughly 4 chars per token)
                     result_tokens = len(result_content) // 4

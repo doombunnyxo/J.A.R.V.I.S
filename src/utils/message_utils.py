@@ -76,27 +76,13 @@ def suppress_link_previews(text: str) -> str:
     if not text:
         return text
     
-    # Find all URLs (http or https)
-    url_pattern = r'https?://[^\s<>]+'
+    # Find URLs that are NOT already wrapped in angle brackets
+    # This pattern looks for URLs that don't have < before them and > after them
+    url_pattern = r'(?<!<)https?://[^\s<>]+(?!>)'
     
     def replace_url(match):
         url = match.group(0)
-        start_pos = match.start()
-        end_pos = match.end()
-        
-        # Check if URL is already wrapped in angle brackets
-        has_opening_bracket = start_pos > 0 and text[start_pos - 1] == '<'
-        has_closing_bracket = end_pos < len(text) and text[end_pos] == '>'
-        
-        # Only wrap if not already wrapped
-        if has_opening_bracket and has_closing_bracket:
-            return url  # Already wrapped, leave as-is
-        elif has_opening_bracket and not has_closing_bracket:
-            return f'{url}>'  # Has opening but missing closing
-        elif not has_opening_bracket and has_closing_bracket:
-            return f'<{url}'  # Has closing but missing opening (shouldn't happen)
-        else:
-            return f'<{url}>'  # Not wrapped, add both brackets
+        return f'<{url}>'
     
     return re.sub(url_pattern, replace_url, text)
 
