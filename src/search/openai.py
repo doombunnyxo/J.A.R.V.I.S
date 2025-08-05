@@ -258,7 +258,7 @@ Answer:"""
     ]
     
     # Set output limits for final responses
-    max_tokens = 1024
+    max_tokens = 512
     
     # Call OpenAI API for final synthesis
     response = await openai_client.create_completion(
