@@ -329,7 +329,14 @@ async def openai_search_analysis(user_query: str, search_results: str, filtered_
                 pass  # Fall through to single-stage processing
         
         # Single-stage approach for GPT-4o or snippet-only results
+        if channel:
+            try:
+                await channel.send(f"🚀 **Starting single-stage analysis** ({model})")
+            except: pass
+        
         # Create OpenAI client with specified model
+        import time
+        single_stage_start = time.time()
         openai_client = OpenAIAPI(config.OPENAI_API_KEY, model)
         
         # Build system message for search result analysis
@@ -378,6 +385,12 @@ Discord-formatted Answer:"""
             max_tokens=max_tokens,
             temperature=0.2
         )
+        single_stage_time = time.time() - single_stage_start
+        
+        if channel:
+            try:
+                await channel.send(f"⚡ **Single-stage complete**: {single_stage_time:.2f}s")
+            except: pass
         
         # Calculate actual input tokens for the single-stage approach
         single_stage_tokens = (len(system_message) + len(user_message)) // 4
