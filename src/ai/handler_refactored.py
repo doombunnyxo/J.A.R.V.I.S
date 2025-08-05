@@ -158,6 +158,8 @@ class AIHandler:
                 response = await self._handle_with_openai(message, cleaned_query)
             elif provider == "direct-ai":
                 response = await self._handle_direct_ai(message, cleaned_query)
+            elif provider == "full-search":
+                response = await self._handle_full_search(message, cleaned_query)
             elif provider == "crafting":
                 response = await self._handle_with_crafting(message, cleaned_query)
             else:  # Default to OpenAI
@@ -276,6 +278,31 @@ class AIHandler:
         except Exception as e:
             logger.debug(f"Search pipeline failed: {e}")
             return f"❌ Error with search: {str(e)}"
+    
+    async def _handle_full_search(self, message, query: str) -> str:
+        """Handle full page search using GPT-4o with web scraping"""
+        try:
+            from ..search.search_pipeline import SearchPipeline
+            from ..search.openai_adapter import OpenAISearchProvider
+            
+            # Build context for search
+            context = await self.context_manager.build_full_context(
+                query, message.author.id, message.channel.id,
+                message.author.display_name, message
+            )
+            
+            # Use GPT-4o provider with full page extraction enabled
+            openai_provider = OpenAISearchProvider(model="gpt-4o")
+            pipeline = SearchPipeline(openai_provider, enable_full_extraction=True)
+            
+            # Execute search pipeline with full page scraping
+            response = await pipeline.search_and_respond(query, context)
+            
+            return response
+            
+        except Exception as e:
+            logger.debug(f"Full search pipeline failed: {e}")
+            return f"❌ Error with full search: {str(e)}"
 
     async def _handle_direct_ai(self, message, query: str) -> str:
         """Handle direct AI chat without search routing"""

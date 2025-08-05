@@ -118,6 +118,16 @@ class EventHandlers(commands.Cog):
                 await self.ai_handler.handle_ai_command(message, craft_query, "crafting")
                 return
             
+            # Check for full: pattern (full page search with GPT-4o)
+            elif "full:" in content:
+                full_index = content.find("full:")
+                query = message.content[full_index + 5:].strip()
+                
+                if query and self.ai_handler:
+                    logger.debug(f"[EventHandler-{self.instance_id}] Forcing full page search for: {query}")
+                    await self.ai_handler.handle_ai_command(message, query, force_provider="full-search")
+                return
+            
             # Check for ai: pattern (direct AI chat)
             elif "ai:" in content:
                 ai_index = content.find("ai:")
