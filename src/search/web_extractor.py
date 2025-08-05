@@ -107,11 +107,14 @@ class WebContentExtractor:
                             slow_sites.append((url, elapsed))  # Use elapsed time as response time
                     marked_slow_at_6s = True  # Don't mark again
                 
-                # Wait for next completion (no timeout constraint since we're not exiting at 6s)
+                # Wait for next completion with remaining time limit
+                remaining_time = max_total_time - total_elapsed
+                wait_timeout = min(1.0, remaining_time)  # Don't wait longer than remaining time
+                
                 try:
                     done, pending_tasks = await asyncio.wait(
                         pending_tasks, 
-                        timeout=1.0,
+                        timeout=wait_timeout,
                         return_when=asyncio.FIRST_COMPLETED
                     )
                     
