@@ -3,6 +3,7 @@ Generalized search pipeline for AI providers
 Provides a common flow: optimize query → Google search → analyze results
 """
 
+import asyncio
 from typing import Optional, Protocol, runtime_checkable
 from ..config import config
 from .google import perform_google_search
