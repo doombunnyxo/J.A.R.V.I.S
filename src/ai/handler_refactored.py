@@ -293,7 +293,7 @@ class AIHandler:
             
             # Use GPT-4o provider with full page extraction enabled
             openai_provider = OpenAISearchProvider(model="gpt-4o")
-            pipeline = SearchPipeline(openai_provider, enable_full_extraction=True)
+            pipeline = SearchPipeline(openai_provider, enable_full_extraction=True, debug_channel=message.channel)
             
             # Execute search pipeline with full page scraping
             response = await pipeline.search_and_respond(query, context)

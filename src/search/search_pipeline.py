@@ -22,9 +22,10 @@ class SearchProvider(Protocol):
 class SearchPipeline:
     """Generalized search pipeline that works with any provider"""
     
-    def __init__(self, provider: SearchProvider, enable_full_extraction: bool = False):
+    def __init__(self, provider: SearchProvider, enable_full_extraction: bool = False, debug_channel=None):
         self.provider = provider
         self.enable_full_extraction = enable_full_extraction
+        self.debug_channel = debug_channel
     
     async def search_and_respond(self, query: str, context: str = "") -> str:
         """
@@ -100,7 +101,7 @@ class SearchPipeline:
                     print(f"DEBUG: Extracting full content from {len(urls)} pages...")
                     
                     extractor = WebContentExtractor()
-                    extracted_pages = await extractor.extract_multiple_pages(urls)
+                    extracted_pages = await extractor.extract_multiple_pages(urls, self.debug_channel)
                     print(f"DEBUG: Successfully extracted {len(extracted_pages)} pages")
                     
                     # Build enhanced search results with full content

@@ -24,7 +24,7 @@ class WebContentExtractor:
         self.max_content_length = max_content_length
         self.session_timeout = aiohttp.ClientTimeout(total=timeout)
     
-    async def extract_multiple_pages(self, urls: List[str]) -> List[Dict[str, str]]:
+    async def extract_multiple_pages(self, urls: List[str], debug_channel=None) -> List[Dict[str, str]]:
         """Extract content from multiple URLs concurrently"""
         if not HAS_BS4:
             raise ImportError("BeautifulSoup4 is required for web content extraction. Install with: pip install beautifulsoup4")
@@ -35,12 +35,24 @@ class WebContentExtractor:
             
             # Filter out exceptions and return successful extractions
             extracted_pages = []
+            first_page_posted = False
+            
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
                     print(f"DEBUG: Failed to extract {urls[i]}: {result}")
                     continue
                 if result and result.get('content'):
                     extracted_pages.append(result)
+                    
+                    # Post first successfully extracted page to Discord for debugging
+                    if not first_page_posted and debug_channel:
+                        try:
+                            content_preview = result['content'][:1500] + "..." if len(result['content']) > 1500 else result['content']
+                            debug_msg = f"🔍 **First Scraped Page Debug**\n**URL**: {result['url']}\n**Title**: {result['title']}\n**Content ({result['length']} chars)**:\n```\n{content_preview}\n```"
+                            await debug_channel.send(debug_msg)
+                            first_page_posted = True
+                        except Exception as e:
+                            print(f"DEBUG: Failed to post scraped content to Discord: {e}")
             
             return extracted_pages
     
