@@ -185,8 +185,8 @@ Please analyze these search results and provide a comprehensive answer to the us
             {"role": "user", "content": user_message}
         ]
         
-        # Use much higher token limits for GPT-4o when processing full page content
-        max_tokens = 80000 if model == "gpt-4o" else 4000
+        # Set reasonable output token limits based on model
+        max_tokens = 2048 if model == "gpt-4o" else 1024
         
         # Call OpenAI API
         response = await openai_client.create_completion(
