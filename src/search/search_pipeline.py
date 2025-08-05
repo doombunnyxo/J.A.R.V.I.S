@@ -95,21 +95,33 @@ class SearchPipeline:
             if enable_full_extraction:
                 # Full page extraction mode
                 try:
+                    if self.debug_channel:
+                        await self.debug_channel.send(f"🔧 **Debug**: Attempting web extraction for {len(basic_results)} URLs...")
+                    
                     from .web_extractor import WebContentExtractor
                     
                     urls = [result['link'] for result in basic_results]
                     print(f"DEBUG: Extracting full content from {len(urls)} pages...")
                     
+                    if self.debug_channel:
+                        await self.debug_channel.send(f"🔧 **Debug**: Created WebContentExtractor, starting extraction...")
+                    
                     extractor = WebContentExtractor()
                     extracted_pages = await extractor.extract_multiple_pages(urls, self.debug_channel)
                     print(f"DEBUG: Successfully extracted {len(extracted_pages)} pages")
+                    
+                    if self.debug_channel:
+                        await self.debug_channel.send(f"🔧 **Debug**: Extraction complete - got {len(extracted_pages)} pages with content")
                     
                     # Build enhanced search results with full content
                     search_results = f"Full page web search results for '{query}':\n\n"
                     extracted_by_url = {page['url']: page for page in extracted_pages}
                     
                 except Exception as e:
-                    print(f"DEBUG: Full page extraction failed: {e}")
+                    error_msg = f"Full page extraction failed: {str(e)}"
+                    print(f"DEBUG: {error_msg}")
+                    if self.debug_channel:
+                        await self.debug_channel.send(f"🔧 **Debug**: ❌ {error_msg}")
                     # Fall back to snippet mode and include error info
                     search_results = f"⚠️ **Full extraction failed**: {str(e)}\n\nFalling back to snippet search for '{query}':\n\n"
                     enable_full_extraction = False
