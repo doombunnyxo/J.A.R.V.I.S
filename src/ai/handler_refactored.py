@@ -160,9 +160,9 @@ class AIHandler:
             elif provider == "direct-ai":
                 response = await self._handle_direct_ai(message, cleaned_query)
             elif provider == "full-search":
-                # Full search now routes to the same handler as regular search
-                logger.debug(f"Full search routing to standard search handler: '{cleaned_query}'")
-                response = await self._handle_search_with_openai(message, cleaned_query)
+                # Full search uses GPT-4o directly (no two-stage summarization)
+                logger.debug(f"Full search routing to GPT-4o handler: '{cleaned_query}'")
+                response = await self._handle_full_search(message, cleaned_query)
             elif provider == "crafting":
                 response = await self._handle_with_crafting(message, cleaned_query)
             else:  # Default to OpenAI
@@ -262,7 +262,7 @@ class AIHandler:
             return f"❌ Error with OpenAI processing: {str(e)}"
     
     async def _handle_search_with_openai(self, message, query: str) -> str:
-        """Handle search queries using full page extraction with GPT-4o"""
+        """Handle search queries using two-stage parallel summarization with GPT-4o mini"""
         try:
             from ..search.search_pipeline import SearchPipeline
             from ..search.openai_adapter import OpenAISearchProvider
@@ -273,11 +273,11 @@ class AIHandler:
                 message.author.display_name, message
             )
             
-            # Always use GPT-4o with full page extraction for searches
-            openai_provider = OpenAISearchProvider(model="gpt-4o")
+            # Use GPT-4o mini with full page extraction for two-stage summarization
+            openai_provider = OpenAISearchProvider(model="gpt-4o-mini")
             pipeline = SearchPipeline(openai_provider, enable_full_extraction=True)
             
-            # Execute search pipeline with full page extraction
+            # Execute search pipeline - this will trigger two-stage summarization
             response = await pipeline.search_and_respond(query, context)
             
             return response
@@ -287,7 +287,7 @@ class AIHandler:
             return f"❌ Error with search: {str(e)}"
     
     async def _handle_full_search(self, message, query: str) -> str:
-        """Handle full page search using GPT-4o with web scraping"""
+        """Handle full page search using GPT-4o directly (single-stage, no summarization)"""
         logger.debug(f"_handle_full_search called with query: '{query}'")
         try:
             from ..search.search_pipeline import SearchPipeline
@@ -299,11 +299,11 @@ class AIHandler:
                 message.author.display_name, message
             )
             
-            # Use GPT-4o provider with full page extraction enabled
+            # Use GPT-4o provider with full page extraction but no two-stage summarization
             openai_provider = OpenAISearchProvider(model="gpt-4o")
             pipeline = SearchPipeline(openai_provider, enable_full_extraction=True, debug_channel=None)
             
-            # Execute search pipeline with full page scraping
+            # Execute search pipeline - GPT-4o will handle full content directly
             response = await pipeline.search_and_respond(query, context)
             
             return response

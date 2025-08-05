@@ -274,17 +274,23 @@ Answer:"""
 async def openai_search_analysis(user_query: str, search_results: str, filtered_context: str = "", model: str = "gpt-4o-mini") -> str:
     """
     Use OpenAI to analyze search results and provide a comprehensive answer
-    Uses two-stage approach: summarize individual pages with GPT-4o mini, then synthesize with GPT-4o mini
+    - GPT-4o mini: Uses two-stage approach (summarize pages, then synthesize)
+    - GPT-4o: Uses single-stage approach (processes full content directly)
     """
     if not config.has_openai_api():
         return "OpenAI API not configured - cannot process search results"
     
     try:
-        # Check if we have full webpage content (indicated by "Full Content" sections)
+        # Check if we have full webpage content and decide approach based on model
         if "Full Content (" in search_results:
-            return await _two_stage_analysis(user_query, search_results, filtered_context)
+            if model == "gpt-4o-mini":
+                # Use two-stage approach for cost optimization
+                return await _two_stage_analysis(user_query, search_results, filtered_context)
+            else:
+                # GPT-4o can handle full content directly - use single-stage approach
+                pass  # Fall through to single-stage processing
         
-        # Fallback to original single-stage approach for snippet-only results
+        # Single-stage approach for GPT-4o or snippet-only results
         # Create OpenAI client with specified model
         openai_client = OpenAIAPI(config.OPENAI_API_KEY, model)
         
