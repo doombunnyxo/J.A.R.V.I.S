@@ -136,6 +136,8 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
         # Craft commands first to avoid conflicts
         (r'^craft:\s*(.+)', 'crafting'),
         (r'^cr:\s*(.+)', 'crafting'),
+        # Full page search with GPT-4o
+        (r'^full:\s*(.+)', 'full-search'),
         # Direct AI chat (bypasses search routing)
         (r'^ai:\s*(.+)', 'direct-ai'),
     ]
