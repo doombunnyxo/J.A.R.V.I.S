@@ -126,24 +126,35 @@ class DomainFilter:
         if response_time < slow_threshold:
             return
         
-        # Track slow responses
+        # Track slow responses using same structure as record_failure
         if domain not in self.temporary_failures:
-            self.temporary_failures[domain] = []
+            self.temporary_failures[domain] = {
+                'failure_count': 0,
+                'first_failure': datetime.now().isoformat(),
+                'last_failure': f"slow response ({response_time:.1f}s)",
+                'slow_responses': []
+            }
         
-        slow_reason = f"slow response ({response_time:.1f}s)"
-        self.temporary_failures[domain].append({
+        # Add this slow response to the tracking
+        self.temporary_failures[domain]['slow_responses'].append({
             'timestamp': time.time(),
-            'error': slow_reason,
+            'response_time': response_time,
             'url': url
         })
+        self.temporary_failures[domain]['last_failure'] = f"slow response ({response_time:.1f}s)"
+        self.temporary_failures[domain]['last_failure_time'] = datetime.now().isoformat()
         
         # Check if we should block this domain for being consistently slow
-        max_slow_strikes = self.config.get('max_slow_strikes_before_block', 2)  # More lenient than failures
-        if len(self.temporary_failures[domain]) >= max_slow_strikes:
-            await self._block_domain(domain, f"consistently slow (avg {response_time:.1f}s)")
+        max_slow_strikes = self.config.get('max_slow_strikes_before_block', 2)
+        slow_count = len(self.temporary_failures[domain]['slow_responses'])
+        
+        if slow_count >= max_slow_strikes:
+            await self.block_domain(domain, f"consistently slow ({slow_count} strikes, avg {response_time:.1f}s)")
             
             # Clear temporary failures since it's now blocked
             del self.temporary_failures[domain]
+        
+        await self._save_blocked_domains()
     
     async def record_failure(self, url: str, error_message: str):
         """Record a failure for a domain and potentially block it"""

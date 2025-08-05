@@ -63,24 +63,25 @@ class WebContentExtractor:
             timeout_start = asyncio.get_event_loop().time()
             url_by_task = {task: url for task, url in zip(tasks, allowed_urls)}  # Track which URL belongs to which task
             
+            marked_slow_at_6s = False  # Track if we've already marked slow sites
+            
             while pending_tasks and estimated_summary_tokens < target_summary_tokens:
-                # Check if we've hit the 6 second mark to identify slow sites
+                # Check if we've hit the 6 second mark to identify slow sites (but don't exit)
                 elapsed = asyncio.get_event_loop().time() - timeout_start
-                if elapsed >= max_timeout:
-                    print(f"DEBUG: Hit 6s mark - adding {len(pending_tasks)} remaining sites to slow list")
-                    # Add remaining sites to slow list (they're taking >6s)
+                if elapsed >= max_timeout and not marked_slow_at_6s:
+                    print(f"DEBUG: Hit 6s mark - adding {len(pending_tasks)} remaining sites to slow list (but continuing to wait)")
+                    # Add remaining sites to slow list (they're taking >6s) but keep waiting
                     for task in pending_tasks:
                         url = url_by_task.get(task, 'unknown')
                         if url != 'unknown':
                             slow_sites.append((url, elapsed))  # Use elapsed time as response time
-                    break
+                    marked_slow_at_6s = True  # Don't mark again
                 
-                # Wait for next completion
-                remaining_time = max_timeout - elapsed
+                # Wait for next completion (no timeout constraint since we're not exiting at 6s)
                 try:
                     done, pending_tasks = await asyncio.wait(
                         pending_tasks, 
-                        timeout=min(1.0, remaining_time),
+                        timeout=1.0,
                         return_when=asyncio.FIRST_COMPLETED
                     )
                     
@@ -138,41 +139,17 @@ class WebContentExtractor:
             
             # Return results immediately - let caller handle blacklist updates later
             return extracted_pages, {'failed_sites': failed_sites, 'slow_sites': slow_sites}
-            
-            # Get domain filter for recording failures
-            from .domain_filter import get_domain_filter
-            domain_filter = get_domain_filter()
-            
-            for i, result in enumerate(results):
-                if isinstance(result, Exception):
-                    error_msg = f"Failed to extract {allowed_urls[i]}: {result}"
-                    print(f"DEBUG: {error_msg}")
-                    
-                    # Record failure for potential auto-blocking
-                    await domain_filter.record_failure(allowed_urls[i], str(result))
-                    continue
-                
-                if result and result.get('content'):
-                    extracted_pages.append(result)
-                else:
-                    # Record failure for potential auto-blocking
-                    if result is None:
-                        error_msg = "returned None"
-                    elif not result.get('content'):
-                        error_msg = f"returned empty content - Title: {result.get('title', 'No title')}"
-                    else:
-                        error_msg = f"Unknown issue with result: {str(result)[:200]}"
-                    
-                    await domain_filter.record_failure(allowed_urls[i], error_msg)
-            
-            return extracted_pages
     
     async def _extract_single_page(self, session: aiohttp.ClientSession, url: str) -> Optional[Dict[str, str]]:
         """Extract content from a single URL"""
+        start_time = asyncio.get_event_loop().time()
         try:
             # Check if this is a Reddit URL and use API instead
             if 'reddit.com' in url:
-                return await self._extract_reddit_content(session, url)
+                result = await self._extract_reddit_content(session, url)
+                if result:
+                    result['response_time'] = asyncio.get_event_loop().time() - start_time
+                return result
             
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -206,11 +183,15 @@ class WebContentExtractor:
                 if len(cleaned_content) > self.max_content_length:
                     cleaned_content = cleaned_content[:self.max_content_length] + "..."
                 
+                # Calculate response time
+                response_time = asyncio.get_event_loop().time() - start_time
+                
                 return {
                     'url': url,
                     'title': title_text,
                     'content': cleaned_content,
-                    'length': len(cleaned_content)
+                    'length': len(cleaned_content),
+                    'response_time': response_time
                 }
                 
         except Exception as e:

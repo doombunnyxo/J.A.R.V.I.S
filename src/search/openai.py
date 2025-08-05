@@ -347,6 +347,11 @@ Discord-formatted Answer:"""
         # Calculate actual tokens used in single-stage approach
         single_stage_tokens = len(user_message) // 4 + len(system_message) // 4
         
+        # Count websites in search results (look for numbered results like "1. **Title**")
+        import re
+        website_matches = re.findall(r'^\d+\.\s\*\*', search_results, re.MULTILINE)
+        website_count = len(website_matches)
+        
         # Get model display name
         model_names = {
             "gpt-4o-mini": "OpenAI GPT-4o Mini",
@@ -357,7 +362,7 @@ Discord-formatted Answer:"""
         model_display = model_names.get(model, f"OpenAI {model}")
         
         print(f"DEBUG: OpenAI search analysis completed successfully")
-        return f"**{model_display} Web Search** (~{single_stage_tokens} tokens): {response}"
+        return f"**{model_display} Web Search** ({website_count} sites, ~{single_stage_tokens} tokens): {response}"
         
     except Exception as e:
         print(f"DEBUG: OpenAI search analysis failed: {e}")
