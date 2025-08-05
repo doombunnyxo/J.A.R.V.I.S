@@ -231,13 +231,6 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
     combined_summaries = "\n\n".join(valid_summaries)
     print(f"DEBUG: Completed parallel summarization, now synthesizing final answer")
     
-    # Post combined summaries to Discord
-    if channel:
-        try:
-            from ..utils.message_utils import send_long_message
-            await send_long_message(channel, f"📋 **All Combined Website Summaries**:\n{combined_summaries}")
-        except Exception as e:
-            print(f"DEBUG: Failed to post combined summaries to Discord: {e}")
     
     # Stage 2: Synthesize final answer using cleaner prompt structure
     openai_client = OpenAIAPI(config.OPENAI_API_KEY, "gpt-4o-mini")
