@@ -76,10 +76,9 @@ class SearchPipeline:
             print(f"DEBUG: Analyzing results with {self.provider.__class__.__name__}")
             response = await self.provider.analyze_results(query, search_results, context)
             
-            # Step 4: Fire-and-forget blacklist updates AFTER getting response
+            # Step 4: Update blacklist immediately after getting response
             if hasattr(self, '_tracking_data') and self._tracking_data:
-                # Don't await - let it run in background without blocking the response
-                asyncio.create_task(self._update_blacklist_async(self._tracking_data))
+                await self._update_blacklist_sync(self._tracking_data)
             
             return response
             
@@ -87,8 +86,8 @@ class SearchPipeline:
             provider_name = self.provider.__class__.__name__
             return f"Error in {provider_name} search pipeline: {str(e)}"
     
-    async def _update_blacklist_async(self, tracking_data: dict):
-        """Update blacklist in background after search completion"""
+    async def _update_blacklist_sync(self, tracking_data: dict):
+        """Update blacklist synchronously after search completion"""
         try:
             from .domain_filter import get_domain_filter
             domain_filter = get_domain_filter()
@@ -106,10 +105,10 @@ class SearchPipeline:
                 await domain_filter.record_slow_site(url, response_time)
                 
             if failed_sites or slow_sites:
-                print(f"DEBUG: Background blacklist update - {len(failed_sites)} failures, {len(slow_sites)} slow sites")
+                print(f"DEBUG: Blacklist updated - {len(failed_sites)} failures, {len(slow_sites)} slow sites")
                 
         except Exception as e:
-            print(f"DEBUG: Background blacklist update failed: {e}")  # Don't crash anything
+            print(f"DEBUG: Blacklist update failed: {e}")  # Don't crash anything
     
     async def _perform_google_search(self, query: str, enable_full_extraction: bool = False, context_size: int = 0) -> str:
         """Perform Google search with optional full page content extraction"""
