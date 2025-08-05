@@ -118,6 +118,12 @@ class WebContentExtractor:
                         return_when=asyncio.FIRST_COMPLETED
                     )
                     
+                    # Debug: Show wait results
+                    if debug_channel and (len(done) > 0 or len(extracted_pages) < 3):  # Limit spam
+                        try:
+                            await debug_channel.send(f"⏱️ **WAIT RESULT**: {len(done)} completed, {len(pending_tasks)} pending, timeout: {wait_timeout:.1f}s")
+                        except: pass
+                    
                     # Process completed results
                     for task in done:
                         try:
