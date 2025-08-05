@@ -20,13 +20,20 @@ except ImportError as e:
 class WebContentExtractor:
     """Extract and clean web page content"""
     
-    def __init__(self, timeout: int = 5, max_content_length: int = 50000):
+    def __init__(self, timeout: int = 8, max_content_length: int = 50000):
         self.timeout = timeout
         self.max_content_length = max_content_length
         self.session_timeout = aiohttp.ClientTimeout(total=timeout)
     
     async def extract_multiple_pages(self, urls: List[str], debug_channel=None) -> List[Dict[str, str]]:
         """Extract content from multiple URLs concurrently"""
+        # Debug: Show we entered the extractor
+        if debug_channel:
+            try:
+                await debug_channel.send(f"🚀 **EXTRACTOR STARTED**: Processing {len(urls)} URLs")
+            except Exception as e:
+                print(f"DEBUG: Failed to send extractor start message: {e}")
+        
         if not HAS_BS4:
             raise ImportError("BeautifulSoup4 is required for web content extraction. Install with: pip install beautifulsoup4")
         
@@ -39,11 +46,11 @@ class WebContentExtractor:
         if not allowed_urls:
             return []
         
-        # Create session with aggressive timeouts for fail-fast behavior
+        # Create session with timeouts allowing for slow site detection
         timeout = aiohttp.ClientTimeout(
-            total=self.timeout,     # 5s total per request
+            total=self.timeout,     # 8s total per request
             connect=2,              # 2s to establish connection
-            sock_read=3             # 3s to read response
+            sock_read=6             # 6s to read response
         )
         
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -74,6 +81,12 @@ class WebContentExtractor:
             max_total_time = 8.0  # Maximum 8 seconds total for web extraction
             
             while pending_tasks and estimated_summary_tokens < target_summary_tokens:
+                # Debug: Show we're in the loop
+                if debug_channel and len(extracted_pages) == 0:  # Only on first iteration
+                    try:
+                        await debug_channel.send(f"🔁 **ENTERED MAIN LOOP**: {len(pending_tasks)} tasks pending")
+                    except: pass
+                
                 # Check total elapsed time
                 total_elapsed = asyncio.get_event_loop().time() - timeout_start
                 if total_elapsed >= max_total_time:
@@ -130,6 +143,12 @@ class WebContentExtractor:
                 
                 except asyncio.TimeoutError:
                     continue
+            
+            # Debug: Show we exited the main loop
+            if debug_channel:
+                try:
+                    await debug_channel.send(f"🔄 **EXITED MAIN LOOP**: {len(extracted_pages)} pages, {len(pending_tasks)} remaining tasks")
+                except: pass
             
             # Handle remaining tasks - either cancelled due to timeout or still pending
             if pending_tasks:
