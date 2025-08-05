@@ -187,6 +187,12 @@ class SearchPipeline:
                     extracted_pages, tracking_data = await extractor.extract_multiple_pages(urls, channel)
                     print(f"DEBUG: Successfully extracted {len(extracted_pages)} pages")
                     
+                    # Debug extraction results
+                    if channel:
+                        try:
+                            await channel.send(f"📊 **WEB EXTRACTION COMPLETED**: {len(extracted_pages)} pages returned")
+                        except: pass
+                    
                     # Store tracking data for later blacklist updates
                     self._tracking_data = tracking_data
                     
