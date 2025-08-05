@@ -7,7 +7,9 @@ import asyncio
 from typing import List, Dict, Any, Optional
 from openai import AsyncOpenAI
 from ..config import config
-from ..utils.logging import logger
+from ..utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class OpenAIClient:
