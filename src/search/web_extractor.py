@@ -53,31 +53,70 @@ class WebContentExtractor:
             failed_sites = []  # Collect failures for batch processing later
             slow_sites = []    # Collect slow sites for batch processing later
             
-            # Wait for all tasks to complete with a reasonable total timeout
-            try:
-                results = await asyncio.wait_for(
-                    asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=8.0  # 8 seconds total for all tasks
-                )
+            # Collect results as they complete, with token-based early exit
+            estimated_tokens = 0
+            target_tokens = 4000
+            timeout_start = asyncio.get_event_loop().time()
+            max_timeout = 6.0  # 6 seconds total
+            
+            # Wait for results to complete, checking tokens and time
+            pending_tasks = set(tasks)
+            
+            while pending_tasks and estimated_tokens < target_tokens:
+                # Check if we've exceeded time limit
+                elapsed = asyncio.get_event_loop().time() - timeout_start
+                if elapsed >= max_timeout:
+                    print(f"DEBUG: Hit 6s timeout with {len(extracted_pages)} pages, ~{estimated_tokens} tokens")
+                    break
                 
-                # Process all results
-                for result in results:
-                    if isinstance(result, Exception):
-                        # Track exceptions
-                        failed_sites.append(('unknown', str(result)))
-                        continue
+                # Wait for next result(s) with remaining time
+                remaining_time = max_timeout - elapsed
+                try:
+                    done, pending_tasks = await asyncio.wait(
+                        pending_tasks, 
+                        timeout=min(1.0, remaining_time),  # Check every 1s or remaining time
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
                     
-                    if result and result.get('content'):
-                        extracted_pages.append(result)
-                        # Track slow sites (>3s response time)
-                        if result.get('response_time', 0) > 3.0:
-                            slow_sites.append((result['url'], result['response_time']))
-                    else:
-                        # Track failed extractions
-                        failed_sites.append(('unknown', 'extraction_failed'))
-                        
-            except asyncio.TimeoutError:
-                print(f"DEBUG: Some sites timed out after 8s, proceeding with {len(extracted_pages)} results")
+                    # Process completed results
+                    for task in done:
+                        try:
+                            result = await task
+                            if result and result.get('content'):
+                                extracted_pages.append(result)
+                                
+                                # Estimate tokens for this page (~4 chars per token + summary overhead)
+                                content_tokens = len(result['content']) // 4
+                                summary_tokens = min(content_tokens, 300)  # Summary will be capped at 300 tokens
+                                estimated_tokens += summary_tokens
+                                
+                                print(f"DEBUG: Got page {len(extracted_pages)}, ~{summary_tokens} tokens (total: ~{estimated_tokens})")
+                                
+                                # Track slow sites (>3s response time)
+                                if result.get('response_time', 0) > 3.0:
+                                    slow_sites.append((result['url'], result['response_time']))
+                            else:
+                                # Track failed extractions
+                                failed_sites.append(('unknown', 'extraction_failed'))
+                        except Exception as e:
+                            # Track exceptions
+                            failed_sites.append(('unknown', str(e)))
+                
+                except asyncio.TimeoutError:
+                    # No results in this interval, continue waiting
+                    continue
+            
+            # Check exit reason
+            if estimated_tokens >= target_tokens:
+                print(f"DEBUG: Reached target ~{estimated_tokens} tokens with {len(extracted_pages)} pages")
+            elif len(extracted_pages) >= 10:
+                print(f"DEBUG: Got all 10 pages, ~{estimated_tokens} tokens")
+            else:
+                print(f"DEBUG: Timeout reached with {len(extracted_pages)} pages, ~{estimated_tokens} tokens")
+            
+            # Cancel any remaining tasks
+            for task in pending_tasks:
+                task.cancel()
                 
             print(f"DEBUG: Web extraction completed with {len(extracted_pages)} successful results")
             
