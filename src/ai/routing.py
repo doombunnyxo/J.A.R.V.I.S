@@ -72,7 +72,7 @@ COMPARISON_TOPICS = [
     'job', 'career', 'salary', 'investment', 'company', 'brand'
 ]
 
-# Admin command keywords - triggers Groq
+# Admin command keywords
 ADMIN_KEYWORDS = [
     # User moderation
     'kick', 'boot', 'eject', 'ban', 'unban', 'timeout', 'mute', 'silence', 'quiet', 'shush',
@@ -94,7 +94,7 @@ ADMIN_KEYWORDS = [
     'user nickname', 'users nickname', 'user\'s nickname', 'set user', 'change user'
 ]
 
-# Personal interaction keywords - triggers Groq
+# Personal interaction keywords
 PERSONAL_KEYWORDS = [
     'remember', 'remind me', 'my name', 'my preference', 'about me',
     'tell me a joke', 'joke', 'funny', 'make me laugh',
@@ -105,8 +105,7 @@ PERSONAL_KEYWORDS = [
 
 def should_use_openai_for_search(query: str) -> bool:
     """
-    Determine if query should be routed to OpenAI (always True now)
-    Kept for compatibility but always returns True since Groq is removed
+    Determine if query should be routed to OpenAI for search
     
     Args:
         query: User's query string
@@ -126,7 +125,7 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
         query: User's query string
         
     Returns:
-        tuple: (provider, cleaned_query) - provider is 'groq', 'openai', or None
+        tuple: (provider, cleaned_query) - provider is 'openai', 'crafting', 'full-search', 'direct-ai', or None
     """
     query_lower = query.lower().strip()
     print(f"DEBUG: extract_forced_provider checking query: '{query_lower}'")

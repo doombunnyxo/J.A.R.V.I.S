@@ -113,14 +113,14 @@ async def perform_google_search(query: str) -> str:
             return "Google search is not configured. Please set GOOGLE_API_KEY and GOOGLE_SEARCH_ENGINE_ID."
         
         service = build("customsearch", "v1", developerKey=config.GOOGLE_API_KEY)
-        result = service.cse().list(q=query, cx=config.GOOGLE_SEARCH_ENGINE_ID, num=10).execute()
+        result = service.cse().list(q=query, cx=config.GOOGLE_SEARCH_ENGINE_ID, num=4).execute()
         
         if 'items' not in result:
             return f"No search results found for: {query}"
         
         search_results = f"Current web search results for '{query}':\n\n"
         
-        for i, item in enumerate(result['items'][:10], 1):
+        for i, item in enumerate(result['items'][:4], 1):
             title = item['title']
             link = item['link']
             snippet = item.get('snippet', 'No description available')

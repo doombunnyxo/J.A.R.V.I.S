@@ -99,14 +99,9 @@ Search query:"""
         # Clean up the response
         optimized_query = response.strip().strip('"\'')
         
-        print(f"DEBUG: OpenAI query optimization:")
-        print(f"DEBUG: Original: '{user_query}'")
-        print(f"DEBUG: Optimized: '{optimized_query}'")
-        
         return optimized_query
         
     except Exception as e:
-        print(f"DEBUG: OpenAI search query optimization failed: {e}")
         return user_query  # Fallback to original query
 
 async def summarize_webpage_content(webpage_content: str, title: str, url: str, channel=None) -> str:
@@ -158,7 +153,6 @@ Summary:"""
         return result
         
     except Exception as e:
-        print(f"DEBUG: Webpage summarization failed for {url}: {e}")
         return f"**{title}** ({url}): Summarization failed - {str(e)}"
 
 
@@ -206,7 +200,6 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
         # Fallback if parsing failed
         return "Error: Could not parse webpage content for summarization."
     
-    print(f"DEBUG: Starting parallel summarization of {len(webpage_sections)} webpages")
     
     if channel:
         try:
@@ -234,7 +227,6 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
     valid_summaries = []
     for summary in webpage_summaries:
         if isinstance(summary, Exception):
-            print(f"DEBUG: Summarization task failed: {summary}")
             continue
         valid_summaries.append(summary)
     
@@ -242,7 +234,6 @@ async def _two_stage_analysis(user_query: str, search_results: str, filtered_con
         return "Error: All webpage summarizations failed."
     
     combined_summaries = "\n\n".join(valid_summaries)
-    print(f"DEBUG: Completed parallel summarization, now synthesizing final answer")
     
     if channel:
         try:
@@ -304,7 +295,6 @@ Answer:"""
     # Calculate actual input tokens for the final synthesis prompt (combined_summaries is already in user_message)
     final_prompt_tokens = (len(system_message) + len(user_message)) // 4
     
-    print(f"DEBUG: Two-stage analysis completed successfully")
     return f"**OpenAI GPT-4o Mini Web Search** ({len(webpage_sections)} sites, ~{final_prompt_tokens} tokens): {response}"
 
 
@@ -409,11 +399,9 @@ Discord-formatted Answer:"""
         }
         model_display = model_names.get(model, f"OpenAI {model}")
         
-        print(f"DEBUG: OpenAI search analysis completed successfully")
         return f"**{model_display} Web Search** ({website_count} sites, ~{single_stage_tokens} tokens): {response}"
         
     except Exception as e:
-        print(f"DEBUG: OpenAI search analysis failed: {e}")
         return f"Error analyzing search results with OpenAI: {str(e)}"
 
 async def test_openai_api() -> bool:
@@ -433,5 +421,4 @@ async def test_openai_api() -> bool:
         )
         return "API test successful" in response
     except Exception as e:
-        print(f"DEBUG: OpenAI API test failed: {e}")
         return False

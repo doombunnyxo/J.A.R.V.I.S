@@ -60,6 +60,11 @@ class AdminProcessor:
         """Check if command needs web search for role reorganization"""
         query_lower = query.lower()
         
+        # Skip role search if this is clearly a nickname change command
+        nickname_keywords = ['nickname', 'nick', 'change name of', 'rename user', 'rename member']
+        if any(keyword in query_lower for keyword in nickname_keywords):
+            return False
+        
         # Role reorganization keywords
         role_patterns = [
             'reorganize.*roles', 'rename.*roles', 'fix.*roles', 'update.*roles',

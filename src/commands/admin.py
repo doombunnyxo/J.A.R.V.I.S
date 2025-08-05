@@ -34,13 +34,10 @@ class AdminCommands(commands.Cog):
         # Prevent duplicate execution
         command_key = f"remember_{ctx.author.id}_{hash(context_text)}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate remember command detected, ignoring")
             return
         
         self._executing_commands.add(command_key)
         try:
-            print(f"DEBUG: add_permanent_context called by {ctx.author.id} with text: '{context_text[:50]}...'")
-            
             if not is_admin(ctx.author.id):
                 await ctx.send(f"❌ You don't have permission to use permanent context commands.\nYour ID: {ctx.author.id}\nAuthorized ID: {config.AUTHORIZED_USER_ID}")
                 return
@@ -60,9 +57,8 @@ class AdminCommands(commands.Cog):
                         mention_formats = [f'<@{user_id}>', f'<@!{user_id}>']
                         for mention_format in mention_formats:
                             resolved_text = resolved_text.replace(mention_format, user.display_name)
-                        print(f"DEBUG: Resolved mention <@{user_id}> to '{user.display_name}'")
                 except Exception as e:
-                    print(f"DEBUG: Failed to resolve mention <@{user_id}>: {e}")
+                    pass
             
             # Check if this exact context already exists to prevent duplicates
             existing_context = data_manager.get_permanent_context(user_key)
@@ -70,12 +66,10 @@ class AdminCommands(commands.Cog):
                 await ctx.send(f"⚠️ **Context already exists!**\nThis exact text is already in your permanent context.\n\nYou have {len(existing_context)} permanent context item(s).")
                 return
             
-            print(f"DEBUG: Adding context for user {user_key}. Current count: {len(existing_context)}")
             data_manager.add_permanent_context(user_key, resolved_text)
             await data_manager.save_permanent_context()
             
             context_count = len(data_manager.get_permanent_context(user_key))
-            print(f"DEBUG: After adding, context count: {context_count}")
             # Show what was saved (with mentions resolved)
             display_text = resolved_text[:100] + "..." if len(resolved_text) > 100 else resolved_text
             await ctx.send(f"✅ **Permanent context added!**\n**Saved as:** {display_text}\n\nYou now have {context_count} permanent context item(s).\n\n*This will always be included in your AI conversations.*")
@@ -90,7 +84,6 @@ class AdminCommands(commands.Cog):
         # Prevent duplicate execution
         command_key = f"memories_{ctx.author.id}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate memories command detected, ignoring")
             return
         
         self._executing_commands.add(command_key)
@@ -126,7 +119,6 @@ class AdminCommands(commands.Cog):
         # Prevent duplicate execution
         command_key = f"forget_{ctx.author.id}_{item_number}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate forget command detected, ignoring")
             return
         
         self._executing_commands.add(command_key)

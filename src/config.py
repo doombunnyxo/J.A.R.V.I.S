@@ -16,17 +16,11 @@ class Config:
     AUTHORIZED_USER_ID: int
     
     # API Keys
-    GROQ_API_KEY: Optional[str]
     OPENAI_API_KEY: Optional[str]
-    PERPLEXITY_API_KEY: Optional[str]
     ANTHROPIC_API_KEY: Optional[str]
     GOOGLE_API_KEY: Optional[str]
     GOOGLE_SEARCH_ENGINE_ID: Optional[str]
     
-    # Reddit API Configuration
-    REDDIT_CLIENT_ID: Optional[str]
-    REDDIT_CLIENT_SECRET: Optional[str]
-    REDDIT_USER_AGENT: str = 'J.A.R.V.I.S Discord Bot 1.0 by /u/CarinXO'
     
     # File Paths
     SETTINGS_FILE: str = 'data/user_settings.json'
@@ -35,7 +29,7 @@ class Config:
     HISTORY_FILE: str = 'data/conversation_history.json'
     
     # AI Configuration  
-    AI_MODEL: str = "llama-3.1-8b-instant"  # Groq model for main processing
+    AI_MODEL: str = "gpt-4o-mini"  # Default OpenAI model
     AI_MAX_TOKENS: int = 1000
     AI_TEMPERATURE: float = 0.7
     
@@ -51,7 +45,7 @@ class Config:
     @property
     def use_openai_as_default(self) -> bool:
         """Check if OpenAI should be used as the default AI"""
-        return self.has_openai_api() and not self.has_groq_api()
+        return self.has_openai_api()
     
     def __init__(self):
         self._validate_and_load()
@@ -75,19 +69,11 @@ class Config:
                 errors.append("AUTHORIZED_USER_ID must be a valid integer")
         
         # Optional configuration
-        self.GROQ_API_KEY = os.getenv('GROQ_API_KEY')
         self.OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-        self.PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY')
         self.ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
         self.GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
         self.GOOGLE_SEARCH_ENGINE_ID = os.getenv('GOOGLE_SEARCH_ENGINE_ID')
         
-        # Reddit API configuration
-        self.REDDIT_CLIENT_ID = os.getenv('REDDIT_CLIENT_ID')
-        self.REDDIT_CLIENT_SECRET = os.getenv('REDDIT_CLIENT_SECRET')
-        reddit_user_agent = os.getenv('REDDIT_USER_AGENT')
-        if reddit_user_agent:
-            self.REDDIT_USER_AGENT = reddit_user_agent
         
         # Override defaults with environment variables if provided
         if os.getenv('AI_MODEL'):
@@ -114,17 +100,11 @@ class Config:
         """Check if the configuration is valid"""
         return bool(self.DISCORD_TOKEN and hasattr(self, 'AUTHORIZED_USER_ID'))
     
-    def has_groq_api(self) -> bool:
-        """Check if Groq API is configured"""
-        return bool(self.GROQ_API_KEY)
     
     def has_openai_api(self) -> bool:
         """Check if OpenAI API is configured"""
         return bool(self.OPENAI_API_KEY)
     
-    def has_perplexity_api(self) -> bool:
-        """Check if Perplexity API is configured"""
-        return bool(self.PERPLEXITY_API_KEY)
     
     def has_anthropic_api(self) -> bool:
         """Check if Anthropic API is configured"""
@@ -134,9 +114,6 @@ class Config:
         """Check if Google Search is configured"""
         return bool(self.GOOGLE_API_KEY and self.GOOGLE_SEARCH_ENGINE_ID)
     
-    def has_reddit_api(self) -> bool:
-        """Check if Reddit API is configured"""
-        return bool(self.REDDIT_CLIENT_ID and self.REDDIT_CLIENT_SECRET)
     
     def get_file_paths(self) -> dict:
         """Get all data file paths"""
@@ -171,7 +148,7 @@ def init_config() -> Config:
 try:
     config = Config()
     logger.info("Configuration loaded successfully")
-    logger.info(f"Available APIs: OpenAI={config.has_openai_api()}, Claude={config.has_anthropic_api()}, Groq={config.has_groq_api()}, Google Search={config.has_google_search()}")
+    logger.info(f"Available APIs: OpenAI={config.has_openai_api()}, Claude={config.has_anthropic_api()}, Google Search={config.has_google_search()}")
 except Exception as e:
     logger.warning(f"Configuration error: {e}")
     logger.warning("Some features may not work without proper configuration")

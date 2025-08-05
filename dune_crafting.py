@@ -25,10 +25,8 @@ def _load_recipes() -> Dict:
             _CRAFTING_RECIPES = data.get("recipes", {})
             return _CRAFTING_RECIPES
     except FileNotFoundError:
-        print(f"Warning: Recipe file not found at {recipes_file}")
         return {}
     except json.JSONDecodeError as e:
-        print(f"Error parsing recipe file: {e}")
         return {}
 
 def get_recipes() -> Dict:

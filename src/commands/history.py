@@ -14,7 +14,6 @@ class HistoryCommands(commands.Cog):
         """Clear your conversation history with the AI"""
         command_key = f"clear_{ctx.author.id}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate clear command detected, ignoring")
             return
         
         self._executing_commands.add(command_key)
@@ -33,7 +32,6 @@ class HistoryCommands(commands.Cog):
         """Show your recent conversation history"""
         command_key = f"history_{ctx.author.id}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate history command detected, ignoring")
             return
         
         self._executing_commands.add(command_key)
@@ -63,7 +61,6 @@ class HistoryCommands(commands.Cog):
         """Toggle or check channel context usage for AI responses"""
         command_key = f"context_{ctx.author.id}_{setting}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate context command detected, ignoring")
             return
         
         self._executing_commands.add(command_key)
@@ -96,7 +93,6 @@ class HistoryCommands(commands.Cog):
         """Add an unfiltered permanent setting that applies to ALL queries"""
         command_key = f"add_setting_{ctx.author.id}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate add_setting command detected, ignoring")
             return
         
         self._executing_commands.add(command_key)
@@ -116,9 +112,8 @@ class HistoryCommands(commands.Cog):
                         mention_formats = [f'<@{user_id}>', f'<@!{user_id}>']
                         for mention_format in mention_formats:
                             resolved_text = resolved_text.replace(mention_format, user.display_name)
-                        print(f"DEBUG: Resolved mention <@{user_id}> to '{user.display_name}'")
                 except Exception as e:
-                    print(f"DEBUG: Failed to resolve mention <@{user_id}>: {e}")
+                    pass
             
             data_manager.add_unfiltered_permanent_context(resolved_text)
             await data_manager.save_unfiltered_permanent_context()
@@ -131,7 +126,6 @@ class HistoryCommands(commands.Cog):
         """List all your unfiltered permanent settings"""
         command_key = f"list_settings_{ctx.author.id}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate list_settings command detected, ignoring")
             return
         
         self._executing_commands.add(command_key)
@@ -157,7 +151,6 @@ class HistoryCommands(commands.Cog):
         """Remove an unfiltered permanent setting by its number (use !list_settings to see numbers)"""
         command_key = f"remove_setting_{ctx.author.id}_{index}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate remove_setting command detected, ignoring")
             return
         
         self._executing_commands.add(command_key)
@@ -189,7 +182,6 @@ class HistoryCommands(commands.Cog):
                 await ctx.send(f'❌ Failed to remove setting {index}. Use `!list_settings` to see valid numbers.')
                 
         except Exception as e:
-            print(f"ERROR in remove_setting command: {e}")
             await ctx.send(f'❌ Error removing setting: {str(e)}')
         finally:
             self._executing_commands.discard(command_key)
@@ -199,7 +191,6 @@ class HistoryCommands(commands.Cog):
         """Clear ALL your unfiltered permanent settings"""
         command_key = f"clear_settings_{ctx.author.id}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate clear_settings command detected, ignoring")
             return
         
         self._executing_commands.add(command_key)

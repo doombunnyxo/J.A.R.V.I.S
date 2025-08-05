@@ -48,7 +48,6 @@ class SearchPipeline:
             start_time = time.time()
             
             # Simple approach: Optimize query first, then search
-            print(f"DEBUG: Starting query optimization")
             if channel:
                 try:
                     await channel.send(f"⏱️ **Starting search pipeline**")
@@ -59,7 +58,6 @@ class SearchPipeline:
             opt_start = time.time()
             optimized_query = await self.provider.optimize_query(query, context)
             opt_time = time.time() - opt_start
-            print(f"DEBUG: Query optimization completed in {opt_time:.2f}s: {optimized_query}")
             if channel:
                 try:
                     await channel.send(f"🔍 **Query optimization**: {opt_time:.2f}s")
@@ -67,10 +65,8 @@ class SearchPipeline:
             
             # Perform search with optimized query
             search_start = time.time()
-            print(f"DEBUG: Performing Google search for optimized query: {optimized_query}")
             search_results = await self._perform_google_search(optimized_query, self.enable_full_extraction, context_size, channel)
             search_time = time.time() - search_start
-            print(f"DEBUG: Google search completed in {search_time:.2f}s")
             if channel:
                 try:
                     await channel.send(f"🌐 **Web extraction**: {search_time:.2f}s")
@@ -81,7 +77,6 @@ class SearchPipeline:
             
             # Step 3: Analyze results with context
             analysis_start = time.time()
-            print(f"DEBUG: Analyzing results with {self.provider.__class__.__name__}")
             if channel:
                 try:
                     await channel.send(f"🤖 **Starting AI analysis**")
@@ -90,7 +85,6 @@ class SearchPipeline:
             analysis_time = time.time() - analysis_start
             
             total_time = time.time() - start_time
-            print(f"DEBUG: Analysis completed in {analysis_time:.2f}s, total pipeline time: {total_time:.2f}s")
             if channel:
                 try:
                     await channel.send(f"📊 **AI analysis**: {analysis_time:.2f}s | **Total**: {total_time:.2f}s")
@@ -124,11 +118,8 @@ class SearchPipeline:
             for url, response_time in slow_sites:
                 await domain_filter.record_slow_site(url, response_time)
                 
-            if failed_sites or slow_sites:
-                print(f"DEBUG: Blacklist updated - {len(failed_sites)} failures, {len(slow_sites)} slow sites")
-                
         except Exception as e:
-            print(f"DEBUG: Blacklist update failed: {e}")  # Don't crash anything
+            pass  # Don't crash anything
     
     async def _perform_google_search(self, query: str, enable_full_extraction: bool = False, context_size: int = 0, channel=None) -> str:
         """Perform Google search with optional full page content extraction"""
@@ -152,13 +143,13 @@ class SearchPipeline:
             from googleapiclient.discovery import build
             
             service = build("customsearch", "v1", developerKey=config.GOOGLE_API_KEY)
-            result = service.cse().list(q=enhanced_query, cx=config.GOOGLE_SEARCH_ENGINE_ID, num=10).execute()
+            result = service.cse().list(q=enhanced_query, cx=config.GOOGLE_SEARCH_ENGINE_ID, num=4).execute()
             
             if 'items' not in result:
                 return f"No search results found for: {query}"
             
             basic_results = []
-            for i, item in enumerate(result['items'][:10], 1):
+            for i, item in enumerate(result['items'][:4], 1):
                 title = item['title']
                 link = item['link']
                 snippet = item.get('snippet', 'No description available')
@@ -176,11 +167,9 @@ class SearchPipeline:
                     from .web_extractor import WebContentExtractor
                     
                     urls = [result['link'] for result in basic_results]
-                    print(f"DEBUG: Extracting full content from {len(urls)} pages...")
                     
                     extractor = WebContentExtractor()
                     extracted_pages, tracking_data = await extractor.extract_multiple_pages(urls, channel)
-                    print(f"DEBUG: Successfully extracted {len(extracted_pages)} pages")
                     
                     # Store tracking data for later blacklist updates
                     self._tracking_data = tracking_data
@@ -191,7 +180,6 @@ class SearchPipeline:
                     
                 except Exception as e:
                     error_msg = f"Full page extraction failed: {str(e)}"
-                    print(f"DEBUG: {error_msg}")
                     # Fall back to snippet mode and include error info
                     search_results = f"⚠️ **Full extraction failed**: {str(e)}\n\nFalling back to snippet search for '{query}':\n\n"
                     enable_full_extraction = False

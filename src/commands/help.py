@@ -23,7 +23,7 @@ class HelpCommands(commands.Cog):
         embed = discord.Embed(
             title="🤖 J.A.R.V.I.S Discord Bot",
             description="**Primary Interaction**: @mention the bot + your message\n" +
-                       "AI system using Groq for conversation and OpenAI for search/admin tasks.",
+                       "AI system using OpenAI for all functionality.",
             color=0x5865f2
         )
         
@@ -100,7 +100,7 @@ class HelpCommands(commands.Cog):
         if category in ['ai', 'bot']:
             embed = discord.Embed(
                 title="🧠 AI System Details",
-                description="AI routing between Groq and OpenAI",
+                description="AI features and routing",
                 color=0x00ff7f
             )
             

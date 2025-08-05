@@ -13,7 +13,6 @@ class BasicCommands(commands.Cog):
         """Greet the user"""
         command_key = f"hello_{ctx.author.id}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate hello command detected, ignoring")
             return
         
         self._executing_commands.add(command_key)
@@ -27,7 +26,6 @@ class BasicCommands(commands.Cog):
         """Respond with pong"""
         command_key = f"ping_{ctx.author.id}"
         if command_key in self._executing_commands:
-            print(f"DEBUG: Duplicate ping command detected, ignoring")
             return
         
         self._executing_commands.add(command_key)

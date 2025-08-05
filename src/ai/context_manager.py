@@ -25,7 +25,7 @@ class ContextManager:
     """Manages conversation context and permanent user data"""
     
     def __init__(self):
-        # No need for groq_client - we'll use OpenAI GPT-4o mini for context filtering
+        # We'll use OpenAI GPT-4o mini for context filtering
         
         # Unified conversation context shared between AIs
         self.unified_conversations: Dict[str, deque] = defaultdict(lambda: deque(maxlen=12))

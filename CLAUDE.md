@@ -1,12 +1,12 @@
-# Discord Bot - Development Context
+# J.A.R.V.I.S Discord Bot - Development Context
 
 ## Project Architecture
 
 ### Core System
 - **Entry Point**: `main.py` - Bot initialization, cog loading, logging setup
 - **Command Prefix**: `!` for slash commands
-- **AI Routing**: OpenAI-only system with optional direct chat mode
-- **Context Management**: OpenAI GPT-4o mini-powered filtering across multiple context types
+- **AI System**: OpenAI-only system with intelligent routing
+- **Context Management**: OpenAI GPT-4o mini-powered filtering and context awareness
 
 ### File Structure
 ```
@@ -15,37 +15,31 @@ dune_crafting.py              # Standalone crafting module
 data/dune_recipes.json        # 250+ recipes database (v6.3)
 src/
 ├── config.py                 # Configuration with environment validation
-├── admin/                    # Admin system (2-phase parsing)
-│   ├── parser.py            # Action identification orchestrator  
-│   ├── extractors.py        # 13 parameter extractors
-│   ├── utils.py             # User/role/channel finding utilities
-│   ├── actions.py           # Admin action execution
-│   └── permissions.py       # Admin permission checking
 ├── ai/
 │   ├── handler_refactored.py # Main AI routing and processing
-│   ├── context_manager.py   # Context filtering with OpenAI GPT-4o mini
-│   ├── routing.py           # Query routing keywords and logic
-│   └── crafting_module.py   # Crafting system integration
-├── commands/                # Discord slash commands
-│   ├── basic.py            # hello, ping
-│   ├── history.py          # Context management commands  
-│   ├── admin.py            # Admin panel commands
-│   ├── help.py             # Help system
-│   └── search_context.py   # Context search utilities
+│   ├── context_manager.py    # Context filtering with OpenAI GPT-4o mini
+│   ├── openai_client.py      # Centralized OpenAI client
+│   ├── routing.py            # Query routing keywords and logic
+│   └── crafting_module.py    # Crafting system integration
+├── admin/
+│   ├── admin_processor.py    # Admin command orchestrator
+│   ├── parser.py             # Two-phase action identification
+│   ├── extractors.py         # 13 parameter extractors
+│   ├── actions.py            # Admin action execution
+│   └── permissions.py        # Admin permission checking
+├── search/
+│   ├── search_pipeline.py    # Search orchestration
+│   ├── openai_adapter.py     # OpenAI search provider
+│   ├── google.py             # Google Custom Search
+│   └── web_extractor.py      # Web content extraction
+├── commands/                 # Discord slash commands
 ├── events/
-│   └── handlers.py         # Discord event processing
-├── search/                 # Search system architecture
-│   ├── search_pipeline.py  # Generic search interface
-│   ├── claude_adapter.py   # Pure Claude search (legacy)
-│   ├── openai_adapter.py   # Pure OpenAI search (primary)
-│   ├── claude.py           # Legacy Claude functions
-│   ├── openai.py           # Primary OpenAI functions
-│   └── google.py           # Google Custom Search
+│   └── handlers.py           # Discord event processing
 ├── data/
-│   └── persistence.py      # JSON data storage with async locks
+│   └── persistence.py        # JSON data storage with async locks
 └── utils/
-    ├── logging.py          # Centralized logging system
-    └── message_utils.py    # Message handling utilities
+    ├── logging.py            # Centralized logging system
+    └── message_utils.py      # Message handling utilities
 ```
 
 ## Configuration
@@ -59,38 +53,41 @@ AUTHORIZED_USER_ID          # Admin user ID (integer)
 ### Optional API Keys
 ```
 OPENAI_API_KEY             # Primary AI provider for all functionality
-ANTHROPIC_API_KEY          # Legacy support (unused, kept for compatibility)
+ANTHROPIC_API_KEY          # Legacy support (mostly unused)
 GOOGLE_API_KEY             # For web search
 GOOGLE_SEARCH_ENGINE_ID    # Google Custom Search Engine ID
 ```
 
 ### AI Configuration Defaults
 ```python
-# OpenAI is now the primary and only AI provider
-AI_RATE_LIMIT_REQUESTS = 10         # Per user per minute
-AI_RATE_LIMIT_WINDOW = 60           # Seconds
-CHANNEL_CONTEXT_LIMIT = 50          # Messages stored per channel
-CHANNEL_CONTEXT_DISPLAY = 35        # Messages shown to AI
+# OpenAI is the primary and only AI provider
+AI_MODEL = "gpt-4o-mini"           # Default OpenAI model
+AI_RATE_LIMIT_REQUESTS = 10        # Per user per minute
+AI_RATE_LIMIT_WINDOW = 60          # Seconds
+CHANNEL_CONTEXT_LIMIT = 50         # Messages stored per channel
+CHANNEL_CONTEXT_DISPLAY = 35       # Messages shown to AI
 ```
 
-### Discord Intents Currently Set
+### Discord Intents Required
 ```python
 intents = discord.Intents.default()
 intents.message_content = True
-# NOTE: Guild Members Intent NOT set in code but required for admin commands
+# NOTE: Guild Members Intent required for admin commands (set in Discord Portal)
 ```
 
-## AI Models and Temperatures
+## AI System Architecture
 
-### OpenAI Configuration (Primary)
-- **Models**: `gpt-4o-mini` (default), `gpt-4o`, `gpt-4-turbo`, `gpt-4`
+### OpenAI Models and Usage
+- **gpt-4o-mini** (default): Context filtering, query optimization, general chat
+- **gpt-4o**: Full page search, complex analysis
+- **gpt-4-turbo**: Alternative high-performance option
+- **gpt-4**: Maximum capability option
 - **Temperature**: 0.1-0.2 (search/admin), 0.7 (direct chat)
-- **Use**: All functionality - search, admin, chat, context filtering
 
-### Legacy Configuration (Unused)
-- **ANTHROPIC_API_KEY**: Kept for compatibility but not used
-- **GROQ_API_KEY**: Removed - Groq no longer supported
-
+### Centralized OpenAI Client
+- **Location**: `src/ai/openai_client.py`
+- **Features**: Singleton pattern, error handling, retries
+- **Usage**: Single client instance for all OpenAI interactions
 
 ## Admin System Architecture
 
@@ -114,8 +111,8 @@ extractor_map = {
 ```
 
 ### Two-Phase Parsing Process
-1. **Action Identification** (`parser.py`): Determines which admin action type
-2. **Parameter Extraction** (`extractors.py`): Extracts specific parameters for that action
+1. **Action Identification** (`parser.py`): Determines admin action type
+2. **Parameter Extraction** (`extractors.py`): Extracts specific parameters
 
 ### Admin Permission System
 - Checks user ID against `AUTHORIZED_USER_ID` in config
@@ -136,7 +133,7 @@ channel_conversations: deque(maxlen=50)  # 50 messages per channel
 
 ### Context Types
 1. **Conversation Context**: Recent AI interactions per user/channel (12 messages, 30min expiry)
-2. **Channel Context**: General channel messages (50 stored, 35 shown, loaded from Discord history on startup)
+2. **Channel Context**: General channel messages (50 stored, 35 shown)
 3. **Permanent Context**: User-specific info, filtered per query by OpenAI GPT-4o mini
 4. **Settings (Unfiltered)**: Global preferences, bypass all filtering
 
@@ -144,11 +141,10 @@ channel_conversations: deque(maxlen=50)  # 50 messages per channel
 - **All filtering uses OpenAI GPT-4o mini** (`gpt-4o-mini`)
 - **Temperature**: 0.1 for context filtering tasks
 - **Max Tokens**: 300-600 depending on task
-- **Filtering Types**: Conversation, permanent, and unified context filtering
 
 ## Search System Architecture
 
-### OpenAI Search (Default)
+### OpenAI Search (Primary)
 ```python
 class OpenAISearchProvider:
     # OpenAI GPT-4o mini: Query optimization and web search
@@ -164,6 +160,8 @@ class OpenAISearchProvider:
 
 ### Force Provider Syntax
 - `ai:` - Direct OpenAI chat (bypasses search routing)
+- `full:` - Full page search with GPT-4o
+- `craft:` - Crafting system
 
 ## Command System
 
@@ -260,23 +258,29 @@ HISTORY_FILE = 'data/conversation_history.json'
 
 ### Search System Issues
 - **OpenAI Search**: Requires OpenAI API key for search functionality
-- **Fallbacks**: Uses OpenAI for all search operations
 - **Google Search**: Requires both `GOOGLE_API_KEY` and `GOOGLE_SEARCH_ENGINE_ID`
+- **Web Extraction**: May fail on some sites, blacklist system handles this
 
 ## Development Notes
 
 ### Recent Architecture Changes
-- **AI System**: Migrated from Groq+OpenAI hybrid to OpenAI-only system
+- **AI System**: Migrated to OpenAI-only system (removed Groq)
 - **Direct Chat**: Added `ai:` command for OpenAI without search routing
 - **Admin System**: Split from monolithic parser to modular 2-phase system
-- **Context Filtering**: Migrated from Claude Haiku to OpenAI GPT-4o mini for consistency
+- **Context Filtering**: Uses OpenAI GPT-4o mini for all filtering
 - **Crafting Database**: Expanded from 79+ to 250+ recipes
-- **Command Naming**: Settings commands changed from `unfiltered_permanent_context` to `add_setting` etc.
-- **Code Cleanup**: Removed Claude and Groq dead code, simplified routing
+- **Code Cleanup**: Removed dead code, simplified routing, standardized patterns
+- **Centralized Client**: All OpenAI usage now goes through single client
 
 ### Code Quality
 - **Logging**: Centralized system with proper levels
 - **Type Hints**: Comprehensive annotations  
 - **Async**: Full async/await implementation
 - **Error Handling**: Graceful fallbacks and user-friendly messages
-- **Debug Cleanup**: Print statements removed from admin system
+- **Refactored**: Clean, maintainable code with consistent patterns
+
+### Important Instructions
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
