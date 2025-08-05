@@ -143,6 +143,15 @@ class WebContentExtractor:
                 
             print(f"DEBUG: Web extraction completed with {len(extracted_pages)} successful results")
             
+            # Debug to Discord
+            if debug_channel:
+                try:
+                    if extracted_pages:
+                        await debug_channel.send(f"✅ **Web Extraction SUCCESS**: {len(extracted_pages)} pages extracted, {len(failed_sites)} failed, {len(slow_sites)} slow")
+                    else:
+                        await debug_channel.send(f"❌ **Web Extraction FAILED**: 0 pages extracted, {len(failed_sites)} failed, {len(slow_sites)} slow")
+                except: pass
+            
             # Return results immediately - let caller handle blacklist updates later
             return extracted_pages, {'failed_sites': failed_sites, 'slow_sites': slow_sites}
     
