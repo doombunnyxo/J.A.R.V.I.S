@@ -44,24 +44,37 @@ class SearchPipeline:
         """
             
         try:
+            import time
+            start_time = time.time()
+            
             # Simple approach: Optimize query first, then search
             print(f"DEBUG: Starting query optimization")
             context_size = len(context) if context else 0
             
             # Optimize the query
+            opt_start = time.time()
             optimized_query = await self.provider.optimize_query(query, context)
-            print(f"DEBUG: Query optimization completed: {optimized_query}")
+            opt_time = time.time() - opt_start
+            print(f"DEBUG: Query optimization completed in {opt_time:.2f}s: {optimized_query}")
             
             # Perform search with optimized query
+            search_start = time.time()
             print(f"DEBUG: Performing Google search for optimized query: {optimized_query}")
             search_results = await self._perform_google_search(optimized_query, self.enable_full_extraction, context_size, channel)
+            search_time = time.time() - search_start
+            print(f"DEBUG: Google search completed in {search_time:.2f}s")
             
             if not search_results or "Search failed" in search_results:
                 return f"Web search unavailable: {search_results}"
             
             # Step 3: Analyze results with context
+            analysis_start = time.time()
             print(f"DEBUG: Analyzing results with {self.provider.__class__.__name__}")
             response = await self.provider.analyze_results(query, search_results, context, channel)
+            analysis_time = time.time() - analysis_start
+            
+            total_time = time.time() - start_time
+            print(f"DEBUG: Analysis completed in {analysis_time:.2f}s, total pipeline time: {total_time:.2f}s")
             
             # Step 4: Update blacklist immediately after getting response
             if hasattr(self, '_tracking_data') and self._tracking_data:
