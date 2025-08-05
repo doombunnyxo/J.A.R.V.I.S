@@ -24,8 +24,8 @@ class AdminUtils:
                     if user_id != bot_id:
                         return guild.get_member(int(user_id))
         
-        # Fallback: Self-reference (if author is targeting themselves)
-        if message_author and any(word in text.lower() for word in ['my', 'me', 'i']):
+        # Fallback: Self-reference (if author is targeting themselves, whole words only)
+        if message_author and re.search(r'\b(my|me|i)\b', text, re.IGNORECASE):
             return message_author
         
         return None

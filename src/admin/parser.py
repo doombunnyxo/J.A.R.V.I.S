@@ -57,14 +57,14 @@ class AdminIntentParser:
             'timeout_user': ['timeout', 'mute', 'silence', 'quiet', 'shush'],
             'remove_timeout': ['remove timeout', 'unmute', 'unsilence'],
             
-            # Nickname changes (more specific patterns first)
-            'change_nickname': ['change nickname', 'set nickname', 'update nickname', 'rename user', 'rename member', 'change name of', 'nickname', 'nick', 'rename'],
-            
-            # Role management
+            # Role management (check these BEFORE nickname patterns to catch 'rename role')
             'add_role': ['add role', 'give role'],
             'remove_role': ['remove role', 'take role'],
             'rename_role': ['rename role', 'change role name', 'update role name', 'update the role name'],
             'reorganize_roles': ['reorganize roles', 'fix role names', 'improve role names', 'clean up roles'],
+            
+            # Nickname changes (moved after role patterns so 'rename role' is caught first)
+            'change_nickname': ['change nickname', 'set nickname', 'update nickname', 'rename user', 'rename member', 'change name of', 'nickname', 'nick', 'rename'],
             
             # Message management
             'bulk_delete': ['delete', 'remove', 'purge', 'clear', 'clean', 'wipe'],
