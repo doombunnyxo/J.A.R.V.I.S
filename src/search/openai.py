@@ -303,10 +303,6 @@ async def openai_search_analysis(user_query: str, search_results: str, filtered_
                 pass  # Fall through to single-stage processing
         
         # Single-stage approach for GPT-4o or snippet-only results
-        if channel:
-            try:
-                await channel.send(f"🚀 **Starting single-stage analysis** ({model})")
-            except: pass
         
         # Create OpenAI client with specified model
         import time
