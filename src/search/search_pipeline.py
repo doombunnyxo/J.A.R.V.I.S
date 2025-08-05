@@ -60,7 +60,7 @@ class SearchPipeline:
                 self.provider.optimize_query(query, context)
             )
             fallback_search_task = asyncio.create_task(
-                self._perform_google_search(query, self.enable_full_extraction, context_size)
+                self._perform_google_search(query, self.enable_full_extraction, context_size, channel)
             )
             
             try:
@@ -71,7 +71,7 @@ class SearchPipeline:
                 # Cancel fallback and use optimized query
                 fallback_search_task.cancel()
                 print(f"DEBUG: Performing Google search for optimized query: {optimized_query}")
-                search_results = await self._perform_google_search(optimized_query, self.enable_full_extraction, context_size)
+                search_results = await self._perform_google_search(optimized_query, self.enable_full_extraction, context_size, channel)
                 
             except asyncio.TimeoutError:
                 # Use fallback results if optimization is slow
@@ -119,7 +119,7 @@ class SearchPipeline:
         except Exception as e:
             print(f"DEBUG: Blacklist update failed: {e}")  # Don't crash anything
     
-    async def _perform_google_search(self, query: str, enable_full_extraction: bool = False, context_size: int = 0) -> str:
+    async def _perform_google_search(self, query: str, enable_full_extraction: bool = False, context_size: int = 0, channel=None) -> str:
         """Perform Google search with optional full page content extraction"""
         try:
             if not config.has_google_search():
