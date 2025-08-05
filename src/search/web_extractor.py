@@ -80,117 +80,46 @@ class WebContentExtractor:
             
             max_total_time = 8.0  # Maximum 8 seconds total for web extraction
             
-            while pending_tasks and estimated_summary_tokens < target_summary_tokens:
-                # Debug: Show we're in the loop
-                if debug_channel and len(extracted_pages) == 0:  # Only on first iteration
-                    try:
-                        await debug_channel.send(f"🔁 **ENTERED MAIN LOOP**: {len(pending_tasks)} tasks pending")
-                    except: pass
-                
-                # Check total elapsed time
-                total_elapsed = asyncio.get_event_loop().time() - timeout_start
-                if total_elapsed >= max_total_time:
-                    print(f"DEBUG: Hitting 8s total time limit with {len(pending_tasks)} tasks remaining - exiting extraction")
-                    if debug_channel:
-                        try:
-                            await debug_channel.send(f"⏰ **WEB EXTRACTION TIMEOUT**: Hit 8s limit, stopping with {len(extracted_pages)} pages")
-                        except: pass
-                    break
-                # Check if we've hit the 6 second mark to identify slow sites (but don't exit)
-                elapsed = asyncio.get_event_loop().time() - timeout_start
-                if elapsed >= max_timeout and not marked_slow_at_6s:
-                    print(f"DEBUG: Hit 6s mark - adding {len(pending_tasks)} remaining sites to slow list (but continuing to wait)")
-                    # Add remaining sites to slow list (they're taking >6s) but keep waiting
-                    for task in pending_tasks:
-                        url = url_by_task.get(task, 'unknown')
-                        if url != 'unknown':
-                            slow_sites.append((url, elapsed))  # Use elapsed time as response time
-                    marked_slow_at_6s = True  # Don't mark again
-                
-                # Wait for next completion - use full request timeout
-                wait_timeout = 8.0  # Wait up to 8 seconds for any task to complete
-                
-                # Debug: About to wait
-                if debug_channel and len(extracted_pages) < 2:  # Limit spam
-                    try:
-                        await debug_channel.send(f"🕐 **ABOUT TO WAIT**: {len(pending_tasks)} tasks, timeout: {wait_timeout:.1f}s")
-                    except: pass
-                
-                try:
-                    done, pending_tasks = await asyncio.wait(
-                        pending_tasks, 
-                        timeout=wait_timeout,
-                        return_when=asyncio.FIRST_COMPLETED
-                    )
-                    
-                    # Debug: Show wait results
-                    if debug_channel and (len(done) > 0 or len(extracted_pages) < 3):  # Limit spam
-                        try:
-                            await debug_channel.send(f"⏱️ **WAIT RESULT**: {len(done)} completed, {len(pending_tasks)} pending, timeout: {wait_timeout:.1f}s")
-                        except: pass
-                    
-                    # Process completed results
-                    for task in done:
-                        try:
-                            result = await task
-                            if result and result.get('content'):
-                                extracted_pages.append(result)
-                                
-                                # Estimate actual summary tokens based on content length
-                                # Summaries are capped at 300 tokens, but might be shorter for brief content
-                                content_length = len(result['content'])
-                                content_tokens = content_length // 4  # Rough token estimate
-                                expected_summary_tokens = min(content_tokens // 3, 300)  # Summaries are ~1/3 of original content, capped at 300
-                                
-                                estimated_summary_tokens += expected_summary_tokens
-                                print(f"DEBUG: Got page {len(extracted_pages)}, content: {content_length} chars, estimated summary: {expected_summary_tokens} tokens (total: {estimated_summary_tokens})")
-                                
-                                # Track slow sites (>3s response time) 
-                                if result.get('response_time', 0) > 3.0:
-                                    slow_sites.append((result['url'], result['response_time']))
-                            else:
-                                # Track failed extractions
-                                failed_sites.append(('unknown', 'extraction_failed'))
-                        except Exception as e:
-                            # Track exceptions
-                            failed_sites.append(('unknown', str(e)))
-                
-                except asyncio.TimeoutError:
-                    continue
+            # Simple timeout approach - just wait max 8 seconds total
+            start_time = asyncio.get_event_loop().time()
             
-            # Debug: Show we exited the main loop
+            # Debug: Show we're starting extraction
             if debug_channel:
                 try:
-                    await debug_channel.send(f"🔄 **EXITED MAIN LOOP**: {len(extracted_pages)} pages, {len(pending_tasks)} remaining tasks")
+                    await debug_channel.send(f"🔁 **STARTING EXTRACTION**: {len(pending_tasks)} tasks, 8s timeout")
                 except: pass
             
-            # Handle remaining tasks - either cancelled due to timeout or still pending
-            if pending_tasks:
-                print(f"DEBUG: Handling remaining {len(pending_tasks)} tasks")
-                # Cancel remaining tasks to prevent RuntimeWarning
-                for task in pending_tasks:
-                    if not task.done():
-                        task.cancel()
+            try:
+                # Wait for all tasks with 8 second timeout
+                completed_tasks = await asyncio.wait_for(
+                    asyncio.gather(*tasks, return_exceptions=True),
+                    timeout=8.0
+                )
                 
-                # Gather results including cancelled ones
-                remaining_results = await asyncio.gather(*pending_tasks, return_exceptions=True)
-                
-                # Process remaining results
-                for result in remaining_results:
+                # Process all results
+                for result in completed_tasks:
                     if isinstance(result, Exception):
                         failed_sites.append(('unknown', str(result)))
                         continue
                     
                     if result and result.get('content'):
                         extracted_pages.append(result)
-                        # These were already marked as slow if they took >6s
                         if result.get('response_time', 0) > 3.0:
                             slow_sites.append((result['url'], result['response_time']))
                     else:
                         failed_sites.append(('unknown', 'extraction_failed'))
-            
-            print(f"DEBUG: Stopped at {len(extracted_pages)} pages, ~{estimated_summary_tokens} summary tokens")
+                        
+            except asyncio.TimeoutError:
+                # Cancel all remaining tasks
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
                 
+                if debug_channel:
+                    try:
+                        await debug_channel.send(f"⏰ **EXTRACTION TIMEOUT**: 8s limit hit, got {len(extracted_pages)} pages")
+                    except: pass
+            
             print(f"DEBUG: Web extraction completed with {len(extracted_pages)} successful results")
             
             # Debug to Discord
