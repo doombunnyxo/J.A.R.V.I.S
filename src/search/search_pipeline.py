@@ -81,8 +81,6 @@ class SearchPipeline:
             # Append exclusions to query
             enhanced_query = f"{query} {exclusion_string}".strip()
             
-            if self.debug_channel and blocked_domains:
-                await self.debug_channel.send(f"🚫 **Search Exclusions**: Excluding {len(blocked_domains)} blocked domains from search")
             
             # Import here to avoid circular imports
             from googleapiclient.discovery import build
@@ -109,23 +107,14 @@ class SearchPipeline:
             if enable_full_extraction:
                 # Full page extraction mode
                 try:
-                    if self.debug_channel:
-                        await self.debug_channel.send(f"🔧 **Debug**: Attempting web extraction for {len(basic_results)} URLs...")
-                    
                     from .web_extractor import WebContentExtractor
                     
                     urls = [result['link'] for result in basic_results]
                     print(f"DEBUG: Extracting full content from {len(urls)} pages...")
                     
-                    if self.debug_channel:
-                        await self.debug_channel.send(f"🔧 **Debug**: Created WebContentExtractor, starting extraction...")
-                    
                     extractor = WebContentExtractor()
-                    extracted_pages = await extractor.extract_multiple_pages(urls, self.debug_channel)
+                    extracted_pages = await extractor.extract_multiple_pages(urls)
                     print(f"DEBUG: Successfully extracted {len(extracted_pages)} pages")
-                    
-                    if self.debug_channel:
-                        await self.debug_channel.send(f"🔧 **Debug**: Extraction complete - got {len(extracted_pages)} pages with content")
                     
                     # Build enhanced search results with full content
                     search_results = f"Full page web search results for '{query}':\n\n"
@@ -134,8 +123,6 @@ class SearchPipeline:
                 except Exception as e:
                     error_msg = f"Full page extraction failed: {str(e)}"
                     print(f"DEBUG: {error_msg}")
-                    if self.debug_channel:
-                        await self.debug_channel.send(f"🔧 **Debug**: ❌ {error_msg}")
                     # Fall back to snippet mode and include error info
                     search_results = f"⚠️ **Full extraction failed**: {str(e)}\n\nFalling back to snippet search for '{query}':\n\n"
                     enable_full_extraction = False
@@ -149,14 +136,15 @@ class SearchPipeline:
                     index = basic_result['index']
                     
                     search_results += f"{index}. **{title}**\n"
+                    search_results += f"   Snippet: {snippet}\n"
                     
                     if link in extracted_by_url:
-                        # Use full extracted content (no truncation for GPT-4o)
+                        # Add full extracted content after snippet
                         page_data = extracted_by_url[link]
                         search_results += f"   Full Content ({page_data['length']} chars): {page_data['content']}\n"
                     else:
-                        # Fallback to snippet
-                        search_results += f"   Snippet: {snippet[:400]}...\n"
+                        # Note extraction failure
+                        search_results += f"   (Full content extraction failed)\n"
                     
                     search_results += f"   Source: <{link}>\n\n"
             else:

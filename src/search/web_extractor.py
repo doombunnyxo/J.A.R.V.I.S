@@ -25,7 +25,7 @@ class WebContentExtractor:
         self.max_content_length = max_content_length
         self.session_timeout = aiohttp.ClientTimeout(total=timeout)
     
-    async def extract_multiple_pages(self, urls: List[str], debug_channel=None) -> List[Dict[str, str]]:
+    async def extract_multiple_pages(self, urls: List[str]) -> List[Dict[str, str]]:
         """Extract content from multiple URLs concurrently"""
         if not HAS_BS4:
             raise ImportError("BeautifulSoup4 is required for web content extraction. Install with: pip install beautifulsoup4")
@@ -36,27 +36,15 @@ class WebContentExtractor:
         
         allowed_urls, blocked_urls = domain_filter.filter_urls(urls)
         
-        if debug_channel:
-            if blocked_urls:
-                blocked_info = '\n'.join([f"  ❌ {url} ({reason})" for url, reason in blocked_urls])
-                await debug_channel.send(f"🚫 **Filtered Blocked Domains**:\n{blocked_info}")
-            
-            if allowed_urls:
-                url_list = '\n'.join([f"{i+1}. {url}" for i, url in enumerate(allowed_urls[:5])])
-                if len(allowed_urls) > 5:
-                    url_list += f"\n... and {len(allowed_urls)-5} more URLs"
-                await debug_channel.send(f"🔧 **Debug**: Attempting to extract from {len(allowed_urls)} allowed URLs:\n```\n{url_list}\n```")
-            else:
-                await debug_channel.send(f"⚠️ **Warning**: All URLs were filtered out by domain blacklist!")
-                return []
+        if not allowed_urls:
+            return []
         
         async with aiohttp.ClientSession(timeout=self.session_timeout) as session:
-            tasks = [self._extract_single_page(session, url, debug_channel) for url in urls]
+            tasks = [self._extract_single_page(session, url) for url in allowed_urls]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             
             # Filter out exceptions and return successful extractions
             extracted_pages = []
-            first_page_posted = False
             
             # Get domain filter for recording failures
             from .domain_filter import get_domain_filter
@@ -64,53 +52,34 @@ class WebContentExtractor:
             
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
-                    error_msg = f"Failed to extract {urls[i]}: {result}"
+                    error_msg = f"Failed to extract {allowed_urls[i]}: {result}"
                     print(f"DEBUG: {error_msg}")
-                    if debug_channel:
-                        await debug_channel.send(f"🔧 **Debug**: ❌ {error_msg}")
                     
                     # Record failure for potential auto-blocking
-                    await domain_filter.record_failure(urls[i], str(result), debug_channel)
+                    await domain_filter.record_failure(allowed_urls[i], str(result))
                     continue
                 
                 if result and result.get('content'):
                     extracted_pages.append(result)
-                    
-                    # Post first successfully extracted page to Discord for debugging
-                    if not first_page_posted and debug_channel:
-                        try:
-                            content_preview = result['content'][:1500] + "..." if len(result['content']) > 1500 else result['content']
-                            debug_msg = f"🔍 **First Scraped Page Debug**\n**URL**: {result['url']}\n**Title**: {result['title']}\n**Content ({result['length']} chars)**:\n```\n{content_preview}\n```"
-                            await debug_channel.send(debug_msg)
-                            first_page_posted = True
-                        except Exception as e:
-                            print(f"DEBUG: Failed to post scraped content to Discord: {e}")
                 else:
-                    # Debug why page returned no content and record failure
+                    # Record failure for potential auto-blocking
                     if result is None:
                         error_msg = "returned None"
-                        if debug_channel:
-                            await debug_channel.send(f"🔧 **Debug**: ❌ URL <{urls[i]}> returned None")
                     elif not result.get('content'):
                         error_msg = f"returned empty content - Title: {result.get('title', 'No title')}"
-                        if debug_channel:
-                            await debug_channel.send(f"🔧 **Debug**: ❌ URL <{urls[i]}> returned empty content - Title: {result.get('title', 'No title')}")
                     else:
                         error_msg = f"Unknown issue with result: {str(result)[:200]}"
-                        if debug_channel:
-                            await debug_channel.send(f"🔧 **Debug**: ❌ URL <{urls[i]}> - Unknown issue with result: {str(result)[:200]}")
                     
-                    # Record failure for potential auto-blocking
-                    await domain_filter.record_failure(urls[i], error_msg, debug_channel)
+                    await domain_filter.record_failure(allowed_urls[i], error_msg)
             
             return extracted_pages
     
-    async def _extract_single_page(self, session: aiohttp.ClientSession, url: str, debug_channel=None) -> Optional[Dict[str, str]]:
+    async def _extract_single_page(self, session: aiohttp.ClientSession, url: str) -> Optional[Dict[str, str]]:
         """Extract content from a single URL"""
         try:
             # Check if this is a Reddit URL and use API instead
             if 'reddit.com' in url:
-                return await self._extract_reddit_content(session, url, debug_channel)
+                return await self._extract_reddit_content(session, url)
             
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -118,20 +87,14 @@ class WebContentExtractor:
             
             async with session.get(url, headers=headers) as response:
                 if response.status != 200:
-                    if debug_channel:
-                        await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - HTTP {response.status}")
                     return None
                 
                 # Check content type
                 content_type = response.headers.get('content-type', '').lower()
                 if 'text/html' not in content_type:
-                    if debug_channel:
-                        await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Not HTML content: {content_type}")
                     return None
                 
                 html_content = await response.text()
-                if debug_channel:
-                    await debug_channel.send(f"🔧 **Debug**: ✅ <{url}> - Got HTML ({len(html_content)} chars)")
                 
                 # Parse with BeautifulSoup
                 soup = BeautifulSoup(html_content, 'html.parser')
@@ -144,16 +107,11 @@ class WebContentExtractor:
                 cleaned_content = self._clean_html_content(soup)
                 
                 if not cleaned_content or len(cleaned_content.strip()) < 100:
-                    if debug_channel:
-                        await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Content too short ({len(cleaned_content) if cleaned_content else 0} chars) after cleaning")
                     return None
                 
                 # Truncate if too long
                 if len(cleaned_content) > self.max_content_length:
                     cleaned_content = cleaned_content[:self.max_content_length] + "..."
-                
-                if debug_channel:
-                    await debug_channel.send(f"🔧 **Debug**: ✅ <{url}> - Successfully extracted {len(cleaned_content)} chars")
                 
                 return {
                     'url': url,
@@ -165,39 +123,30 @@ class WebContentExtractor:
         except Exception as e:
             error_msg = f"Error extracting {url}: {e}"
             print(f"DEBUG: {error_msg}")
-            if debug_channel:
-                await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Exception: {str(e)}")
             
             # Record failure for potential auto-blocking
             from .domain_filter import get_domain_filter
             domain_filter = get_domain_filter()
-            await domain_filter.record_failure(url, str(e), debug_channel)
+            await domain_filter.record_failure(url, str(e))
             
             return None
     
-    async def _extract_reddit_content(self, session: aiohttp.ClientSession, url: str, debug_channel=None) -> Optional[Dict[str, str]]:
+    async def _extract_reddit_content(self, session: aiohttp.ClientSession, url: str) -> Optional[Dict[str, str]]:
         """Extract content from Reddit using authenticated API"""
         try:
             from ..config import config
             from .reddit_client import RedditClient
             
-            if debug_channel:
-                await debug_channel.send(f"🔧 **Debug**: ✅ <{url}> - Using authenticated Reddit API")
-            
             # Check if Reddit API is configured
             if not config.has_reddit_api():
-                if debug_channel:
-                    await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Reddit API not configured, trying public JSON")
                 # Fallback to public JSON endpoint
-                return await self._extract_reddit_json_fallback(session, url, debug_channel)
+                return await self._extract_reddit_json_fallback(session, url)
             
             # Use authenticated Reddit client
             reddit_client = RedditClient()
             data = await reddit_client.get_post_data(session, url)
             
             if not data:
-                if debug_channel:
-                    await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Reddit API returned no data")
                 return None
             
             # Extract content from API response
@@ -209,23 +158,16 @@ class WebContentExtractor:
                     result['content'] = result['content'][:self.max_content_length] + "..."
                     result['length'] = len(result['content'])
                 
-                if debug_channel:
-                    await debug_channel.send(f"🔧 **Debug**: ✅ <{url}> - Reddit API extracted {result['length']} chars")
-                
                 return result
             else:
-                if debug_channel:
-                    await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Failed to extract content from Reddit data")
                 return None
                 
         except Exception as e:
             error_msg = f"Reddit API extraction failed for {url}: {e}"
             print(f"DEBUG: {error_msg}")
-            if debug_channel:
-                await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Reddit API error: {str(e)}")
             return None
     
-    async def _extract_reddit_json_fallback(self, session: aiohttp.ClientSession, url: str, debug_channel=None) -> Optional[Dict[str, str]]:
+    async def _extract_reddit_json_fallback(self, session: aiohttp.ClientSession, url: str) -> Optional[Dict[str, str]]:
         """Fallback method using public Reddit JSON endpoints"""
         try:
             # Try public JSON endpoint
@@ -235,13 +177,8 @@ class WebContentExtractor:
                 'User-Agent': 'J.A.R.V.I.S Discord Bot 1.0 by /u/CarinXO'
             }
             
-            if debug_channel:
-                await debug_channel.send(f"🔧 **Debug**: ✅ <{url}> - Trying public JSON: {json_url}")
-            
             async with session.get(json_url, headers=headers) as response:
                 if response.status != 200:
-                    if debug_channel:
-                        await debug_channel.send(f"🔧 **Debug**: ❌ <{json_url}> - Public JSON HTTP {response.status}")
                     return None
                 
                 data = await response.json()
@@ -251,18 +188,9 @@ class WebContentExtractor:
                 reddit_client = RedditClient()
                 result = await reddit_client.extract_content_from_data(data)
                 
-                if result:
-                    if debug_channel:
-                        await debug_channel.send(f"🔧 **Debug**: ✅ <{url}> - Public JSON extracted {result['length']} chars")
-                    return result
-                else:
-                    if debug_channel:
-                        await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Failed to extract from public JSON")
-                    return None
+                return result
                 
         except Exception as e:
-            if debug_channel:
-                await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Public JSON error: {str(e)}")
             return None
     
     def _clean_html_content(self, soup: BeautifulSoup) -> str:

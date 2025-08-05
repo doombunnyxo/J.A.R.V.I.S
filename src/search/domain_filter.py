@@ -108,7 +108,7 @@ class DomainFilter:
         
         return False, "allowed"
     
-    async def record_failure(self, url: str, error_message: str, debug_channel=None):
+    async def record_failure(self, url: str, error_message: str):
         """Record a failure for a domain and potentially block it"""
         domain = self.extract_domain(url)
         
@@ -137,16 +137,13 @@ class DomainFilter:
         
         # Block domain if it exceeds failure threshold
         if failure_count >= max_failures:
-            await self.block_domain(domain, f"Auto-blocked after {failure_count} failures", error_message, debug_channel)
+            await self.block_domain(domain, f"Auto-blocked after {failure_count} failures", error_message)
             # Move from temporary to blocked
             del self.temporary_failures[domain]
-        else:
-            if debug_channel:
-                await debug_channel.send(f"🔧 **Debug**: Domain `{domain}` failure {failure_count}/{max_failures}: {error_message}")
         
         await self._save_blocked_domains()
     
-    async def block_domain(self, domain: str, reason: str, last_error: str = "", debug_channel=None):
+    async def block_domain(self, domain: str, reason: str, last_error: str = ""):
         """Manually block a domain"""
         self.blocked_domains[domain] = {
             'reason': reason,
@@ -155,20 +152,14 @@ class DomainFilter:
             'last_failure': last_error
         }
         
-        if debug_channel:
-            await debug_channel.send(f"🚫 **Domain Blocked**: `{domain}` - {reason}")
-        
         logger.info(f"Blocked domain: {domain} - {reason}")
         await self._save_blocked_domains()
     
-    async def unblock_domain(self, domain: str, debug_channel=None):
+    async def unblock_domain(self, domain: str):
         """Remove a domain from the blocklist"""
         if domain in self.blocked_domains:
             del self.blocked_domains[domain]
             await self._save_blocked_domains()
-            
-            if debug_channel:
-                await debug_channel.send(f"✅ **Domain Unblocked**: `{domain}`")
             
             logger.info(f"Unblocked domain: {domain}")
     

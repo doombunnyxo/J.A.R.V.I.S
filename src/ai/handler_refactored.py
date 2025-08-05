@@ -154,20 +154,18 @@ class AIHandler:
             provider, cleaned_query = await self._determine_provider_and_query(message, ai_query, force_provider)
             
             # Route to appropriate handler
-            await message.channel.send(f"🔧 **Debug**: Routing to provider: `{provider}`")
             logger.debug(f"Routing to provider: {provider}")
             if provider == "openai":
                 response = await self._handle_with_openai(message, cleaned_query)
             elif provider == "direct-ai":
                 response = await self._handle_direct_ai(message, cleaned_query)
             elif provider == "full-search":
-                await message.channel.send(f"🔧 **Debug**: Calling _handle_full_search with query: `{cleaned_query}`")
-                logger.debug(f"Calling _handle_full_search with query: '{cleaned_query}'")
-                response = await self._handle_full_search(message, cleaned_query)
+                # Full search now routes to the same handler as regular search
+                logger.debug(f"Full search routing to standard search handler: '{cleaned_query}'")
+                response = await self._handle_search_with_openai(message, cleaned_query)
             elif provider == "crafting":
                 response = await self._handle_with_crafting(message, cleaned_query)
             else:  # Default to OpenAI
-                await message.channel.send(f"🔧 **Debug**: Using default OpenAI for provider: `{provider}`")
                 logger.debug(f"Using default OpenAI for provider: {provider}")
                 response = await self._handle_with_openai(message, cleaned_query)
             
@@ -192,7 +190,6 @@ class AIHandler:
         
         # If provider is forced, return as-is
         if force_provider:
-            await message.channel.send(f"🔧 **Debug**: Using forced provider: `{force_provider}`")
             logger.debug(f"Using forced provider: {force_provider}")
             return force_provider, query
         
@@ -265,7 +262,7 @@ class AIHandler:
             return f"❌ Error with OpenAI processing: {str(e)}"
     
     async def _handle_search_with_openai(self, message, query: str) -> str:
-        """Handle search queries using pure OpenAI search pipeline"""
+        """Handle search queries using full page extraction with GPT-4o"""
         try:
             from ..search.search_pipeline import SearchPipeline
             from ..search.openai_adapter import OpenAISearchProvider
@@ -276,11 +273,11 @@ class AIHandler:
                 message.author.display_name, message
             )
             
-            # Use pure OpenAI provider with gpt-4o-mini
-            openai_provider = OpenAISearchProvider(model="gpt-4o-mini")
-            pipeline = SearchPipeline(openai_provider)
+            # Always use GPT-4o with full page extraction for searches
+            openai_provider = OpenAISearchProvider(model="gpt-4o")
+            pipeline = SearchPipeline(openai_provider, enable_full_extraction=True)
             
-            # Execute search pipeline with OpenAI only
+            # Execute search pipeline with full page extraction
             response = await pipeline.search_and_respond(query, context)
             
             return response
@@ -291,30 +288,24 @@ class AIHandler:
     
     async def _handle_full_search(self, message, query: str) -> str:
         """Handle full page search using GPT-4o with web scraping"""
-        await message.channel.send(f"🔧 **Debug**: _handle_full_search called with query: `{query}`")
         logger.debug(f"_handle_full_search called with query: '{query}'")
         try:
-            await message.channel.send(f"🔧 **Debug**: Importing search modules...")
             from ..search.search_pipeline import SearchPipeline
             from ..search.openai_adapter import OpenAISearchProvider
             
-            await message.channel.send(f"🔧 **Debug**: Building context for search...")
             # Build context for search
             context = await self.context_manager.build_full_context(
                 query, message.author.id, message.channel.id,
                 message.author.display_name, message
             )
             
-            await message.channel.send(f"🔧 **Debug**: Context built ({len(context)} chars), creating GPT-4o provider...")
             # Use GPT-4o provider with full page extraction enabled
             openai_provider = OpenAISearchProvider(model="gpt-4o")
-            pipeline = SearchPipeline(openai_provider, enable_full_extraction=True, debug_channel=message.channel)
+            pipeline = SearchPipeline(openai_provider, enable_full_extraction=True, debug_channel=None)
             
-            await message.channel.send(f"🔧 **Debug**: Starting search pipeline with full extraction...")
             # Execute search pipeline with full page scraping
             response = await pipeline.search_and_respond(query, context)
             
-            await message.channel.send(f"🔧 **Debug**: Search completed, response length: {len(response)} chars")
             return response
             
         except Exception as e:
