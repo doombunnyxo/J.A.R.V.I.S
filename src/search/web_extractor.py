@@ -111,6 +111,12 @@ class WebContentExtractor:
                 remaining_time = max_total_time - total_elapsed
                 wait_timeout = min(1.0, remaining_time)  # Don't wait longer than remaining time
                 
+                # Debug: About to wait
+                if debug_channel and len(extracted_pages) < 2:  # Limit spam
+                    try:
+                        await debug_channel.send(f"🕐 **ABOUT TO WAIT**: {len(pending_tasks)} tasks, timeout: {wait_timeout:.1f}s")
+                    except: pass
+                
                 try:
                     done, pending_tasks = await asyncio.wait(
                         pending_tasks, 
