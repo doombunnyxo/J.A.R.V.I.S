@@ -47,19 +47,22 @@ class EventHandlers(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
         """Handle incoming messages"""
+        # Capture ALL messages for context (both user and bot messages)
+        if message.content.strip() and self.ai_handler and hasattr(self.ai_handler, 'context_manager'):
+            # Use bot display name for bot messages, user display name for user messages
+            display_name = "J.A.R.V.I.S" if message.author == self.bot.user else message.author.display_name
+            self.ai_handler.context_manager.add_channel_message(
+                message.channel.id, 
+                display_name, 
+                message.content,
+                message.channel  # Pass channel object for thread detection
+            )
+        
+        # Return early for bot messages (don't process them as commands)
         if message.author == self.bot.user:
             return
         
         logger.debug(f'[{message.channel}] {message.author}: {message.content} (msg_id: {message.id})')
-        
-        # Capture channel message for context (non-empty messages only)
-        if message.content.strip() and self.ai_handler and hasattr(self.ai_handler, 'context_manager'):
-            self.ai_handler.context_manager.add_channel_message(
-                message.channel.id, 
-                message.author.display_name, 
-                message.content,
-                message.channel  # Pass channel object for thread detection
-            )
         
         # Check if this is a reply to the bot, in a thread, or a direct mention
         is_reply_to_bot = (message.reference and 

@@ -420,36 +420,33 @@ Return only relevant permanent context items, one per line, in the exact same fo
             ])
             context_parts.append(f"Previous conversation:\n{conversation_text}")
         
-        # Get channel context if enabled
-        if user_key:
-            user_settings = data_manager.get_user_settings(user_key)
-            if user_settings.get("use_channel_context", True):
-                # If user mentioned specific channels, only use those
-                if message and message.channel_mentions:
-                    for mentioned_channel in message.channel_mentions:
-                        mentioned_messages = self.get_channel_context(mentioned_channel.id, limit=35)
-                        if mentioned_messages:
-                            mentioned_context_text = "\n".join(mentioned_messages)
-                            context_parts.append(f"Recent discussion in #{mentioned_channel.name}:\n{mentioned_context_text}")
-                else:
-                    # Check if current channel is a thread
-                    is_current_thread = (message and hasattr(message.channel, 'type') and 
-                                       str(message.channel.type) in ['public_thread', 'private_thread'])
-                    
-                    if is_current_thread:
-                        # Use thread context (parent context already inherited when thread was created)
-                        thread_messages = self.get_thread_context(channel_id)
-                        if thread_messages:
-                            thread_context_text = "\n".join(thread_messages)
-                            thread_name = message.channel.name if hasattr(message.channel, 'name') else "current thread"
-                            context_parts.append(f"Thread discussion in {thread_name}:\n{thread_context_text}")
-                    else:
-                        # No channels mentioned, use current channel context
-                        channel_messages = self.get_smart_channel_context(channel_id, limit=35)
-                        if channel_messages:
-                            channel_context_text = "\n".join(channel_messages)
-                            current_channel_name = message.channel.name if message and hasattr(message.channel, 'name') else "current channel"
-                            context_parts.append(f"Recent discussion in #{current_channel_name}:\n{channel_context_text}")
+        # Get channel context (always include for filtering)
+        # If user mentioned specific channels, only use those
+        if message and message.channel_mentions:
+            for mentioned_channel in message.channel_mentions:
+                mentioned_messages = self.get_channel_context(mentioned_channel.id, limit=35)
+                if mentioned_messages:
+                    mentioned_context_text = "\n".join(mentioned_messages)
+                    context_parts.append(f"Recent discussion in #{mentioned_channel.name}:\n{mentioned_context_text}")
+        else:
+            # Check if current channel is a thread
+            is_current_thread = (message and hasattr(message.channel, 'type') and 
+                               str(message.channel.type) in ['public_thread', 'private_thread'])
+            
+            if is_current_thread:
+                # Use thread context (parent context already inherited when thread was created)
+                thread_messages = self.get_thread_context(channel_id)
+                if thread_messages:
+                    thread_context_text = "\n".join(thread_messages)
+                    thread_name = message.channel.name if hasattr(message.channel, 'name') else "current thread"
+                    context_parts.append(f"Thread discussion in {thread_name}:\n{thread_context_text}")
+            else:
+                # No channels mentioned, use current channel context
+                channel_messages = self.get_smart_channel_context(channel_id, limit=35)
+                if channel_messages:
+                    channel_context_text = "\n".join(channel_messages)
+                    current_channel_name = message.channel.name if message and hasattr(message.channel, 'name') else "current channel"
+                    context_parts.append(f"Recent discussion in #{current_channel_name}:\n{channel_context_text}")
         
         # Get permanent context
         if user_key:

@@ -30,7 +30,9 @@ class OpenAISearchProvider:
     
     async def analyze_results(self, query: str, search_results: str, context: str) -> str:
         """Use OpenAI to analyze search results"""
-        response = await openai_search_analysis(query, search_results, context, self.model)
+        # Use GPT-4o for analysis to handle larger context from full page content
+        analysis_model = "gpt-4o" if "full page content" in search_results else self.model
+        response = await openai_search_analysis(query, search_results, context, analysis_model)
         
         # Estimate total prompt tokens (context + system prompt + search results + user query)
         # Rough estimation: 4 characters per token

@@ -63,13 +63,14 @@ class SearchPipeline:
             return f"Error in {provider_name} search pipeline: {str(e)}"
     
     async def _perform_google_search(self, query: str) -> str:
-        """Perform Google search"""
+        """Perform Google search and extract full page content"""
         try:
             if not config.has_google_search():
                 return "Google search not configured"
             
             # Import here to avoid circular imports
             from googleapiclient.discovery import build
+            from .web_extractor import WebContentExtractor
             
             service = build("customsearch", "v1", developerKey=config.GOOGLE_API_KEY)
             result = service.cse().list(q=query, cx=config.GOOGLE_SEARCH_ENGINE_ID, num=10).execute()
@@ -77,15 +78,52 @@ class SearchPipeline:
             if 'items' not in result:
                 return f"No search results found for: {query}"
             
-            search_results = f"Current web search results for '{query}':\n\n"
-            
+            # Extract URLs from search results
+            urls = []
+            basic_results = []
             for i, item in enumerate(result['items'][:10], 1):
                 title = item['title']
                 link = item['link']
                 snippet = item.get('snippet', 'No description available')
                 
-                search_results += f"{i}. **{title}**\n"
-                search_results += f"   {snippet[:400]}...\n"
+                urls.append(link)
+                basic_results.append({
+                    'title': title,
+                    'link': link,
+                    'snippet': snippet,
+                    'index': i
+                })
+            
+            print(f"DEBUG: Extracting full content from {len(urls)} pages...")
+            
+            # Extract full page content
+            extractor = WebContentExtractor()
+            extracted_pages = await extractor.extract_multiple_pages(urls)
+            
+            print(f"DEBUG: Successfully extracted {len(extracted_pages)} pages")
+            
+            # Build enhanced search results with full content
+            search_results = f"Enhanced web search results with full page content for '{query}':\n\n"
+            
+            extracted_by_url = {page['url']: page for page in extracted_pages}
+            
+            for basic_result in basic_results:
+                link = basic_result['link']
+                title = basic_result['title']
+                snippet = basic_result['snippet']
+                index = basic_result['index']
+                
+                search_results += f"{index}. **{title}**\n"
+                
+                if link in extracted_by_url:
+                    # Use extracted content
+                    page_data = extracted_by_url[link]
+                    content_preview = page_data['content'][:800] + "..." if len(page_data['content']) > 800 else page_data['content']
+                    search_results += f"   Full Content ({page_data['length']} chars): {content_preview}\n"
+                else:
+                    # Fallback to snippet
+                    search_results += f"   Snippet: {snippet[:400]}...\n"
+                
                 search_results += f"   Source: <{link}>\n\n"
             
             return search_results
