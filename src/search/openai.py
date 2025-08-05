@@ -257,8 +257,8 @@ Answer:"""
         {"role": "user", "content": user_message}
     ]
     
-    # Set reasonable output token limits
-    max_tokens = 2048 if "gpt-4o" in "gpt-4o-mini" else 1024
+    # Set reasonable output token limits - always use 1024 for GPT-4o mini in two-stage
+    max_tokens = 1024
     
     # Call OpenAI API for final synthesis
     response = await openai_client.create_completion(

@@ -40,5 +40,5 @@ class OpenAISearchProvider:
         search_results_tokens = len(search_results) // 4
         total_estimated_tokens = context_tokens + system_prompt_tokens + search_results_tokens
         
-        # Prepend response type with total token count
-        return f"**Web Search** (~{total_estimated_tokens} tokens): {response}"
+        # Prepend response type with model name and token count
+        return f"**{self.model_name} Web Search** (~{total_estimated_tokens} tokens): {response}"

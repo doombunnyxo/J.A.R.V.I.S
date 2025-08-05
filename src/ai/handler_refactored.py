@@ -368,7 +368,7 @@ Finally, respond with a clear answer.
             user_message_tokens = len(query) // 4
             total_estimated_tokens = context_tokens + system_prompt_tokens + user_message_tokens
             
-            return f"**AI Response** (~{total_estimated_tokens} tokens):\n\n{response}"
+            return f"**OpenAI GPT-4o Mini AI Response** (~{total_estimated_tokens} tokens):\n\n{response}"
             
         except Exception as e:
             logger.debug(f"Direct AI failed: {e}")
