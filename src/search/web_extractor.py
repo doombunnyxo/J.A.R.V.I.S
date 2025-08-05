@@ -67,11 +67,11 @@ class WebContentExtractor:
                     # Debug why page returned no content
                     if debug_channel:
                         if result is None:
-                            await debug_channel.send(f"🔧 **Debug**: ❌ URL {urls[i]} returned None")
+                            await debug_channel.send(f"🔧 **Debug**: ❌ URL <{urls[i]}> returned None")
                         elif not result.get('content'):
-                            await debug_channel.send(f"🔧 **Debug**: ❌ URL {urls[i]} returned empty content - Title: {result.get('title', 'No title')}")
+                            await debug_channel.send(f"🔧 **Debug**: ❌ URL <{urls[i]}> returned empty content - Title: {result.get('title', 'No title')}")
                         else:
-                            await debug_channel.send(f"🔧 **Debug**: ❌ URL {urls[i]} - Unknown issue with result: {str(result)[:200]}")
+                            await debug_channel.send(f"🔧 **Debug**: ❌ URL <{urls[i]}> - Unknown issue with result: {str(result)[:200]}")
             
             return extracted_pages
     
@@ -194,33 +194,47 @@ class WebContentExtractor:
         """Extract text while preserving some structure"""
         text_parts = []
         
-        for child in element.children:
-            if hasattr(child, 'name'):
-                if child.name in ['p', 'div', 'article', 'section']:
-                    text = child.get_text().strip()
-                    if text and len(text) > 20:  # Only include substantial paragraphs
+        # Check if element has children attribute (some BeautifulSoup objects don't)
+        if not hasattr(element, 'children'):
+            # If it's a text node, return its string representation
+            text = str(element).strip()
+            return text if len(text) > 10 else ""
+        
+        try:
+            for child in element.children:
+                # Skip comments, doctypes, and other non-element nodes
+                if hasattr(child, 'name') and child.name:
+                    if child.name in ['p', 'div', 'article', 'section']:
+                        text = child.get_text().strip()
+                        if text and len(text) > 20:  # Only include substantial paragraphs
+                            text_parts.append(text)
+                    elif child.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                        text = child.get_text().strip()
+                        if text:
+                            text_parts.append(f"\n## {text}\n")
+                    elif child.name in ['ul', 'ol']:
+                        # Handle lists
+                        list_items = child.find_all('li')
+                        for li in list_items:
+                            li_text = li.get_text().strip()
+                            if li_text:
+                                text_parts.append(f"• {li_text}")
+                    else:
+                        # Recursively process other elements
+                        nested_text = self._extract_text_with_structure(child)
+                        if nested_text:
+                            text_parts.append(nested_text)
+                elif str(child).strip():
+                    # Text node - but check if it's substantial
+                    text = str(child).strip()
+                    if text and len(text) > 10 and not text.startswith('<!--'):
                         text_parts.append(text)
-                elif child.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-                    text = child.get_text().strip()
-                    if text:
-                        text_parts.append(f"\n## {text}\n")
-                elif child.name in ['ul', 'ol']:
-                    # Handle lists
-                    list_items = child.find_all('li')
-                    for li in list_items:
-                        li_text = li.get_text().strip()
-                        if li_text:
-                            text_parts.append(f"• {li_text}")
-                else:
-                    # Recursively process other elements
-                    nested_text = self._extract_text_with_structure(child)
-                    if nested_text:
-                        text_parts.append(nested_text)
+        except Exception as e:
+            # If iteration fails, fall back to simple text extraction
+            if hasattr(element, 'get_text'):
+                return element.get_text().strip()
             else:
-                # Text node
-                text = str(child).strip()
-                if text and len(text) > 10:
-                    text_parts.append(text)
+                return str(element).strip()
         
         return "\n".join(text_parts)
     
