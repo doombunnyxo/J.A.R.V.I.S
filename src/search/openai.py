@@ -302,6 +302,17 @@ async def openai_search_analysis(user_query: str, search_results: str, filtered_
         return "OpenAI API not configured - cannot process search results"
     
     try:
+        # Debug: Check what we got in search results
+        if channel:
+            try:
+                has_full_content = "Full Content (" in search_results
+                await channel.send(f"🔍 **SEARCH RESULTS DEBUG**: Full content found: {has_full_content}, Model: {model}")
+                if has_full_content:
+                    await channel.send("✅ **TRIGGERING TWO-STAGE ANALYSIS**")
+                else:
+                    await channel.send("❌ **NO FULL CONTENT - USING SINGLE STAGE**")
+            except: pass
+        
         # Check if we have full webpage content and decide approach based on model
         if "Full Content (" in search_results:
             if model == "gpt-4o-mini":
