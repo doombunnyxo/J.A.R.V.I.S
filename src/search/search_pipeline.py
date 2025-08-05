@@ -167,6 +167,12 @@ class SearchPipeline:
                     urls = [result['link'] for result in basic_results]
                     print(f"DEBUG: Extracting full content from {len(urls)} pages...")
                     
+                    # Debug to Discord
+                    if channel:
+                        try:
+                            await channel.send(f"🌐 **STARTING WEB EXTRACTION**: {len(urls)} URLs")
+                        except: pass
+                    
                     extractor = WebContentExtractor()
                     extracted_pages, tracking_data = await extractor.extract_multiple_pages(urls, channel)
                     print(f"DEBUG: Successfully extracted {len(extracted_pages)} pages")
