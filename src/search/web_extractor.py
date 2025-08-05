@@ -30,11 +30,25 @@ class WebContentExtractor:
         if not HAS_BS4:
             raise ImportError("BeautifulSoup4 is required for web content extraction. Install with: pip install beautifulsoup4")
         
+        # Filter out blocked domains
+        from .domain_filter import get_domain_filter
+        domain_filter = get_domain_filter()
+        
+        allowed_urls, blocked_urls = domain_filter.filter_urls(urls)
+        
         if debug_channel:
-            url_list = '\n'.join([f"{i+1}. {url}" for i, url in enumerate(urls[:5])])  # Show first 5 URLs
-            if len(urls) > 5:
-                url_list += f"\n... and {len(urls)-5} more URLs"
-            await debug_channel.send(f"🔧 **Debug**: Attempting to extract from URLs:\n```\n{url_list}\n```")
+            if blocked_urls:
+                blocked_info = '\n'.join([f"  ❌ {url} ({reason})" for url, reason in blocked_urls])
+                await debug_channel.send(f"🚫 **Filtered Blocked Domains**:\n{blocked_info}")
+            
+            if allowed_urls:
+                url_list = '\n'.join([f"{i+1}. {url}" for i, url in enumerate(allowed_urls[:5])])
+                if len(allowed_urls) > 5:
+                    url_list += f"\n... and {len(allowed_urls)-5} more URLs"
+                await debug_channel.send(f"🔧 **Debug**: Attempting to extract from {len(allowed_urls)} allowed URLs:\n```\n{url_list}\n```")
+            else:
+                await debug_channel.send(f"⚠️ **Warning**: All URLs were filtered out by domain blacklist!")
+                return []
         
         async with aiohttp.ClientSession(timeout=self.session_timeout) as session:
             tasks = [self._extract_single_page(session, url, debug_channel) for url in urls]
@@ -44,12 +58,19 @@ class WebContentExtractor:
             extracted_pages = []
             first_page_posted = False
             
+            # Get domain filter for recording failures
+            from .domain_filter import get_domain_filter
+            domain_filter = get_domain_filter()
+            
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
                     error_msg = f"Failed to extract {urls[i]}: {result}"
                     print(f"DEBUG: {error_msg}")
                     if debug_channel:
                         await debug_channel.send(f"🔧 **Debug**: ❌ {error_msg}")
+                    
+                    # Record failure for potential auto-blocking
+                    await domain_filter.record_failure(urls[i], str(result), debug_channel)
                     continue
                 
                 if result and result.get('content'):
@@ -65,14 +86,22 @@ class WebContentExtractor:
                         except Exception as e:
                             print(f"DEBUG: Failed to post scraped content to Discord: {e}")
                 else:
-                    # Debug why page returned no content
-                    if debug_channel:
-                        if result is None:
+                    # Debug why page returned no content and record failure
+                    if result is None:
+                        error_msg = "returned None"
+                        if debug_channel:
                             await debug_channel.send(f"🔧 **Debug**: ❌ URL <{urls[i]}> returned None")
-                        elif not result.get('content'):
+                    elif not result.get('content'):
+                        error_msg = f"returned empty content - Title: {result.get('title', 'No title')}"
+                        if debug_channel:
                             await debug_channel.send(f"🔧 **Debug**: ❌ URL <{urls[i]}> returned empty content - Title: {result.get('title', 'No title')}")
-                        else:
+                    else:
+                        error_msg = f"Unknown issue with result: {str(result)[:200]}"
+                        if debug_channel:
                             await debug_channel.send(f"🔧 **Debug**: ❌ URL <{urls[i]}> - Unknown issue with result: {str(result)[:200]}")
+                    
+                    # Record failure for potential auto-blocking
+                    await domain_filter.record_failure(urls[i], error_msg, debug_channel)
             
             return extracted_pages
     
@@ -138,6 +167,12 @@ class WebContentExtractor:
             print(f"DEBUG: {error_msg}")
             if debug_channel:
                 await debug_channel.send(f"🔧 **Debug**: ❌ <{url}> - Exception: {str(e)}")
+            
+            # Record failure for potential auto-blocking
+            from .domain_filter import get_domain_filter
+            domain_filter = get_domain_filter()
+            await domain_filter.record_failure(url, str(e), debug_channel)
+            
             return None
     
     async def _extract_reddit_content(self, session: aiohttp.ClientSession, url: str, debug_channel=None) -> Optional[Dict[str, str]]:

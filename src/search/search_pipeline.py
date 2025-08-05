@@ -70,11 +70,25 @@ class SearchPipeline:
             if not config.has_google_search():
                 return "Google search not configured"
             
+            # Add domain exclusions to search query
+            from .domain_filter import get_domain_filter
+            domain_filter = get_domain_filter()
+            
+            # Build exclusion string for blocked domains
+            blocked_domains = [domain for domain in domain_filter.blocked_domains.keys()]
+            exclusion_string = " ".join([f"-site:{domain}" for domain in blocked_domains])
+            
+            # Append exclusions to query
+            enhanced_query = f"{query} {exclusion_string}".strip()
+            
+            if self.debug_channel and blocked_domains:
+                await self.debug_channel.send(f"🚫 **Search Exclusions**: Excluding {len(blocked_domains)} blocked domains from search")
+            
             # Import here to avoid circular imports
             from googleapiclient.discovery import build
             
             service = build("customsearch", "v1", developerKey=config.GOOGLE_API_KEY)
-            result = service.cse().list(q=query, cx=config.GOOGLE_SEARCH_ENGINE_ID, num=10).execute()
+            result = service.cse().list(q=enhanced_query, cx=config.GOOGLE_SEARCH_ENGINE_ID, num=10).execute()
             
             if 'items' not in result:
                 return f"No search results found for: {query}"
