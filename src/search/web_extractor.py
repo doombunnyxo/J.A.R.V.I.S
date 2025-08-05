@@ -20,7 +20,7 @@ except ImportError as e:
 class WebContentExtractor:
     """Extract and clean web page content"""
     
-    def __init__(self, timeout: int = 5, max_content_length: int = 50000):
+    def __init__(self, timeout: int = 3, max_content_length: int = 50000):
         self.timeout = timeout
         self.max_content_length = max_content_length
         self.session_timeout = aiohttp.ClientTimeout(total=timeout)
@@ -42,9 +42,9 @@ class WebContentExtractor:
         
         # Create session with timeouts allowing for slow site detection
         timeout = aiohttp.ClientTimeout(
-            total=self.timeout,     # 5s total per request
-            connect=2,              # 2s to establish connection
-            sock_read=3             # 3s to read response
+            total=self.timeout,     # 3s total per request
+            connect=1,              # 1s to establish connection
+            sock_read=2             # 2s to read response
         )
         
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -67,17 +67,17 @@ class WebContentExtractor:
             marked_slow_at_6s = False  # Track if we've already marked slow sites
             
             
-            max_total_time = 5.0  # Maximum 5 seconds total for web extraction
+            max_total_time = 3.0  # Maximum 3 seconds total for web extraction
             
-            # Simple timeout approach - just wait max 5 seconds total
+            # Simple timeout approach - just wait max 3 seconds total
             start_time = asyncio.get_event_loop().time()
             
             
             try:
-                # Wait for all tasks with 5 second timeout
+                # Wait for all tasks with 3 second timeout
                 completed_tasks = await asyncio.wait_for(
                     asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=5.0
+                    timeout=3.0
                 )
                 
                 # Process all results
@@ -88,7 +88,7 @@ class WebContentExtractor:
                     
                     if result and result.get('content'):
                         extracted_pages.append(result)
-                        if result.get('response_time', 0) > 4.0:
+                        if result.get('response_time', 0) > 2.5:
                             slow_sites.append((result['url'], result['response_time']))
                     else:
                         failed_sites.append(('unknown', 'extraction_failed'))
