@@ -47,9 +47,10 @@ class SearchPipeline:
             optimized_query = await self.provider.optimize_query(query, context)
             print(f"DEBUG: Optimized query: {optimized_query}")
             
-            # Step 2: Perform Google search
+            # Step 2: Perform Google search with context size for token estimation
             print(f"DEBUG: Performing Google search for: {optimized_query}")
-            search_results = await self._perform_google_search(optimized_query, self.enable_full_extraction)
+            context_size = len(context) if context else 0
+            search_results = await self._perform_google_search(optimized_query, self.enable_full_extraction, context_size)
             
             if not search_results or "Search failed" in search_results:
                 return f"Web search unavailable: {search_results}"
@@ -64,7 +65,7 @@ class SearchPipeline:
             provider_name = self.provider.__class__.__name__
             return f"Error in {provider_name} search pipeline: {str(e)}"
     
-    async def _perform_google_search(self, query: str, enable_full_extraction: bool = False) -> str:
+    async def _perform_google_search(self, query: str, enable_full_extraction: bool = False, context_size: int = 0) -> str:
         """Perform Google search with optional full page content extraction"""
         try:
             if not config.has_google_search():
@@ -86,13 +87,13 @@ class SearchPipeline:
             from googleapiclient.discovery import build
             
             service = build("customsearch", "v1", developerKey=config.GOOGLE_API_KEY)
-            result = service.cse().list(q=enhanced_query, cx=config.GOOGLE_SEARCH_ENGINE_ID, num=5).execute()
+            result = service.cse().list(q=enhanced_query, cx=config.GOOGLE_SEARCH_ENGINE_ID, num=10).execute()
             
             if 'items' not in result:
                 return f"No search results found for: {query}"
             
             basic_results = []
-            for i, item in enumerate(result['items'][:5], 1):
+            for i, item in enumerate(result['items'][:10], 1):
                 title = item['title']
                 link = item['link']
                 snippet = item.get('snippet', 'No description available')
@@ -128,25 +129,47 @@ class SearchPipeline:
                     enable_full_extraction = False
             
             if enable_full_extraction:
-                # Continue with full extraction processing
+                # Build search results with dynamic token estimation
+                # Estimate initial tokens: query + context + system prompt
+                estimated_tokens = len(query) // 4  # Query tokens
+                estimated_tokens += 500  # System prompt estimate (~2000 chars)
+                estimated_tokens += context_size // 4  # Context tokens
+                
+                # Token limit with safety margin
+                token_limit = 28000
+                
                 for basic_result in basic_results:
                     link = basic_result['link']
                     title = basic_result['title']
                     snippet = basic_result['snippet']
                     index = basic_result['index']
                     
-                    search_results += f"{index}. **{title}**\n"
-                    search_results += f"   Snippet: {snippet}\n"
+                    # Build this result's content
+                    result_content = f"{index}. **{title}**\n"
+                    result_content += f"   Snippet: {snippet}\n"
                     
                     if link in extracted_by_url:
                         # Add full extracted content after snippet
                         page_data = extracted_by_url[link]
-                        search_results += f"   Full Content ({page_data['length']} chars): {page_data['content']}\n"
+                        result_content += f"   Full Content ({page_data['length']} chars): {page_data['content']}\n"
                     else:
                         # Note extraction failure
-                        search_results += f"   (Full content extraction failed)\n"
+                        result_content += f"   (Full content extraction failed)\n"
                     
-                    search_results += f"   Source: <{link}>\n\n"
+                    result_content += f"   Source: <{link}>\n\n"
+                    
+                    # Estimate tokens for this result (roughly 4 chars per token)
+                    result_tokens = len(result_content) // 4
+                    
+                    # Check if adding this result would exceed limit
+                    if estimated_tokens + result_tokens > token_limit:
+                        print(f"DEBUG: Stopping at {index-1} results to stay under token limit. Current: {estimated_tokens}, Would add: {result_tokens}")
+                        search_results += f"\n(Limited to {index-1} results to stay within token limits)\n"
+                        break
+                    
+                    # Add the result
+                    search_results += result_content
+                    estimated_tokens += result_tokens
             else:
                 # Snippet-only mode
                 search_results = f"Web search results for '{query}':\n\n"
