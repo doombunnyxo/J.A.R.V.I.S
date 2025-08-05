@@ -154,15 +154,21 @@ class AIHandler:
             provider, cleaned_query = await self._determine_provider_and_query(message, ai_query, force_provider)
             
             # Route to appropriate handler
+            await message.channel.send(f"🔧 **Debug**: Routing to provider: `{provider}`")
+            logger.debug(f"Routing to provider: {provider}")
             if provider == "openai":
                 response = await self._handle_with_openai(message, cleaned_query)
             elif provider == "direct-ai":
                 response = await self._handle_direct_ai(message, cleaned_query)
             elif provider == "full-search":
+                await message.channel.send(f"🔧 **Debug**: Calling _handle_full_search with query: `{cleaned_query}`")
+                logger.debug(f"Calling _handle_full_search with query: '{cleaned_query}'")
                 response = await self._handle_full_search(message, cleaned_query)
             elif provider == "crafting":
                 response = await self._handle_with_crafting(message, cleaned_query)
             else:  # Default to OpenAI
+                await message.channel.send(f"🔧 **Debug**: Using default OpenAI for provider: `{provider}`")
+                logger.debug(f"Using default OpenAI for provider: {provider}")
                 response = await self._handle_with_openai(message, cleaned_query)
             
             # Store conversation context
@@ -182,8 +188,12 @@ class AIHandler:
     
     async def _determine_provider_and_query(self, message, query: str, force_provider: str) -> tuple[str, str]:
         """Determine which provider to use and clean the query"""
+        logger.debug(f"_determine_provider_and_query: force_provider='{force_provider}', query='{query}'")
+        
         # If provider is forced, return as-is
         if force_provider:
+            await message.channel.send(f"🔧 **Debug**: Using forced provider: `{force_provider}`")
+            logger.debug(f"Using forced provider: {force_provider}")
             return force_provider, query
         
         # Use routing logic to determine provider
@@ -281,6 +291,8 @@ class AIHandler:
     
     async def _handle_full_search(self, message, query: str) -> str:
         """Handle full page search using GPT-4o with web scraping"""
+        await message.channel.send(f"🔧 **Debug**: _handle_full_search called with query: `{query}`")
+        logger.debug(f"_handle_full_search called with query: '{query}'")
         try:
             from ..search.search_pipeline import SearchPipeline
             from ..search.openai_adapter import OpenAISearchProvider

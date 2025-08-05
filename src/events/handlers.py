@@ -124,6 +124,7 @@ class EventHandlers(commands.Cog):
                 query = message.content[full_index + 5:].strip()
                 
                 if query and self.ai_handler:
+                    await message.channel.send(f"🔧 **Debug**: Detected full: command, routing to full search with query: `{query}`")
                     logger.debug(f"[EventHandler-{self.instance_id}] Forcing full page search for: {query}")
                     await self.ai_handler.handle_ai_command(message, query, force_provider="full-search")
                 return
