@@ -274,7 +274,7 @@ class HelpCommands(commands.Cog):
             embed.add_field(
                 name="🎮 Character Management",
                 value="`!add_char <name> <realm> [region]` - Add character\n" +
-                      "`!add_main [number]` - Set main character\n" +
+                      "`!set_main [number]` - Set main character\n" +
                       "`!list_chars` - List your characters\n" +
                       "`!remove_char <number>` - Remove character\n" +
                       "`!clear_chars` - Clear all characters\n\n" +
@@ -329,7 +329,7 @@ class HelpCommands(commands.Cog):
             embed.add_field(
                 name="💡 Workflow Tips",
                 value="1. Add your characters with `!add_char`\n" +
-                      "2. Set your main with `!add_main`\n" +
+                      "2. Set your main with `!set_main`\n" +
                       "3. Use `!rio_runs` to see numbered recent runs\n" +
                       "4. Use `!rio_details <number>` for detailed analysis\n" +
                       "5. All commands work without stored characters too!",

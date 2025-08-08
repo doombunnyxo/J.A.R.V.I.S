@@ -72,16 +72,16 @@ class WoWCharacterCommands(commands.Cog):
         finally:
             self._executing_commands.discard(command_key)
     
-    @commands.command(name='add_main')
+    @commands.command(name='set_main')
     async def set_main_character(self, ctx, char_number: Optional[int] = None):
         """
         Set your main character from your character list
         
         Usage:
-        !add_main       # Shows your character list
-        !add_main 2     # Sets character #2 as your main
+        !set_main       # Shows your character list
+        !set_main 2     # Sets character #2 as your main
         """
-        command_key = f"add_main_{ctx.author.id}"
+        command_key = f"set_main_{ctx.author.id}"
         if command_key in self._executing_commands:
             return
         
@@ -100,7 +100,7 @@ class WoWCharacterCommands(commands.Cog):
                 
                 embed = discord.Embed(
                     title="🎮 Your WoW Characters",
-                    description="Use `!add_main <number>` to set your main character",
+                    description="Use `!set_main <number>` to set your main character",
                     color=0x3498db
                 )
                 
@@ -164,7 +164,7 @@ class WoWCharacterCommands(commands.Cog):
                     inline=True
                 )
             
-            embed.set_footer(text=f"Total: {len(characters)} character(s) | Use !add_main to set your main")
+            embed.set_footer(text=f"Total: {len(characters)} character(s) | Use !set_main to set your main")
             await ctx.send(embed=embed)
             
         except Exception as e:

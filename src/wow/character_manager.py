@@ -37,12 +37,30 @@ class CharacterManager:
             self.data = {}
     
     def _save_data(self):
-        """Save character data to file"""
+        """Save character data to file with error handling"""
         try:
-            with open(self.data_file, 'w') as f:
+            # Ensure directory exists
+            self.data_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Write to temporary file first to avoid corruption
+            temp_file = self.data_file.with_suffix('.tmp')
+            with open(temp_file, 'w') as f:
                 json.dump(self.data, f, indent=2)
+            
+            # Atomic move to final location
+            temp_file.replace(self.data_file)
+            logger.debug(f"Character data saved successfully to {self.data_file}")
+            
         except Exception as e:
-            logger.error(f"Failed to save character data: {e}")
+            logger.error(f"Failed to save character data to {self.data_file}: {e}")
+            # Try to clean up temp file if it exists
+            try:
+                temp_file = self.data_file.with_suffix('.tmp')
+                if temp_file.exists():
+                    temp_file.unlink()
+            except:
+                pass
+            raise  # Re-raise to let caller know save failed
     
     async def add_character(
         self, 
@@ -96,7 +114,17 @@ class CharacterManager:
             if len(self.data[user_id]["characters"]) == 1:
                 self.data[user_id]["main_character"] = 0
             
-            self._save_data()
+            try:
+                self._save_data()
+            except Exception as e:
+                # Rollback the in-memory change if save fails
+                self.data[user_id]["characters"].pop()
+                if len(self.data[user_id]["characters"]) == 0:
+                    self.data[user_id]["main_character"] = None
+                return {
+                    "success": False,
+                    "message": f"❌ Failed to save character data: {str(e)}"
+                }
             
             char_count = len(self.data[user_id]["characters"])
             return {
@@ -131,8 +159,19 @@ class CharacterManager:
                     "message": f"Invalid character number. You have {len(self.data[user_id]['characters'])} characters"
                 }
             
+            # Store original main character for rollback
+            original_main = self.data[user_id]["main_character"]
             self.data[user_id]["main_character"] = character_index
-            self._save_data()
+            
+            try:
+                self._save_data()
+            except Exception as e:
+                # Rollback the in-memory change if save fails
+                self.data[user_id]["main_character"] = original_main
+                return {
+                    "success": False,
+                    "message": f"❌ Failed to save main character selection: {str(e)}"
+                }
             
             char = self.data[user_id]["characters"][character_index]
             return {

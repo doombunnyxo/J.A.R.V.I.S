@@ -316,7 +316,7 @@ class RaiderIOCommands(commands.Cog):
             name="🎮 Character Management",
             value=(
                 "`!add_char <character> <realm> [region]` - Add character\n"
-                "`!add_main [number]` - Set main character\n"
+                "`!set_main [number]` - Set main character\n"
                 "`!list_chars` - List your characters"
             ),
             inline=False
