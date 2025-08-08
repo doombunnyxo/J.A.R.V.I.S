@@ -37,7 +37,6 @@ class SeasonManager:
                 # Create data directory if it doesn't exist
                 self.data_file.parent.mkdir(parents=True, exist_ok=True)
                 self.data = {"current_season": "current", "seasons": {}}
-                self._save_data()
         except Exception as e:
             logger.error(f"Failed to load season data: {e}")
             self.data = {"current_season": "current", "seasons": {}}

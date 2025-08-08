@@ -31,7 +31,6 @@ class CharacterManager:
                 # Create data directory if it doesn't exist
                 self.data_file.parent.mkdir(parents=True, exist_ok=True)
                 self.data = {}
-                self._save_data()
         except Exception as e:
             logger.error(f"Failed to load character data: {e}")
             self.data = {}

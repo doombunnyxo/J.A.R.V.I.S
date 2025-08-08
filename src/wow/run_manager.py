@@ -38,7 +38,6 @@ class RunManager:
                 # Create data directory if it doesn't exist
                 self.data_file.parent.mkdir(parents=True, exist_ok=True)
                 self.data = {"runs": [], "next_id": 1}
-                self._save_data()
         except Exception as e:
             logger.error(f"Failed to load run data: {e}")
             self.data = {"runs": [], "next_id": 1}
