@@ -87,6 +87,7 @@ class RaiderIOClient:
             fields = [
                 "gear",
                 "guild", 
+                "talents:categorized",
                 "mythic_plus_scores_by_season:current",
                 "mythic_plus_recent_runs", 
                 "mythic_plus_best_runs",

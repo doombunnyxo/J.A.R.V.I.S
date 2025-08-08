@@ -42,6 +42,17 @@ async def setup_bot():
         await data_manager.load_all_data()
         logger.info("Data loaded successfully")
         
+        # Initialize WoW managers to load their data files
+        logger.info("Loading WoW manager data...")
+        from src.wow.character_manager import character_manager
+        from src.wow.run_manager import run_manager
+        from src.wow.season_manager import season_manager
+        
+        # Log what was loaded
+        logger.info(f"Loaded {len(character_manager.data)} users' character data")
+        logger.info(f"Loaded {len(run_manager.data['runs'])} run records")
+        logger.info(f"Current season: {season_manager.data['current_season']}")
+        
         # Setup Discord bot
         intents = discord.Intents.default()
         intents.message_content = True
