@@ -20,6 +20,7 @@ class Config:
     ANTHROPIC_API_KEY: Optional[str]
     GOOGLE_API_KEY: Optional[str]
     GOOGLE_SEARCH_ENGINE_ID: Optional[str]
+    RAIDERIO_API_KEY: Optional[str]
     
     
     # File Paths
@@ -73,6 +74,7 @@ class Config:
         self.ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
         self.GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
         self.GOOGLE_SEARCH_ENGINE_ID = os.getenv('GOOGLE_SEARCH_ENGINE_ID')
+        self.RAIDERIO_API_KEY = os.getenv('RAIDERIO_API_KEY')
         
         
         # Override defaults with environment variables if provided

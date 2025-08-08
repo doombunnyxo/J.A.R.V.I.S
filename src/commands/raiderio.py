@@ -10,6 +10,7 @@ from ..wow.raiderio_client import raiderio_client
 from ..wow.character_manager import character_manager
 from ..wow.run_manager import run_manager
 from ..wow.season_manager import season_manager
+from ..config import config
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -68,7 +69,9 @@ class RaiderIOCommands(commands.Cog):
             loading_msg = await ctx.send(f"🔍 Looking up **{character}** on **{realm}** ({region.upper()})...")
             
             # Fetch character data
-            char_data = await raiderio_client.get_character_profile(region, realm, character)
+            char_data = await raiderio_client.get_character_profile(
+                region, realm, character, access_key=config.RAIDERIO_API_KEY
+            )
             
             # Format and send response
             if "error" in char_data:
@@ -120,7 +123,8 @@ class RaiderIOCommands(commands.Cog):
             # Get character profile with recent runs
             char_data = await raiderio_client.get_character_profile(
                 region, realm, character, 
-                fields=["mythic_plus_recent_runs", "mythic_plus_best_runs"]
+                fields=["mythic_plus_recent_runs", "mythic_plus_best_runs"],
+                access_key=config.RAIDERIO_API_KEY
             )
             
             if "error" in char_data:
@@ -232,7 +236,9 @@ class RaiderIOCommands(commands.Cog):
                 current_season = await season_manager.get_current_season()
                 
                 loading_msg = await ctx.send(f"🔍 Fetching details for run #{sequential_id}...")
-                run_data = await raiderio_client.get_mythic_plus_run_details(run_info['raiderio_id'], current_season)
+                run_data = await raiderio_client.get_mythic_plus_run_details(
+                    run_info['raiderio_id'], current_season, access_key=config.RAIDERIO_API_KEY
+                )
                 
             # Manual run ID lookup
             else:
@@ -245,7 +251,9 @@ class RaiderIOCommands(commands.Cog):
                         season = await season_manager.get_current_season()
                     
                     loading_msg = await ctx.send(f"🔍 Fetching run details for ID: {run_id}...")
-                    run_data = await raiderio_client.get_mythic_plus_run_details(run_id, season)
+                    run_data = await raiderio_client.get_mythic_plus_run_details(
+                        run_id, season, access_key=config.RAIDERIO_API_KEY
+                    )
                 except ValueError:
                     await ctx.send("❌ **Usage**: `!rio_details <run_number>` or `!rio_details <run_id>`")
                     return
@@ -394,10 +402,14 @@ class RaiderIOCommands(commands.Cog):
             
             # Call API with or without season parameter
             if season:
-                cutoffs_data = await raiderio_client.get_mythic_plus_season_cutoffs(region, season)
+                cutoffs_data = await raiderio_client.get_mythic_plus_season_cutoffs(
+                    region, season, access_key=config.RAIDERIO_API_KEY
+                )
             else:
                 # Use current season from API default (don't pass season parameter)
-                cutoffs_data = await raiderio_client.get_mythic_plus_season_cutoffs(region)
+                cutoffs_data = await raiderio_client.get_mythic_plus_season_cutoffs(
+                    region, access_key=config.RAIDERIO_API_KEY
+                )
             
             if "error" in cutoffs_data:
                 await loading_msg.edit(content=f"❌ **Error**: {cutoffs_data['error']}")
