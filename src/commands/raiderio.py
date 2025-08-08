@@ -26,8 +26,8 @@ class RaiderIOCommands(commands.Cog):
         
         Usage:
         !rio <character> <realm> [region]
-        !rio Thrall Mal'Ganis us
-        !rio Gandalf Stormrage
+        !rio Thrall Mal'Ganis      # defaults to US
+        !rio Gandalf Stormrage eu   # specify EU region
         !rio help
         """
         # Prevent duplicate execution
@@ -55,10 +55,10 @@ class RaiderIOCommands(commands.Cog):
             
             character = parts[0]
             realm = parts[1]
-            region = parts[2] if len(parts) > 2 else "us"
+            region = parts[2].lower() if len(parts) > 2 else "us"
             
             # Validate region
-            valid_regions = ["us", "eu", "kr", "tw"]
+            valid_regions = ["us", "eu", "kr", "tw", "cn"]
             if region.lower() not in valid_regions:
                 await ctx.send(f"❌ **Invalid region**: `{region}`. Valid regions: {', '.join(valid_regions)}")
                 return
@@ -90,6 +90,7 @@ class RaiderIOCommands(commands.Cog):
         
         Usage:
         !rio_runs <character> <realm> [region]
+        Default region is US if not specified
         """
         command_key = f"rio_runs_{ctx.author.id}"
         if command_key in self._executing_commands:
@@ -109,7 +110,7 @@ class RaiderIOCommands(commands.Cog):
             
             character = parts[0]
             realm = parts[1]
-            region = parts[2] if len(parts) > 2 else "us"
+            region = parts[2].lower() if len(parts) > 2 else "us"
             
             loading_msg = await ctx.send(f"🔍 Fetching Mythic+ runs for **{character}**...")
             
@@ -175,7 +176,8 @@ class RaiderIOCommands(commands.Cog):
             value=(
                 "`!rio <character> <realm> [region]`\n"
                 "Get character profile, M+ score, and raid progress\n"
-                "Example: `!rio Thrall Mal'Ganis us`"
+                "Example: `!rio Thrall Mal'Ganis` (defaults to US)\n"
+                "Example: `!rio Gandalf Stormrage eu`"
             ),
             inline=False
         )
@@ -185,7 +187,7 @@ class RaiderIOCommands(commands.Cog):
             value=(
                 "`!rio_runs <character> <realm> [region]`\n"
                 "Get recent and best Mythic+ runs\n"
-                "Example: `!rio_runs Gandalf Stormrage eu`"
+                "Example: `!rio_runs Gandalf Stormrage` (defaults to US)"
             ),
             inline=False
         )
@@ -195,6 +197,7 @@ class RaiderIOCommands(commands.Cog):
             value=(
                 "`!rio_affixes [region]`\n"
                 "Get current Mythic+ affixes\n"
+                "Example: `!rio_affixes` (defaults to US)\n"
                 "Example: `!rio_affixes eu`"
             ),
             inline=False
@@ -202,7 +205,7 @@ class RaiderIOCommands(commands.Cog):
         
         embed.add_field(
             name="🌍 Regions",
-            value="Valid regions: `us`, `eu`, `kr`, `tw`",
+            value="Valid regions: `us` (default), `eu`, `kr`, `tw`, `cn`",
             inline=False
         )
         
