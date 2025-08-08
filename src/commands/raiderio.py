@@ -9,6 +9,7 @@ from typing import Dict, Optional
 from ..wow.raiderio_client import raiderio_client
 from ..wow.character_manager import character_manager
 from ..wow.run_manager import run_manager
+from ..wow.season_manager import season_manager
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -227,14 +228,22 @@ class RaiderIOCommands(commands.Cog):
                     await ctx.send(f"❌ Run #{sequential_id} not found. Available runs: #1-#{stats['latest_run_id']}")
                     return
                 
+                # Get current season setting
+                current_season = await season_manager.get_current_season()
+                
                 loading_msg = await ctx.send(f"🔍 Fetching details for run #{sequential_id}...")
-                run_data = await raiderio_client.get_mythic_plus_run_details(run_info['raiderio_id'])
+                run_data = await raiderio_client.get_mythic_plus_run_details(run_info['raiderio_id'], current_season)
                 
             # Manual run ID lookup
             else:
                 try:
                     run_id = int(parts[0])
-                    season = parts[1] if len(parts) > 1 else "current"
+                    # Use provided season or fall back to stored season setting
+                    if len(parts) > 1:
+                        season = parts[1]
+                    else:
+                        season = await season_manager.get_current_season()
+                    
                     loading_msg = await ctx.send(f"🔍 Fetching run details for ID: {run_id}...")
                     run_data = await raiderio_client.get_mythic_plus_run_details(run_id, season)
                 except ValueError:
@@ -353,7 +362,7 @@ class RaiderIOCommands(commands.Cog):
         try:
             # Determine region and season
             region = "us"  # Default
-            season = "current"  # Default
+            season = None  # Only set if explicitly requested
             
             if args:
                 parts = args.strip().split()
@@ -377,13 +386,18 @@ class RaiderIOCommands(commands.Cog):
                         await ctx.send(f"❌ **Invalid region**: `{region}`. Valid regions: {', '.join(valid_regions)}")
                         return
                     
-                    # Optional season parameter
+                    # Optional season parameter - only use stored season if explicitly requested
                     if len(parts) >= 2:
                         season = parts[1]
             
             loading_msg = await ctx.send(f"🔍 Fetching Mythic+ cutoffs for {region.upper()}...")
             
-            cutoffs_data = await raiderio_client.get_mythic_plus_season_cutoffs(region, season)
+            # Call API with or without season parameter
+            if season:
+                cutoffs_data = await raiderio_client.get_mythic_plus_season_cutoffs(region, season)
+            else:
+                # Use current season from API default (don't pass season parameter)
+                cutoffs_data = await raiderio_client.get_mythic_plus_season_cutoffs(region)
             
             if "error" in cutoffs_data:
                 await loading_msg.edit(content=f"❌ **Error**: {cutoffs_data['error']}")
@@ -394,6 +408,76 @@ class RaiderIOCommands(commands.Cog):
         except Exception as e:
             logger.error(f"RaiderIO cutoffs command error: {e}")
             await ctx.send(f"❌ **Error**: Failed to fetch cutoffs data")
+        finally:
+            self._executing_commands.discard(command_key)
+    
+    @commands.command(name='rio_season')
+    async def raiderio_season(self, ctx, *, season: str = None):
+        """
+        Set or view the current season for RaiderIO commands
+        
+        Usage:
+        !rio_season                     # View current season
+        !rio_season current             # Set to current season
+        !rio_season season-tww-2        # Set to specific season
+        !rio_season season-tww-1        # Set to previous season
+        !rio_season reset               # Reset to 'current'
+        """
+        command_key = f"rio_season_{ctx.author.id}"
+        if command_key in self._executing_commands:
+            return
+        
+        self._executing_commands.add(command_key)
+        
+        try:
+            # If no season provided, show current season
+            if not season:
+                current_season = await season_manager.get_current_season()
+                stats = await season_manager.get_stats()
+                
+                embed = discord.Embed(
+                    title="⚙️ RaiderIO Season Settings",
+                    color=0x3498db
+                )
+                
+                embed.add_field(
+                    name="📅 Current Season",
+                    value=f"**{current_season}**",
+                    inline=True
+                )
+                
+                if stats["known_seasons"] > 0:
+                    seasons_list = ", ".join(stats["seasons_list"][-5:])  # Show last 5
+                    embed.add_field(
+                        name="🗄️ Known Seasons",
+                        value=seasons_list,
+                        inline=True
+                    )
+                
+                embed.add_field(
+                    name="💡 Usage",
+                    value="`!rio_season season-tww-2` - Set season\n"
+                          "`!rio_season current` - Use current season\n"
+                          "`!rio_season reset` - Reset to current",
+                    inline=False
+                )
+                
+                embed.set_footer(text="Season setting affects !rio_details and !rio_cutoff commands")
+                await ctx.send(embed=embed)
+                return
+            
+            # Handle special cases
+            season = season.strip()
+            if season.lower() == "reset":
+                result = await season_manager.reset_to_current()
+            else:
+                result = await season_manager.set_current_season(season)
+            
+            await ctx.send(result["message"])
+            
+        except Exception as e:
+            logger.error(f"RaiderIO season command error: {e}")
+            await ctx.send("❌ **Error**: Failed to manage season settings")
         finally:
             self._executing_commands.discard(command_key)
     
@@ -455,6 +539,17 @@ class RaiderIOCommands(commands.Cog):
                 "`!rio_cutoff 2` - Uses your character #2's region\n"
                 "`!rio_cutoff eu` - EU region cutoffs\n"
                 "`!rio_cutoff us season-tww-1` - Specific season"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="⚙️ Season Management",
+            value=(
+                "`!rio_season` - View current season setting\n"
+                "`!rio_season season-tww-2` - Set specific season\n"
+                "`!rio_season current` - Use current season\n"
+                "`!rio_season reset` - Reset to current"
             ),
             inline=False
         )

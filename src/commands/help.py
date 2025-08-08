@@ -53,6 +53,7 @@ class HelpCommands(commands.Cog):
                   "`!rio_runs` - Recent Mythic+ runs\n" +
                   "`!rio_details <number>` - Detailed run information\n" +
                   "`!rio_cutoff` - Season rating thresholds\n" +
+                  "`!rio_season` - Manage season settings\n" +
                   "`!add_char <name> <realm>` - Add WoW character",
             inline=False
         )
@@ -322,11 +323,21 @@ class HelpCommands(commands.Cog):
             
             embed.add_field(
                 name="📊 Season Cutoffs",
-                value="`!rio_cutoff` - Rating thresholds (US)\n" +
+                value="`!rio_cutoff` - Rating thresholds (US, current season)\n" +
                       "`!rio_cutoff 2` - Cutoffs for character #2's region\n" +
                       "`!rio_cutoff eu` - EU region cutoffs\n" +
                       "`!rio_cutoff us season-tww-1` - Specific season\n\n" +
                       "**Shows:** Rating thresholds for top percentiles (99th, 95th, 90th, etc.)",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="⚙️ Season Management",
+                value="`!rio_season` - View/set season for run details\n" +
+                      "`!rio_season season-tww-2` - Set specific season\n" +
+                      "`!rio_season current` - Use current season\n" +
+                      "`!rio_season reset` - Reset to current\n\n" +
+                      "**Affects:** !rio_details command (cutoffs always use current unless specified)",
                 inline=False
             )
             

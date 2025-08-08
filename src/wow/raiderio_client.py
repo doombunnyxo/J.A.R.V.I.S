@@ -210,7 +210,7 @@ class RaiderIOClient:
     async def get_mythic_plus_season_cutoffs(
         self, 
         region: str,
-        season: str = "current",
+        season: str = None,
         access_key: str = None
     ) -> Dict[str, Any]:
         """
@@ -218,16 +218,19 @@ class RaiderIOClient:
         
         Args:
             region: Region code (us, eu, kr, tw, cn)
-            season: Season identifier (current, previous, or season-X)
+            season: Optional season identifier (if None, API uses current season)
             access_key: Optional API key for higher rate limits
             
         Returns:
             Season cutoffs data with percentile breakdowns
         """
         params = {
-            "region": region.lower(),
-            "season": season
+            "region": region.lower()
         }
+        
+        # Only add season parameter if specified
+        if season:
+            params["season"] = season
         
         if access_key:
             params["access_key"] = access_key
