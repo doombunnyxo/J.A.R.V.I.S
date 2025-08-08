@@ -207,6 +207,34 @@ class RaiderIOClient:
         params = {"region": region.lower()}
         return await self._make_request("mythic-plus/affixes", params)
     
+    async def get_mythic_plus_season_cutoffs(
+        self, 
+        region: str,
+        season: str = "current",
+        access_key: str = None
+    ) -> Dict[str, Any]:
+        """
+        Get Mythic+ season cutoffs for different percentiles
+        
+        Args:
+            region: Region code (us, eu, kr, tw, cn)
+            season: Season identifier (current, previous, or season-X)
+            access_key: Optional API key for higher rate limits
+            
+        Returns:
+            Season cutoffs data with percentile breakdowns
+        """
+        params = {
+            "region": region.lower(),
+            "season": season
+        }
+        
+        if access_key:
+            params["access_key"] = access_key
+        
+        logger.debug(f"Making season-cutoffs request with params: {params}")
+        return await self._make_request("mythic-plus/season-cutoffs", params)
+    
     def format_character_summary(self, data: Dict[str, Any]) -> str:
         """Format character data into a readable summary"""
         if "error" in data:

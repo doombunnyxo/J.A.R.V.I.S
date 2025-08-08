@@ -52,8 +52,8 @@ class HelpCommands(commands.Cog):
             value="`!rio` - Character lookup (uses main character)\n" +
                   "`!rio_runs` - Recent Mythic+ runs\n" +
                   "`!rio_details <number>` - Detailed run information\n" +
-                  "`!add_char <name> <realm>` - Add WoW character\n" +
-                  "`!list_chars` - View your characters",
+                  "`!rio_cutoff` - Season rating thresholds\n" +
+                  "`!add_char <name> <realm>` - Add WoW character",
             inline=False
         )
         
@@ -317,6 +317,16 @@ class HelpCommands(commands.Cog):
                       "`!rio_affixes 2` - Affixes for character #2's region\n" +
                       "`!rio_affixes eu` - Affixes for specific region\n\n" +
                       "**Shows:** Current week's Mythic+ modifiers with descriptions",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="📊 Season Cutoffs",
+                value="`!rio_cutoff` - Rating thresholds (US)\n" +
+                      "`!rio_cutoff 2` - Cutoffs for character #2's region\n" +
+                      "`!rio_cutoff eu` - EU region cutoffs\n" +
+                      "`!rio_cutoff us season-tww-1` - Specific season\n\n" +
+                      "**Shows:** Rating thresholds for top percentiles (99th, 95th, 90th, etc.)",
                 inline=False
             )
             

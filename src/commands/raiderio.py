@@ -333,6 +333,70 @@ class RaiderIOCommands(commands.Cog):
         finally:
             self._executing_commands.discard(command_key)
     
+    @commands.command(name='rio_cutoff')
+    async def raiderio_cutoffs(self, ctx, *, args: str = None):
+        """
+        Show Mythic+ season cutoffs for different percentiles
+        
+        Usage:
+        !rio_cutoff                  # US region (default)
+        !rio_cutoff eu               # EU region cutoffs  
+        !rio_cutoff 2                # Uses your character #2's region
+        !rio_cutoff eu season-tww-1  # Specific region and season
+        """
+        command_key = f"rio_cutoff_{ctx.author.id}"
+        if command_key in self._executing_commands:
+            return
+        
+        self._executing_commands.add(command_key)
+        
+        try:
+            # Determine region and season
+            region = "us"  # Default
+            season = "current"  # Default
+            
+            if args:
+                parts = args.strip().split()
+                
+                # Check if it's a number (character selection for region)
+                if len(parts) == 1 and parts[0].isdigit():
+                    char_index = int(parts[0]) - 1
+                    character_data = await character_manager.get_character(ctx.author.id, char_index)
+                    if character_data:
+                        region = character_data['region']
+                    else:
+                        chars = await character_manager.get_all_characters(ctx.author.id)
+                        await ctx.send(f"❌ Invalid character number. You have {len(chars)} character(s)")
+                        return
+                # Parse region and optional season
+                elif len(parts) >= 1:
+                    region = parts[0].lower()
+                    # Validate region
+                    valid_regions = ["us", "eu", "kr", "tw", "cn"]
+                    if region not in valid_regions:
+                        await ctx.send(f"❌ **Invalid region**: `{region}`. Valid regions: {', '.join(valid_regions)}")
+                        return
+                    
+                    # Optional season parameter
+                    if len(parts) >= 2:
+                        season = parts[1]
+            
+            loading_msg = await ctx.send(f"🔍 Fetching Mythic+ cutoffs for {region.upper()}...")
+            
+            cutoffs_data = await raiderio_client.get_mythic_plus_season_cutoffs(region, season)
+            
+            if "error" in cutoffs_data:
+                await loading_msg.edit(content=f"❌ **Error**: {cutoffs_data['error']}")
+            else:
+                embed = await self._create_cutoffs_embed(cutoffs_data, region, season)
+                await loading_msg.edit(content=None, embed=embed)
+                
+        except Exception as e:
+            logger.error(f"RaiderIO cutoffs command error: {e}")
+            await ctx.send(f"❌ **Error**: Failed to fetch cutoffs data")
+        finally:
+            self._executing_commands.discard(command_key)
+    
     async def _show_help(self, ctx):
         """Show RaiderIO command help"""
         embed = discord.Embed(
@@ -380,6 +444,17 @@ class RaiderIOCommands(commands.Cog):
                 "`!rio_affixes` - US region (default)\n"
                 "`!rio_affixes 2` - Uses your character #2's region\n"
                 "`!rio_affixes eu` - Specify region directly"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📊 Season Cutoffs",
+            value=(
+                "`!rio_cutoff` - Rating thresholds (US region)\n"
+                "`!rio_cutoff 2` - Uses your character #2's region\n"
+                "`!rio_cutoff eu` - EU region cutoffs\n"
+                "`!rio_cutoff us season-tww-1` - Specific season"
             ),
             inline=False
         )
@@ -613,6 +688,80 @@ class RaiderIOCommands(commands.Cog):
                 embed.set_footer(text="💡 Use !rio_details <number> to view detailed run information")
         else:
             embed.set_footer(text="💡 Use !rio_details <number> to view detailed run information")
+        
+        return embed
+    
+    async def _create_cutoffs_embed(self, data: Dict, region: str, season: str) -> discord.Embed:
+        """Create embed for season cutoffs"""
+        embed = discord.Embed(
+            title=f"📊 Mythic+ Season Cutoffs ({region.upper()})",
+            description=f"Rating thresholds for {season} season",
+            color=0xf39c12
+        )
+        
+        # Check if we have cutoff data
+        cutoffs = data.get("cutoffs", {})
+        if not cutoffs:
+            embed.description = "No cutoff data available for this region/season"
+            return embed
+        
+        # Common percentiles to display
+        percentile_labels = {
+            "p999": "Top 0.1% (99.9th)",
+            "p99": "Top 1% (99th)", 
+            "p95": "Top 5% (95th)",
+            "p90": "Top 10% (90th)",
+            "p75": "Top 25% (75th)",
+            "p50": "Top 50% (50th)"
+        }
+        
+        # Display overall cutoffs if available
+        if "all" in cutoffs:
+            all_cutoffs = cutoffs["all"]
+            cutoff_text = ""
+            
+            for percentile, label in percentile_labels.items():
+                if percentile in all_cutoffs:
+                    rating = all_cutoffs[percentile]
+                    cutoff_text += f"**{label}**: {rating:,}\n"
+            
+            if cutoff_text:
+                embed.add_field(
+                    name="🏆 Overall Ratings",
+                    value=cutoff_text.strip(),
+                    inline=True
+                )
+        
+        # Display role-specific cutoffs
+        role_icons = {"dps": "⚔️", "healer": "💚", "tank": "🛡️"}
+        role_names = {"dps": "DPS", "healer": "Healer", "tank": "Tank"}
+        
+        for role, icon in role_icons.items():
+            if role in cutoffs:
+                role_cutoffs = cutoffs[role]
+                role_text = ""
+                
+                # Show top percentiles for each role
+                for percentile in ["p99", "p95", "p90", "p75", "p50"]:
+                    if percentile in role_cutoffs:
+                        rating = role_cutoffs[percentile]
+                        percentage = percentile.replace("p", "").replace("999", "99.9")
+                        role_text += f"**{percentage}th**: {rating:,}\n"
+                
+                if role_text:
+                    embed.add_field(
+                        name=f"{icon} {role_names[role]}",
+                        value=role_text.strip(),
+                        inline=True
+                    )
+        
+        # Add season and timestamp info if available
+        season_info = data.get("season", {})
+        if season_info:
+            season_name = season_info.get("name", season)
+            embed.set_footer(text=f"Season: {season_name} | Region: {region.upper()}")
+        else:
+            embed.set_footer(text=f"Region: {region.upper()} | Season: {season}")
         
         return embed
     
