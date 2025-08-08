@@ -46,6 +46,17 @@ class HelpCommands(commands.Cog):
             inline=False
         )
         
+        # RaiderIO Commands
+        embed.add_field(
+            name="🏆 World of Warcraft",
+            value="`!rio` - Character lookup (uses main character)\n" +
+                  "`!rio_runs` - Recent Mythic+ runs\n" +
+                  "`!rio_details <number>` - Detailed run information\n" +
+                  "`!add_char <name> <realm>` - Add WoW character\n" +
+                  "`!list_chars` - View your characters",
+            inline=False
+        )
+        
         # Context Commands
         embed.add_field(
             name="🔄 Context Management", 
@@ -85,7 +96,8 @@ class HelpCommands(commands.Cog):
             name="📖 Categories",
             value="`!help ai` - AI system details\n" +
                   "`!help context` - Context management\n" +
-                  "`!help crafting` - Dune crafting system" +
+                  "`!help crafting` - Dune crafting system\n" +
+                  "`!help wow` - World of Warcraft commands" +
                   ("\n`!help admin` - Admin commands" if user_is_admin else ""),
             inline=False
         )
@@ -252,6 +264,78 @@ class HelpCommands(commands.Cog):
                 inline=False
             )
         
+        elif category in ['wow', 'raiderio', 'warcraft']:
+            embed = discord.Embed(
+                title="🏆 World of Warcraft Commands",
+                description="RaiderIO integration for Mythic+ and character data",
+                color=0xf4c430
+            )
+            
+            embed.add_field(
+                name="🎮 Character Management",
+                value="`!add_char <name> <realm> [region]` - Add character\n" +
+                      "`!add_main [number]` - Set main character\n" +
+                      "`!list_chars` - List your characters\n" +
+                      "`!remove_char <number>` - Remove character\n" +
+                      "`!clear_chars` - Clear all characters\n\n" +
+                      "**Examples:**\n" +
+                      "• `!add_char Thrall Mal'Ganis` (defaults to US)\n" +
+                      "• `!add_char Gandalf Stormrage eu`",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="📊 Character Lookup",
+                value="`!rio` - Profile for your main character\n" +
+                      "`!rio 2` - Profile for your character #2\n" +
+                      "`!rio <name> <realm> [region]` - Manual lookup\n\n" +
+                      "**Shows:** Mythic+ score, recent high run, raid progress, gear",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="🏃 Mythic+ Runs",
+                value="`!rio_runs` - Recent runs (main character)\n" +
+                      "`!rio_runs 2` - Recent runs (character #2)\n" +
+                      "`!rio_runs <name> <realm>` - Manual lookup\n\n" +
+                      "**Shows:** Numbered list of recent runs with completion times and dates",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="🔍 Detailed Run Analysis",
+                value="`!rio_details <number>` - Details for recent run\n" +
+                      "`!rio_details 2 3` - Run #3 from character #2\n" +
+                      "`!rio_details <run_id>` - Manual run ID lookup\n\n" +
+                      "**Shows:** Team composition, affixes, precise timing, completion status",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="⚡ Weekly Affixes",
+                value="`!rio_affixes` - Current affixes (US)\n" +
+                      "`!rio_affixes 2` - Affixes for character #2's region\n" +
+                      "`!rio_affixes eu` - Affixes for specific region\n\n" +
+                      "**Shows:** Current week's Mythic+ modifiers with descriptions",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="🌍 Supported Regions",
+                value="• **US** (default)\n• **EU** (Europe)\n• **KR** (Korea)\n• **TW** (Taiwan)\n• **CN** (China)",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="💡 Workflow Tips",
+                value="1. Add your characters with `!add_char`\n" +
+                      "2. Set your main with `!add_main`\n" +
+                      "3. Use `!rio_runs` to see numbered recent runs\n" +
+                      "4. Use `!rio_details <number>` for detailed analysis\n" +
+                      "5. All commands work without stored characters too!",
+                inline=False
+            )
+        
         else:
             embed = discord.Embed(
                 title="❌ Unknown Category",
@@ -259,7 +343,8 @@ class HelpCommands(commands.Cog):
                            "**Available categories:**\n" +
                            "• `ai` - AI system details\n" +
                            "• `context` - Context management\n" +
-                           "• `crafting` - Dune crafting system" +
+                           "• `crafting` - Dune crafting system\n" +
+                           "• `wow` - World of Warcraft commands" +
                            ("\n• `admin` - Admin commands" if user_is_admin else ""),
                 color=0x95a5a6
             )
