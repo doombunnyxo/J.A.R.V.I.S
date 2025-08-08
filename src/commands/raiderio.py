@@ -898,10 +898,6 @@ class RaiderIOCommands(commands.Cog):
     
     async def _create_run_details_embed(self, data: Dict) -> discord.Embed:
         """Create embed for detailed run information"""
-        embed = discord.Embed(
-            title="🏃 Mythic+ Run Details",
-            color=0xe67e22
-        )
         
         # Basic run info
         dungeon = data.get("dungeon", "Unknown")
@@ -909,9 +905,20 @@ class RaiderIOCommands(commands.Cog):
         score = data.get("score", 0)
         completed = "✅ Completed" if data.get("num_chests", 0) >= 1 else "❌ Depleted"
         
+        # Create embed with dungeon name in title
+        embed = discord.Embed(
+            title=f"🏃 +{level} {dungeon}",
+            color=0xe67e22 if data.get("num_chests", 0) >= 1 else 0xe74c3c
+        )
+        
+        # Set dungeon icon as thumbnail if available
+        icon_url = data.get("icon_url")
+        if icon_url:
+            embed.set_thumbnail(url=icon_url)
+        
         embed.add_field(
-            name="📋 Run Info",
-            value=f"**+{level} {dungeon}**\n{completed}\n{score:.1f} score",
+            name="📋 Run Status",
+            value=f"{completed}\n**Score**: {score:.1f}",
             inline=True
         )
         
