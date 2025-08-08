@@ -63,6 +63,7 @@ async def setup_bot():
             'src.commands.admin',
             'src.commands.search_context',
             'src.commands.help',
+            'src.commands.raiderio',
             'src.search.google',
             'src.events.handlers'
         ]
