@@ -64,6 +64,7 @@ async def setup_bot():
             'src.commands.search_context',
             'src.commands.help',
             'src.commands.raiderio',
+            'src.commands.wow_characters',
             'src.search.google',
             'src.events.handlers'
         ]

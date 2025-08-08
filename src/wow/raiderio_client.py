@@ -134,6 +134,33 @@ class RaiderIOClient:
         
         return await self._make_request("characters/mythic-plus-runs", params)
     
+    async def get_mythic_plus_run_details(
+        self, 
+        run_id: int, 
+        season: str = "current",
+        access_key: str = None
+    ) -> Dict[str, Any]:
+        """
+        Get detailed information about a specific Mythic+ run
+        
+        Args:
+            run_id: ID of the run to get details for
+            season: Season identifier (current, previous, or season-X)
+            access_key: Optional API key for higher rate limits
+            
+        Returns:
+            Detailed run information including affixes, team composition, etc.
+        """
+        params = {
+            "id": run_id,
+            "season": season
+        }
+        
+        if access_key:
+            params["access_key"] = access_key
+        
+        return await self._make_request("mythic-plus/run-details", params)
+    
     async def get_guild_profile(
         self, 
         region: str, 
