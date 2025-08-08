@@ -25,7 +25,7 @@ class CharacterManager:
         """Load character data from file"""
         try:
             if self.data_file.exists():
-                with open(self.data_file, 'r') as f:
+                with open(self.data_file, 'r', encoding='utf-8') as f:
                     self.data = json.load(f)
             else:
                 # Create data directory if it doesn't exist
@@ -44,8 +44,8 @@ class CharacterManager:
             
             # Write to temporary file first to avoid corruption
             temp_file = self.data_file.with_suffix('.tmp')
-            with open(temp_file, 'w') as f:
-                json.dump(self.data, f, indent=2)
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                json.dump(self.data, f, indent=2, ensure_ascii=False)
             
             # Atomic move to final location
             temp_file.replace(self.data_file)

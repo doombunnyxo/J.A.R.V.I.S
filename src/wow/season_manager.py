@@ -26,7 +26,7 @@ class SeasonManager:
         """Load season data from file"""
         try:
             if self.data_file.exists():
-                with open(self.data_file, 'r') as f:
+                with open(self.data_file, 'r', encoding='utf-8') as f:
                     loaded_data = json.load(f)
                     self.data = {
                         "current_season": loaded_data.get("current_season", "current"),
@@ -50,8 +50,8 @@ class SeasonManager:
             
             # Write to temporary file first to avoid corruption
             temp_file = self.data_file.with_suffix('.tmp')
-            with open(temp_file, 'w') as f:
-                json.dump(self.data, f, indent=2)
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                json.dump(self.data, f, indent=2, ensure_ascii=False)
             
             # Atomic move to final location
             temp_file.replace(self.data_file)
