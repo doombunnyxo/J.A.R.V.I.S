@@ -8,6 +8,7 @@ from discord.ext import commands
 from typing import Dict, Optional
 from ..wow.raiderio_client import raiderio_client
 from ..wow.character_manager import character_manager
+from ..wow.run_manager import run_manager
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -215,71 +216,19 @@ class RaiderIOCommands(commands.Cog):
             
             parts = args.strip().split()
             
-            # Check if it's a simple number (recent run selection)
+            # Check if it's a simple number (global sequential run ID)
             if len(parts) == 1 and parts[0].isdigit():
-                run_number = int(parts[0])
-                character_data = await character_manager.get_character(ctx.author.id)
-                if not character_data:
-                    await ctx.send("❌ You have no main character set. Use `!add_char` to add characters")
+                sequential_id = int(parts[0])
+                
+                # Get run data from global manager
+                run_info = await run_manager.get_run_by_sequential_id(sequential_id)
+                if not run_info:
+                    stats = await run_manager.get_stats()
+                    await ctx.send(f"❌ Run #{sequential_id} not found. Available runs: #1-#{stats['latest_run_id']}")
                     return
                 
-                # Get cached runs for this character
-                user_id = str(ctx.author.id)
-                char_key = f"{character_data['name']}-{character_data['realm']}-{character_data['region']}"
-                
-                if user_id not in self._cached_runs or char_key not in self._cached_runs[user_id]:
-                    await ctx.send("❌ No cached runs found. Use `!rio_runs` first to load recent runs")
-                    return
-                
-                cached_runs = self._cached_runs[user_id][char_key]
-                if run_number < 1 or run_number > len(cached_runs):
-                    await ctx.send(f"❌ Invalid run number. Available runs: 1-{len(cached_runs)}")
-                    return
-                
-                # Get the specific run data
-                selected_run = cached_runs[run_number - 1]
-                run_id = self._extract_run_id(selected_run)
-                
-                if not run_id:
-                    await ctx.send("❌ Unable to find run ID for this run. The run may not have detailed data available.")
-                    return
-                
-                loading_msg = await ctx.send(f"🔍 Fetching details for run #{run_number}...")
-                run_data = await raiderio_client.get_mythic_plus_run_details(run_id)
-                
-            # Check if it's character number + run number (e.g., "2 3" for char #2, run #3)
-            elif len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-                char_number = int(parts[0])
-                run_number = int(parts[1])
-                
-                character_data = await character_manager.get_character(ctx.author.id, char_number - 1)
-                if not character_data:
-                    chars = await character_manager.get_all_characters(ctx.author.id)
-                    await ctx.send(f"❌ Invalid character number. You have {len(chars)} character(s)")
-                    return
-                
-                # Get cached runs for this character
-                user_id = str(ctx.author.id)
-                char_key = f"{character_data['name']}-{character_data['realm']}-{character_data['region']}"
-                
-                if user_id not in self._cached_runs or char_key not in self._cached_runs[user_id]:
-                    await ctx.send(f"❌ No cached runs found for {character_data['name']}. Use `!rio_runs {char_number}` first")
-                    return
-                
-                cached_runs = self._cached_runs[user_id][char_key]
-                if run_number < 1 or run_number > len(cached_runs):
-                    await ctx.send(f"❌ Invalid run number. Available runs for {character_data['name']}: 1-{len(cached_runs)}")
-                    return
-                
-                selected_run = cached_runs[run_number - 1]
-                run_id = self._extract_run_id(selected_run)
-                
-                if not run_id:
-                    await ctx.send(f"❌ Unable to find run ID for {character_data['name']} run #{run_number}. The run may not have detailed data available.")
-                    return
-                
-                loading_msg = await ctx.send(f"🔍 Fetching details for {character_data['name']} run #{run_number}...")
-                run_data = await raiderio_client.get_mythic_plus_run_details(run_id)
+                loading_msg = await ctx.send(f"🔍 Fetching details for run #{sequential_id}...")
+                run_data = await raiderio_client.get_mythic_plus_run_details(run_info['raiderio_id'])
                 
             # Manual run ID lookup
             else:
@@ -301,6 +250,86 @@ class RaiderIOCommands(commands.Cog):
         except Exception as e:
             logger.error(f"RaiderIO run details command error: {e}")
             await ctx.send(f"❌ **Error**: Failed to fetch run details")
+        finally:
+            self._executing_commands.discard(command_key)
+    
+    @commands.command(name='rio_list')
+    async def list_all_runs(self, ctx, limit: int = 20):
+        """
+        List all stored runs from all characters
+        
+        Usage:
+        !rio_list           # Show last 20 runs
+        !rio_list 50        # Show last 50 runs
+        """
+        command_key = f"rio_list_{ctx.author.id}"
+        if command_key in self._executing_commands:
+            return
+        
+        self._executing_commands.add(command_key)
+        
+        try:
+            # Validate limit
+            if limit < 1 or limit > 100:
+                await ctx.send("❌ Limit must be between 1 and 100")
+                return
+            
+            # Get recent runs from global database
+            recent_runs = await run_manager.get_recent_runs(limit)
+            
+            if not recent_runs:
+                await ctx.send("❌ No runs stored in database yet. Use `!rio_runs` to load runs first.")
+                return
+            
+            # Create paginated embed
+            embed = discord.Embed(
+                title="🗂️ All Stored Runs",
+                description=f"Showing last {len(recent_runs)} run(s)",
+                color=0x3498db
+            )
+            
+            runs_text = ""
+            for run_entry in recent_runs:
+                seq_id = run_entry["sequential_id"]
+                run_data = run_entry["data"]
+                character_info = run_entry.get("character", {})
+                
+                # Extract run information
+                dungeon = run_data.get("dungeon", "Unknown")
+                level = run_data.get("mythic_level", 0)
+                completed = "✅" if run_data.get("num_chests", 0) >= 1 else "❌"
+                
+                # Character information
+                char_name = character_info.get("name", "Unknown")
+                char_realm = character_info.get("realm", "Unknown")
+                char_region = character_info.get("region", "us").upper()
+                
+                # Date information
+                completed_at = run_data.get("completed_at", "")
+                if completed_at:
+                    date_str = completed_at.split('T')[0] if 'T' in completed_at else completed_at
+                else:
+                    date_str = "Unknown"
+                
+                runs_text += f"**#{seq_id}** {completed} +{level} {dungeon}\n"
+                runs_text += f"   {char_name}-{char_realm} ({char_region}) - {date_str}\n\n"
+            
+            embed.description = f"Showing last {len(recent_runs)} run(s)\nUse `!rio_details <#number>` for details"
+            embed.add_field(
+                name="📋 Runs List",
+                value=runs_text.strip() or "No runs available",
+                inline=False
+            )
+            
+            # Add stats
+            stats = await run_manager.get_stats()
+            embed.set_footer(text=f"Total runs in database: {stats['total_runs']}")
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"List runs command error: {e}")
+            await ctx.send("❌ **Error**: Failed to list runs")
         finally:
             self._executing_commands.discard(command_key)
     
@@ -356,12 +385,12 @@ class RaiderIOCommands(commands.Cog):
         )
         
         embed.add_field(
-            name="🔍 Run Details",
+            name="🔍 Run Details & Database",
             value=(
-                "`!rio_details <number>` - View run details from recent runs\n"
-                "`!rio_details 2 3` - View run #3 from character #2\n"
-                "`!rio_details <run_id>` - Manual run ID lookup\n"
-                "Use `!rio_runs` first to see numbered run lists"
+                "`!rio_details <#number>` - View detailed run information\n"
+                "`!rio_list [limit]` - List all stored runs from all characters\n"
+                "`!rio_details <run_id>` - Manual RaiderIO run ID lookup\n"
+                "Global run numbering: #1, #2, #3... (persistent across restarts)"
             ),
             inline=False
         )
@@ -481,8 +510,25 @@ class RaiderIOCommands(commands.Cog):
         # Recent runs with enhanced details and numbering
         recent_runs = data.get("mythic_plus_recent_runs", [])[:10]  # Store more for selection
         if recent_runs:
-            # Cache the runs for quick access
-            self._cached_runs[user_id_str][char_key] = recent_runs
+            # Prepare character information
+            character_info = {
+                "name": name,
+                "realm": realm,
+                "region": region.lower()
+            }
+            
+            # Add runs to global database and get their sequential IDs
+            sequential_ids = await run_manager.add_runs(recent_runs, character_info)
+            
+            # Create mapping for quick access
+            runs_with_ids = []
+            for i, (run, seq_id) in enumerate(zip(recent_runs, sequential_ids)):
+                run_with_id = run.copy()
+                run_with_id['sequential_id'] = seq_id
+                runs_with_ids.append(run_with_id)
+            
+            # Cache the runs with their sequential IDs
+            self._cached_runs[user_id_str][char_key] = runs_with_ids
             
             # Debug: Log available fields in first run to understand structure
             if recent_runs and logger.level <= 10:  # DEBUG level
@@ -495,7 +541,7 @@ class RaiderIOCommands(commands.Cog):
                     logger.debug(f"Run URL found: {first_run['url']}")
             
             recent_text = ""
-            for i, run in enumerate(recent_runs[:5], 1):  # Show top 5 with numbers
+            for i, (run, seq_id) in enumerate(zip(recent_runs[:5], sequential_ids[:5]), 1):  # Show top 5 with numbers
                 dungeon = run.get("dungeon", "Unknown")
                 level = run.get("mythic_level", 0)
                 score = run.get("score", 0)
@@ -519,7 +565,7 @@ class RaiderIOCommands(commands.Cog):
                 else:
                     date_str = ""
                 
-                recent_text += f"**{i}.** {completed} **+{level} {dungeon}**{time_str}\n{score:.0f} score{date_str}\n\n"
+                recent_text += f"**#{seq_id}** {completed} **+{level} {dungeon}**{time_str}\n{score:.0f} score{date_str}\n\n"
             
             embed.add_field(
                 name=f"📅 Recent Runs (Use `!rio_details <number>` for details)",
@@ -553,9 +599,20 @@ class RaiderIOCommands(commands.Cog):
                 inline=False
             )
         
-        # Add footer with instructions
-        total_cached = len(self._cached_runs[user_id_str].get(char_key, []))
-        embed.set_footer(text=f"💡 Use !rio_details <1-{total_cached}> to view detailed run information")
+        # Add footer with instructions using sequential IDs
+        if user_id_str in self._cached_runs and char_key in self._cached_runs[user_id_str]:
+            cached_runs = self._cached_runs[user_id_str][char_key]
+            if cached_runs:
+                min_id = min(run.get('sequential_id', 0) for run in cached_runs)
+                max_id = max(run.get('sequential_id', 0) for run in cached_runs)
+                if min_id == max_id:
+                    embed.set_footer(text=f"💡 Use !rio_details #{min_id} to view detailed run information")
+                else:
+                    embed.set_footer(text=f"💡 Use !rio_details <#{min_id}-#{max_id}> to view detailed run information")
+            else:
+                embed.set_footer(text="💡 Use !rio_details <number> to view detailed run information")
+        else:
+            embed.set_footer(text="💡 Use !rio_details <number> to view detailed run information")
         
         return embed
     

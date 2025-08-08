@@ -156,6 +156,8 @@ class RaiderIOClient:
             "season": season
         }
         
+        logger.debug(f"Making run-details request with params: {params}")
+        
         if access_key:
             params["access_key"] = access_key
         
