@@ -238,14 +238,14 @@ class RaiderIOCommands(commands.Cog):
                 
                 # Get the specific run data
                 selected_run = cached_runs[run_number - 1]
-                run_id = selected_run.get("url", "").split("/")[-1] if selected_run.get("url") else None
+                run_id = self._extract_run_id(selected_run)
                 
-                if not run_id or not run_id.isdigit():
-                    await ctx.send("❌ Unable to find run ID for this run")
+                if not run_id:
+                    await ctx.send("❌ Unable to find run ID for this run. The run may not have detailed data available.")
                     return
                 
                 loading_msg = await ctx.send(f"🔍 Fetching details for run #{run_number}...")
-                run_data = await raiderio_client.get_mythic_plus_run_details(int(run_id))
+                run_data = await raiderio_client.get_mythic_plus_run_details(run_id)
                 
             # Check if it's character number + run number (e.g., "2 3" for char #2, run #3)
             elif len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
@@ -272,14 +272,14 @@ class RaiderIOCommands(commands.Cog):
                     return
                 
                 selected_run = cached_runs[run_number - 1]
-                run_id = selected_run.get("url", "").split("/")[-1] if selected_run.get("url") else None
+                run_id = self._extract_run_id(selected_run)
                 
-                if not run_id or not run_id.isdigit():
-                    await ctx.send("❌ Unable to find run ID for this run")
+                if not run_id:
+                    await ctx.send(f"❌ Unable to find run ID for {character_data['name']} run #{run_number}. The run may not have detailed data available.")
                     return
                 
                 loading_msg = await ctx.send(f"🔍 Fetching details for {character_data['name']} run #{run_number}...")
-                run_data = await raiderio_client.get_mythic_plus_run_details(int(run_id))
+                run_data = await raiderio_client.get_mythic_plus_run_details(run_id)
                 
             # Manual run ID lookup
             else:
@@ -484,6 +484,16 @@ class RaiderIOCommands(commands.Cog):
             # Cache the runs for quick access
             self._cached_runs[user_id_str][char_key] = recent_runs
             
+            # Debug: Log available fields in first run to understand structure
+            if recent_runs and logger.level <= 10:  # DEBUG level
+                first_run = recent_runs[0]
+                available_fields = list(first_run.keys())
+                logger.debug(f"Run data fields available: {available_fields}")
+                if 'id' in first_run:
+                    logger.debug(f"Direct run ID found: {first_run['id']}")
+                elif 'url' in first_run:
+                    logger.debug(f"Run URL found: {first_run['url']}")
+            
             recent_text = ""
             for i, run in enumerate(recent_runs[:5], 1):  # Show top 5 with numbers
                 dungeon = run.get("dungeon", "Unknown")
@@ -548,6 +558,42 @@ class RaiderIOCommands(commands.Cog):
         embed.set_footer(text=f"💡 Use !rio_details <1-{total_cached}> to view detailed run information")
         
         return embed
+    
+    def _extract_run_id(self, run_data: Dict) -> Optional[int]:
+        """
+        Extract run ID from run data, trying multiple sources
+        
+        Args:
+            run_data: Run data dict from RaiderIO API
+            
+        Returns:
+            Run ID as integer, or None if not found
+        """
+        # Try direct ID field first
+        if 'id' in run_data and run_data['id']:
+            try:
+                return int(run_data['id'])
+            except (ValueError, TypeError):
+                pass
+        
+        # Try extracting from URL
+        if 'url' in run_data and run_data['url']:
+            try:
+                url_parts = str(run_data['url']).split('/')
+                if url_parts and url_parts[-1].isdigit():
+                    return int(url_parts[-1])
+            except (ValueError, TypeError):
+                pass
+        
+        # Try other potential fields
+        for field in ['run_id', 'keystone_run_id', 'mythic_plus_run_id']:
+            if field in run_data and run_data[field]:
+                try:
+                    return int(run_data[field])
+                except (ValueError, TypeError):
+                    pass
+        
+        return None
     
     async def _create_run_details_embed(self, data: Dict) -> discord.Embed:
         """Create embed for detailed run information"""
