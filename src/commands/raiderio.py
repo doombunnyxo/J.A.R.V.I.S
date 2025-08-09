@@ -130,7 +130,7 @@ class RaiderIOCommands(commands.Cog):
             if "error" in char_data:
                 await loading_msg.edit(content=f"❌ **Error**: {char_data['error']}")
             else:
-                embed = await self._create_runs_embed(char_data, ctx.author.id)
+                embed = await self._create_runs_embed(char_data, ctx.author.id, ctx)
                 await loading_msg.edit(content=None, embed=embed)
                 
         except Exception as e:
@@ -232,6 +232,18 @@ class RaiderIOCommands(commands.Cog):
                     await ctx.send(f"❌ Run #{sequential_id} not found. Available runs: #1-#{stats['latest_run_id']}")
                     return
                 
+                # Check if we have the RaiderIO ID
+                if not run_info.get('raiderio_id'):
+                    # We have the run data but no RaiderIO ID to fetch details
+                    logger.warning(f"Run #{sequential_id} has no RaiderIO ID, showing cached data")
+                    await ctx.send(f"⚠️ Run #{sequential_id} is missing RaiderIO ID. Showing cached information:")
+                    
+                    # Create embed from cached data
+                    cached_data = run_info.get('data', {})
+                    embed = await self._create_basic_run_embed(cached_data, sequential_id)
+                    await ctx.send(embed=embed)
+                    return
+                
                 # Get current season setting
                 current_season = await season_manager.get_current_season()
                 
@@ -265,8 +277,20 @@ class RaiderIOCommands(commands.Cog):
                 await loading_msg.edit(content=None, embed=embed)
                 
         except Exception as e:
-            logger.error(f"RaiderIO run details command error: {e}")
-            await ctx.send(f"❌ **Error**: Failed to fetch run details")
+            logger.error(f"RaiderIO run details command error: {e}", exc_info=True)
+            import traceback
+            error_details = traceback.format_exc()
+            
+            # Send detailed error to Discord for debugging
+            error_msg = f"❌ **Error**: Failed to fetch run details\n"
+            error_msg += f"**Error Type**: {type(e).__name__}\n"
+            error_msg += f"**Error Message**: {str(e)}\n"
+            
+            # If it's a specific error we can handle better
+            if "loading_msg" not in locals():
+                await ctx.send(error_msg)
+            else:
+                await loading_msg.edit(content=error_msg)
         finally:
             self._executing_commands.discard(command_key)
     
@@ -741,7 +765,7 @@ class RaiderIOCommands(commands.Cog):
         
         return embed
     
-    async def _create_runs_embed(self, data: Dict, user_id: int) -> discord.Embed:
+    async def _create_runs_embed(self, data: Dict, user_id: int, ctx) -> discord.Embed:
         """Create embed for Mythic+ runs"""
         name = data.get("name", "Unknown")
         realm = data.get("realm", "Unknown")
@@ -772,8 +796,18 @@ class RaiderIOCommands(commands.Cog):
         if recent_runs:
             
             # Add runs to global database and get their sequential IDs
-            sequential_ids = await run_manager.add_runs(recent_runs, character_info)
+            sequential_ids, errors = await run_manager.add_runs_with_errors(recent_runs, character_info)
             logger.info(f"Recent runs for {name}: assigned IDs {sequential_ids}")
+            
+            # Report any extraction errors
+            if errors:
+                error_msg = f"⚠️ **Warning**: Failed to extract RaiderIO IDs for {len(errors)} run(s):\n"
+                for error in errors[:3]:  # Show first 3 errors
+                    error_msg += f"• {error['dungeon']} +{error['level']}: Missing fields: {error['reason']}\n"
+                if len(errors) > 3:
+                    error_msg += f"... and {len(errors) - 3} more\n"
+                error_msg += "\nThese runs have been numbered but `!rio_details` may show limited information."
+                await ctx.send(error_msg)
             
             # Create mapping for quick access
             runs_with_ids = []
@@ -832,8 +866,18 @@ class RaiderIOCommands(commands.Cog):
         best_runs = data.get("mythic_plus_best_runs", [])[:5]
         if best_runs:
             # Add best runs to database as well
-            best_sequential_ids = await run_manager.add_runs(best_runs, character_info)
+            best_sequential_ids, best_errors = await run_manager.add_runs_with_errors(best_runs, character_info)
             logger.info(f"Best runs for {name}: assigned IDs {best_sequential_ids}")
+            
+            # Report any extraction errors for best runs
+            if best_errors:
+                error_msg = f"⚠️ **Warning**: Failed to extract RaiderIO IDs for {len(best_errors)} best run(s):\n"
+                for error in best_errors[:3]:  # Show first 3 errors
+                    error_msg += f"• {error['dungeon']} +{error['level']}: {error['reason']}\n"
+                if len(best_errors) > 3:
+                    error_msg += f"... and {len(best_errors) - 3} more\n"
+                error_msg += "\nThese runs have been numbered but `!rio_details` may show limited information."
+                await ctx.send(error_msg)
             
             best_text = ""
             for run, seq_id in zip(best_runs, best_sequential_ids):
@@ -984,6 +1028,58 @@ class RaiderIOCommands(commands.Cog):
                     pass
         
         return None
+    
+    async def _create_basic_run_embed(self, data: Dict, sequential_id: int) -> discord.Embed:
+        """Create a basic embed from cached run data when RaiderIO ID is missing"""
+        dungeon = data.get("dungeon", "Unknown")
+        level = data.get("mythic_level", 0)
+        score = data.get("score", 0)
+        
+        embed = discord.Embed(
+            title=f"🏃 Run #{sequential_id}: +{level} {dungeon}",
+            description="⚠️ Limited information available (RaiderIO ID missing)",
+            color=0xf39c12  # Orange for warning
+        )
+        
+        embed.add_field(
+            name="📋 Basic Information",
+            value=f"**Dungeon**: {dungeon}\n**Level**: +{level}\n**Score**: {score:.1f}",
+            inline=True
+        )
+        
+        # Timing if available
+        clear_time_ms = data.get("clear_time_ms", 0)
+        if clear_time_ms > 0:
+            minutes = clear_time_ms // 60000
+            seconds = (clear_time_ms % 60000) // 1000
+            embed.add_field(
+                name="⏱️ Clear Time",
+                value=f"{minutes}:{seconds:02d}",
+                inline=True
+            )
+        
+        # Date if available
+        completed_at = data.get("completed_at", "")
+        if completed_at:
+            date_str = completed_at.split('T')[0] if 'T' in completed_at else completed_at
+            embed.add_field(
+                name="📅 Completed",
+                value=date_str,
+                inline=True
+            )
+        
+        # Affixes if available
+        affixes = data.get("affixes", [])
+        if affixes:
+            affix_names = [affix.get("name", "Unknown") for affix in affixes]
+            embed.add_field(
+                name="⚡ Affixes",
+                value="\n".join(f"• {name}" for name in affix_names),
+                inline=False
+            )
+        
+        embed.set_footer(text="This run's full details cannot be fetched from RaiderIO")
+        return embed
     
     async def _create_run_details_embed(self, data: Dict) -> discord.Embed:
         """Create embed for detailed run information"""
