@@ -19,6 +19,7 @@ class CharacterManager:
         self.data_file = Path(data_file)
         self.data = {}
         self.lock = asyncio.Lock()
+        self.startup_errors = []  # Store errors to report to Discord later
         logger.info(f"Initializing CharacterManager with file: {self.data_file}")
         self._load_data()
         logger.info(f"CharacterManager initialized with {len(self.data)} users")
@@ -42,23 +43,45 @@ class CharacterManager:
                 self.data = {}
                 logger.info("No existing character data file, starting fresh")
         except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error in character data: {e}")
+            error_msg = f"JSON decode error in character data: {e}"
+            logger.error(error_msg)
+            self.startup_errors.append(f"❌ **Character Loading Error**: {error_msg}")
             # Try to backup the corrupted file before resetting
             try:
                 backup_file = self.data_file.with_suffix('.backup')
                 self.data_file.rename(backup_file)
                 logger.warning(f"Backed up corrupted file to {backup_file}")
+                self.startup_errors.append(f"💾 Backed up corrupted file to {backup_file}")
             except:
                 pass
             self.data = {}
         except Exception as e:
-            logger.error(f"Unexpected error loading character data: {e}")
+            error_msg = f"Unexpected error loading character data: {e}"
+            logger.error(error_msg)
+            self.startup_errors.append(f"❌ **Character Loading Error**: {error_msg}")
             # Don't wipe data on unexpected errors - keep it empty but don't save
             self.data = {}
     
     def _save_data(self):
         """Save character data to file with error handling"""
         try:
+            # CRITICAL: Don't save empty data if we had data before
+            if not self.data and self.data_file.exists():
+                error_msg = "CRITICAL: Attempted to save empty character data when file exists! Aborting save to prevent data loss."
+                logger.error(error_msg)
+                self.startup_errors.append(f"🛡️ **Data Protection**: Prevented overwriting character file with empty data")
+                # Check if file has data
+                try:
+                    with open(self.data_file, 'r', encoding='utf-8') as f:
+                        existing_data = json.load(f)
+                        if existing_data:
+                            protection_msg = f"File contains {len(existing_data)} users but we're trying to save empty data. PREVENTING DATA LOSS!"
+                            logger.error(protection_msg)
+                            self.startup_errors.append(f"🛡️ **Protected**: {len(existing_data)} user(s) data preserved in file")
+                            return  # Abort save
+                except:
+                    pass
+            
             # Ensure directory exists
             self.data_file.parent.mkdir(parents=True, exist_ok=True)
             
@@ -69,7 +92,7 @@ class CharacterManager:
             
             # Atomic move to final location
             temp_file.replace(self.data_file)
-            logger.debug(f"Character data saved successfully to {self.data_file}")
+            logger.info(f"Character data saved successfully: {len(self.data)} users")
             
         except Exception as e:
             logger.error(f"Failed to save character data to {self.data_file}: {e}")
@@ -256,6 +279,12 @@ class CharacterManager:
             return None
         
         return self.data[user_id].get("main_character")
+    
+    def get_startup_errors(self) -> List[str]:
+        """Get startup errors and clear them"""
+        errors = self.startup_errors.copy()
+        self.startup_errors.clear()
+        return errors
     
     async def remove_character(self, user_id: str, character_index: int) -> Dict[str, Any]:
         """

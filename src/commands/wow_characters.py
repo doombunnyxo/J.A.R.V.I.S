@@ -269,6 +269,48 @@ class WoWCharacterCommands(commands.Cog):
         except Exception as e:
             await ctx.send(f"❌ Reload error: {type(e).__name__}: {str(e)}")
     
+    @commands.command(name='char_errors')
+    async def show_character_errors(self, ctx):
+        """
+        Show any character loading errors from startup (Admin only)
+        
+        Usage:
+        !char_errors
+        """
+        # Check if user is admin
+        if str(ctx.author.id) != str(config.AUTHORIZED_USER_ID):
+            await ctx.send("❌ This command is admin-only")
+            return
+        
+        try:
+            errors = character_manager.get_startup_errors()
+            
+            if not errors:
+                await ctx.send("✅ No character loading errors since startup")
+                return
+            
+            embed = discord.Embed(
+                title="⚠️ Character Loading Errors",
+                description=f"Found {len(errors)} error(s) since startup:",
+                color=0xe74c3c
+            )
+            
+            error_text = "\n".join(errors)
+            if len(error_text) > 4000:  # Discord field limit
+                error_text = error_text[:4000] + "... (truncated)"
+            
+            embed.add_field(
+                name="🔍 Error Details",
+                value=error_text,
+                inline=False
+            )
+            
+            embed.set_footer(text="These errors have been cleared after showing")
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error checking character errors: {type(e).__name__}: {str(e)}")
+    
     @commands.command(name='list_chars')
     async def list_characters(self, ctx):
         """

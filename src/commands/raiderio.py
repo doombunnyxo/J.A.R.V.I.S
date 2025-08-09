@@ -1035,17 +1035,9 @@ class RaiderIOCommands(commands.Cog):
         level = data.get("mythic_level", 0)
         score = data.get("score", 0)
         
-        # Truncate dungeon name if title would be too long (Discord limit is 256 chars)
-        title = f"🏃 Run #{sequential_id}: +{level} {dungeon}"
-        if len(title) > 256:
-            # Truncate dungeon name to fit
-            max_dungeon_len = 256 - len(f"🏃 Run #{sequential_id}: +{level} ")
-            dungeon = dungeon[:max_dungeon_len-3] + "..."
-            title = f"🏃 Run #{sequential_id}: +{level} {dungeon}"
-        
         embed = discord.Embed(
-            title=title,
-            description="⚠️ Limited information available (RaiderIO ID missing)",
+            title=f"🏃 +{level} {dungeon}",
+            description=f"⚠️ Run #{sequential_id} - Limited information available (RaiderIO ID missing)",
             color=0xf39c12  # Orange for warning
         )
         
