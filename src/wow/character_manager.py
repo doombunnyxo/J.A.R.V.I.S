@@ -26,13 +26,32 @@ class CharacterManager:
         try:
             if self.data_file.exists():
                 with open(self.data_file, 'r', encoding='utf-8') as f:
-                    self.data = json.load(f)
+                    loaded_data = json.load(f)
+                    # Validate the loaded data structure
+                    if isinstance(loaded_data, dict):
+                        self.data = loaded_data
+                        logger.info(f"Successfully loaded character data for {len(self.data)} users")
+                    else:
+                        logger.error(f"Invalid data structure in {self.data_file}, expected dict but got {type(loaded_data)}")
+                        self.data = {}
             else:
                 # Create data directory if it doesn't exist
                 self.data_file.parent.mkdir(parents=True, exist_ok=True)
                 self.data = {}
+                logger.info("No existing character data file, starting fresh")
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error in character data: {e}")
+            # Try to backup the corrupted file before resetting
+            try:
+                backup_file = self.data_file.with_suffix('.backup')
+                self.data_file.rename(backup_file)
+                logger.warning(f"Backed up corrupted file to {backup_file}")
+            except:
+                pass
+            self.data = {}
         except Exception as e:
-            logger.error(f"Failed to load character data: {e}")
+            logger.error(f"Unexpected error loading character data: {e}")
+            # Don't wipe data on unexpected errors - keep it empty but don't save
             self.data = {}
     
     def _save_data(self):

@@ -42,7 +42,11 @@ class StartupLoader:
         
         # Get all stored characters
         all_users_chars = character_manager.data
-        total_characters = sum(len(chars) for chars in all_users_chars.values())
+        # Count total characters - need to access 'characters' key in each user's data
+        total_characters = 0
+        for user_data in all_users_chars.values():
+            if isinstance(user_data, dict) and "characters" in user_data:
+                total_characters += len(user_data["characters"])
         
         if total_characters == 0:
             logger.info("No characters stored, skipping run pre-fetch")
@@ -51,8 +55,12 @@ class StartupLoader:
         logger.info(f"Pre-fetching runs for {total_characters} character(s)...")
         
         # Process each user's characters
-        for user_id, characters in all_users_chars.items():
-            for char_data in characters:
+        for user_id, user_data in all_users_chars.items():
+            if not isinstance(user_data, dict) or "characters" not in user_data:
+                logger.warning(f"Invalid user data structure for user {user_id}")
+                continue
+                
+            for char_data in user_data["characters"]:
                 try:
                     name = char_data.get('name')
                     realm = char_data.get('realm')

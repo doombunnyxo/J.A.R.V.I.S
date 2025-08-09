@@ -50,7 +50,8 @@ async def setup_bot():
         from src.wow.startup_loader import startup_loader
         
         # Log what was loaded
-        logger.info(f"Loaded {len(character_manager.data)} users' character data")
+        total_chars = sum(len(user_data.get("characters", [])) for user_data in character_manager.data.values() if isinstance(user_data, dict))
+        logger.info(f"Loaded character data: {len(character_manager.data)} users, {total_chars} total characters")
         logger.info(f"Loaded {len(run_manager.data['runs'])} run records")
         logger.info(f"Current season: {season_manager.data['current_season']}")
         
