@@ -47,11 +47,23 @@ async def setup_bot():
         from src.wow.character_manager import character_manager
         from src.wow.run_manager import run_manager
         from src.wow.season_manager import season_manager
+        from src.wow.startup_loader import startup_loader
         
         # Log what was loaded
         logger.info(f"Loaded {len(character_manager.data)} users' character data")
         logger.info(f"Loaded {len(run_manager.data['runs'])} run records")
         logger.info(f"Current season: {season_manager.data['current_season']}")
+        
+        # Pre-fetch runs for all characters if enabled
+        # Set to False to disable startup loading
+        ENABLE_STARTUP_LOADING = False  # Disabled by default to avoid slow startup
+        if ENABLE_STARTUP_LOADING and config_instance.RAIDERIO_API_KEY:
+            logger.info("Pre-fetching character runs on startup...")
+            load_stats = await startup_loader.load_all_character_runs(enabled=True)
+            if load_stats.get("status") == "completed":
+                logger.info(f"Pre-fetch stats: {load_stats}")
+        else:
+            logger.info("Startup run loading is disabled (ENABLE_STARTUP_LOADING=False)")
         
         # Setup Discord bot
         intents = discord.Intents.default()

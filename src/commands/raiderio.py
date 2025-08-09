@@ -423,6 +423,77 @@ class RaiderIOCommands(commands.Cog):
         finally:
             self._executing_commands.discard(command_key)
     
+    @commands.command(name='rio_prefetch')
+    async def prefetch_all_runs(self, ctx):
+        """
+        Pre-fetch runs for all stored characters (Admin only)
+        
+        Usage:
+        !rio_prefetch    # Load runs for all characters
+        """
+        # Check if user is admin
+        if str(ctx.author.id) != str(config.AUTHORIZED_USER_ID):
+            await ctx.send("❌ This command is admin-only")
+            return
+        
+        command_key = f"rio_prefetch_{ctx.author.id}"
+        if command_key in self._executing_commands:
+            return
+        
+        self._executing_commands.add(command_key)
+        
+        try:
+            from ..wow.startup_loader import startup_loader
+            
+            loading_msg = await ctx.send("🔄 Pre-fetching runs for all stored characters...")
+            
+            # Reset loader state
+            startup_loader.loaded_characters = 0
+            startup_loader.loaded_runs = 0
+            startup_loader.failed_characters = []
+            
+            # Run the pre-fetch
+            stats = await startup_loader.load_all_character_runs(enabled=True)
+            
+            if stats.get("status") == "no_characters":
+                await loading_msg.edit(content="❌ No characters stored to pre-fetch")
+            elif stats.get("status") == "completed":
+                embed = discord.Embed(
+                    title="✅ Pre-fetch Complete",
+                    color=0x2ecc71
+                )
+                embed.add_field(
+                    name="📊 Statistics",
+                    value=(
+                        f"**Characters processed**: {stats['characters_processed']}\n"
+                        f"**Characters failed**: {stats['characters_failed']}\n"
+                        f"**Runs loaded**: {stats['runs_loaded']}\n"
+                        f"**Total runs in DB**: {stats['total_runs_in_db']}\n"
+                        f"**Time elapsed**: {stats['time_elapsed']}"
+                    ),
+                    inline=False
+                )
+                
+                if startup_loader.failed_characters:
+                    failed_list = "\n".join(startup_loader.failed_characters[:10])
+                    if len(startup_loader.failed_characters) > 10:
+                        failed_list += f"\n... and {len(startup_loader.failed_characters) - 10} more"
+                    embed.add_field(
+                        name="❌ Failed Characters",
+                        value=failed_list,
+                        inline=False
+                    )
+                
+                await loading_msg.edit(content=None, embed=embed)
+            else:
+                await loading_msg.edit(content="❌ Pre-fetch failed or was disabled")
+                
+        except Exception as e:
+            logger.error(f"Pre-fetch command error: {e}")
+            await ctx.send(f"❌ **Error**: Failed to pre-fetch runs")
+        finally:
+            self._executing_commands.discard(command_key)
+    
     @commands.command(name='rio_season')
     async def raiderio_season(self, ctx, *, season: str = None):
         """
@@ -689,18 +760,20 @@ class RaiderIOCommands(commands.Cog):
         if user_id_str not in self._cached_runs:
             self._cached_runs[user_id_str] = {}
         
+        # Prepare character information for all runs
+        character_info = {
+            "name": name,
+            "realm": realm,
+            "region": region.lower()
+        }
+        
         # Recent runs with enhanced details and numbering
         recent_runs = data.get("mythic_plus_recent_runs", [])[:10]  # Store more for selection
         if recent_runs:
-            # Prepare character information
-            character_info = {
-                "name": name,
-                "realm": realm,
-                "region": region.lower()
-            }
             
             # Add runs to global database and get their sequential IDs
             sequential_ids = await run_manager.add_runs(recent_runs, character_info)
+            logger.info(f"Recent runs for {name}: assigned IDs {sequential_ids}")
             
             # Create mapping for quick access
             runs_with_ids = []
@@ -755,11 +828,15 @@ class RaiderIOCommands(commands.Cog):
                 inline=False
             )
         
-        # Best runs this season (no numbers, these are achievements)
+        # Best runs this season (also add to database for numbering)
         best_runs = data.get("mythic_plus_best_runs", [])[:5]
         if best_runs:
+            # Add best runs to database as well
+            best_sequential_ids = await run_manager.add_runs(best_runs, character_info)
+            logger.info(f"Best runs for {name}: assigned IDs {best_sequential_ids}")
+            
             best_text = ""
-            for run in best_runs:
+            for run, seq_id in zip(best_runs, best_sequential_ids):
                 dungeon = run.get("dungeon", "Unknown")
                 level = run.get("mythic_level", 0)
                 score = run.get("score", 0)
@@ -773,10 +850,10 @@ class RaiderIOCommands(commands.Cog):
                 else:
                     time_str = ""
                 
-                best_text += f"⭐ **+{level} {dungeon}**{time_str} - {score:.0f}\n"
+                best_text += f"**#{seq_id}** ⭐ **+{level} {dungeon}**{time_str} - {score:.0f}\n"
             
             embed.add_field(
-                name="🌟 Season Best Runs",
+                name="🌟 Season Best Runs (Use `!rio_details <number>` for details)",
                 value=best_text.strip() or "No best runs",
                 inline=False
             )
