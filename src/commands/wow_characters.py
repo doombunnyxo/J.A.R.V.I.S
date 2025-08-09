@@ -6,7 +6,10 @@ Commands for managing stored WoW characters
 import discord
 from discord.ext import commands
 from typing import Optional
+import json
+from pathlib import Path
 from ..wow.character_manager import character_manager
+from ..config import config
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -127,6 +130,144 @@ class WoWCharacterCommands(commands.Cog):
             await ctx.send(f"❌ **Error**: Failed to set main character")
         finally:
             self._executing_commands.discard(command_key)
+    
+    @commands.command(name='debug_chars')
+    async def debug_characters(self, ctx):
+        """
+        Debug command to check character data structure (Admin only)
+        
+        Usage:
+        !debug_chars
+        """
+        # Check if user is admin
+        if str(ctx.author.id) != str(config.AUTHORIZED_USER_ID):
+            await ctx.send("❌ This command is admin-only")
+            return
+        
+        try:
+            # Show raw data structure
+            embed = discord.Embed(
+                title="🔧 Character Manager Debug Info",
+                color=0xe74c3c
+            )
+            
+            # File info
+            char_file = Path("data/wow_characters.json")
+            file_exists = char_file.exists()
+            file_size = char_file.stat().st_size if file_exists else 0
+            
+            embed.add_field(
+                name="📁 File Status",
+                value=f"**Exists**: {file_exists}\n**Size**: {file_size} bytes\n**Path**: {char_file.absolute()}",
+                inline=False
+            )
+            
+            # Data structure in memory
+            total_users = len(character_manager.data)
+            total_chars = 0
+            sample_data = {}
+            
+            # Count all characters properly
+            for user_id, user_data in character_manager.data.items():
+                if isinstance(user_data, dict) and "characters" in user_data:
+                    total_chars += len(user_data["characters"])
+            
+            # Get sample of first user (anonymized)
+            if character_manager.data:
+                first_user_id = list(character_manager.data.keys())[0]
+                first_user_data = character_manager.data[first_user_id]
+                sample_data = {
+                    "user_id": first_user_id[:8] + "...",
+                    "type": type(first_user_data).__name__,
+                    "has_characters": "characters" in first_user_data if isinstance(first_user_data, dict) else False,
+                    "char_count": len(first_user_data.get("characters", [])) if isinstance(first_user_data, dict) else 0,
+                    "keys": list(first_user_data.keys()) if isinstance(first_user_data, dict) else []
+                }
+            
+            embed.add_field(
+                name="📊 In-Memory Data",
+                value=f"**Total Users**: {total_users}\n**Total Characters**: {total_chars}\n**Data Type**: {type(character_manager.data).__name__}",
+                inline=False
+            )
+            
+            if sample_data:
+                sample_text = "```json\n"
+                sample_text += json.dumps(sample_data, indent=2)[:400]
+                sample_text += "\n```"
+                embed.add_field(
+                    name="🔍 Sample Structure",
+                    value=sample_text,
+                    inline=False
+                )
+            
+            # Try to load fresh from file
+            if file_exists:
+                try:
+                    with open(char_file, 'r', encoding='utf-8') as f:
+                        fresh_data = json.load(f)
+                        fresh_users = len(fresh_data)
+                        fresh_chars = 0
+                        for user_data in fresh_data.values():
+                            if isinstance(user_data, dict) and "characters" in user_data:
+                                fresh_chars += len(user_data["characters"])
+                        
+                        embed.add_field(
+                            name="✅ Fresh File Load",
+                            value=f"**Users in file**: {fresh_users}\n**Characters in file**: {fresh_chars}\n**Matches memory**: {fresh_users == total_users}",
+                            inline=False
+                        )
+                except Exception as e:
+                    embed.add_field(
+                        name="❌ File Load Error",
+                        value=f"```{type(e).__name__}: {str(e)[:200]}```",
+                        inline=False
+                    )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Debug error: {type(e).__name__}: {str(e)}")
+    
+    @commands.command(name='reload_chars')
+    async def reload_characters(self, ctx):
+        """
+        Reload character data from file (Admin only)
+        
+        Usage:
+        !reload_chars
+        """
+        # Check if user is admin
+        if str(ctx.author.id) != str(config.AUTHORIZED_USER_ID):
+            await ctx.send("❌ This command is admin-only")
+            return
+        
+        try:
+            # Store current data as backup
+            old_count = len(character_manager.data)
+            
+            # Reload data
+            character_manager._load_data()
+            
+            new_count = len(character_manager.data)
+            total_chars = 0
+            for user_data in character_manager.data.values():
+                if isinstance(user_data, dict) and "characters" in user_data:
+                    total_chars += len(user_data["characters"])
+            
+            embed = discord.Embed(
+                title="♻️ Character Data Reloaded",
+                color=0x2ecc71
+            )
+            embed.add_field(
+                name="📊 Results",
+                value=f"**Old user count**: {old_count}\n**New user count**: {new_count}\n**Total characters**: {total_chars}",
+                inline=False
+            )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Reload error: {type(e).__name__}: {str(e)}")
     
     @commands.command(name='list_chars')
     async def list_characters(self, ctx):

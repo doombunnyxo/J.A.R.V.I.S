@@ -19,7 +19,9 @@ class CharacterManager:
         self.data_file = Path(data_file)
         self.data = {}
         self.lock = asyncio.Lock()
+        logger.info(f"Initializing CharacterManager with file: {self.data_file}")
         self._load_data()
+        logger.info(f"CharacterManager initialized with {len(self.data)} users")
     
     def _load_data(self):
         """Load character data from file"""
