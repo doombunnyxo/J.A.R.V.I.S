@@ -1035,8 +1035,16 @@ class RaiderIOCommands(commands.Cog):
         level = data.get("mythic_level", 0)
         score = data.get("score", 0)
         
+        # Create embed with dungeon name in title (Discord limit is 256 chars)
+        title = f"🏃 +{level} {dungeon}"
+        if len(title) > 256:
+            # Truncate dungeon name to fit
+            max_dungeon_len = 256 - len(f"🏃 +{level} ")
+            dungeon = dungeon[:max_dungeon_len-3] + "..."
+            title = f"🏃 +{level} {dungeon}"
+        
         embed = discord.Embed(
-            title=f"🏃 +{level} {dungeon}",
+            title=title,
             description=f"⚠️ Run #{sequential_id} - Limited information available (RaiderIO ID missing)",
             color=0xf39c12  # Orange for warning
         )
@@ -1090,9 +1098,16 @@ class RaiderIOCommands(commands.Cog):
         score = data.get("score", 0)
         completed = "✅ Completed" if data.get("num_chests", 0) >= 1 else "❌ Depleted"
         
-        # Create embed with dungeon name in title
+        # Create embed with dungeon name in title (Discord limit is 256 chars)
+        title = f"🏃 +{level} {dungeon}"
+        if len(title) > 256:
+            # Truncate dungeon name to fit
+            max_dungeon_len = 256 - len(f"🏃 +{level} ")
+            dungeon = dungeon[:max_dungeon_len-3] + "..."
+            title = f"🏃 +{level} {dungeon}"
+        
         embed = discord.Embed(
-            title=f"🏃 +{level} {dungeon}",
+            title=title,
             color=0xe67e22 if data.get("num_chests", 0) >= 1 else 0xe74c3c
         )
         
