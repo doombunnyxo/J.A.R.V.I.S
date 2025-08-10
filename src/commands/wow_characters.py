@@ -311,6 +311,41 @@ class WoWCharacterCommands(commands.Cog):
         except Exception as e:
             await ctx.send(f"❌ Error checking character errors: {type(e).__name__}: {str(e)}")
     
+    @commands.command(name='force_save_chars')
+    async def force_save_characters(self, ctx):
+        """
+        Force save character data to file (Admin only)
+        
+        Usage:
+        !force_save_chars
+        """
+        # Check if user is admin
+        if str(ctx.author.id) != str(config.AUTHORIZED_USER_ID):
+            await ctx.send("❌ This command is admin-only")
+            return
+        
+        try:
+            # Get current stats
+            total_users = len(character_manager.data)
+            total_chars = 0
+            for user_data in character_manager.data.values():
+                if isinstance(user_data, dict) and "characters" in user_data:
+                    total_chars += len(user_data["characters"])
+            
+            # Try to force save
+            try:
+                character_manager._save_data()
+                await ctx.send(f"✅ **Force save successful!**\n"
+                              f"Saved {total_users} users with {total_chars} total characters\n"
+                              f"File: `{character_manager.data_file}`")
+            except Exception as save_error:
+                await ctx.send(f"❌ **Force save failed!**\n"
+                              f"Error: {type(save_error).__name__}: {str(save_error)}\n"
+                              f"Data in memory: {total_users} users, {total_chars} characters")
+                
+        except Exception as e:
+            await ctx.send(f"❌ Force save error: {type(e).__name__}: {str(e)}")
+    
     @commands.command(name='list_chars')
     async def list_characters(self, ctx):
         """

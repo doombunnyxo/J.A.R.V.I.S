@@ -85,14 +85,22 @@ class CharacterManager:
             # Ensure directory exists
             self.data_file.parent.mkdir(parents=True, exist_ok=True)
             
+            # Log what we're about to save
+            total_chars = sum(len(u.get("characters", [])) for u in self.data.values() if isinstance(u, dict))
+            logger.info(f"Saving character data: {len(self.data)} users, {total_chars} total characters to {self.data_file}")
+            
             # Write to temporary file first to avoid corruption
             temp_file = self.data_file.with_suffix('.tmp')
             with open(temp_file, 'w', encoding='utf-8') as f:
                 json.dump(self.data, f, indent=2, ensure_ascii=False)
             
+            # Verify temp file was written correctly
+            temp_size = temp_file.stat().st_size
+            logger.debug(f"Temp file written: {temp_file}, size: {temp_size} bytes")
+            
             # Atomic move to final location
             temp_file.replace(self.data_file)
-            logger.info(f"Character data saved successfully: {len(self.data)} users")
+            logger.info(f"Character data saved successfully: {len(self.data)} users, {total_chars} characters")
             
         except Exception as e:
             logger.error(f"Failed to save character data to {self.data_file}: {e}")
@@ -312,6 +320,10 @@ class CharacterManager:
                     "message": f"Invalid character number"
                 }
             
+            # Store original state for rollback
+            original_characters = self.data[user_id]["characters"].copy()
+            original_main = self.data[user_id].get("main_character")
+            
             # Remove character
             removed_char = self.data[user_id]["characters"].pop(character_index)
             
@@ -324,7 +336,16 @@ class CharacterManager:
                 # Adjust index down
                 self.data[user_id]["main_character"] = main_idx - 1
             
-            self._save_data()
+            try:
+                self._save_data()
+            except Exception as e:
+                # Rollback the in-memory changes if save fails
+                self.data[user_id]["characters"] = original_characters
+                self.data[user_id]["main_character"] = original_main
+                return {
+                    "success": False,
+                    "message": f"❌ Failed to save after removing character: {str(e)}"
+                }
             
             return {
                 "success": True,
@@ -343,8 +364,20 @@ class CharacterManager:
                 }
             
             char_count = len(self.data[user_id].get("characters", []))
+            # Store original data for rollback
+            original_data = self.data[user_id].copy()
+            
             del self.data[user_id]
-            self._save_data()
+            
+            try:
+                self._save_data()
+            except Exception as e:
+                # Rollback the in-memory change if save fails
+                self.data[user_id] = original_data
+                return {
+                    "success": False,
+                    "message": f"❌ Failed to save after clearing characters: {str(e)}"
+                }
             
             return {
                 "success": True,
