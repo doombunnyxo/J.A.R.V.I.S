@@ -123,13 +123,13 @@ class SearchPipeline:
             from googleapiclient.discovery import build
             
             service = build("customsearch", "v1", developerKey=config.GOOGLE_API_KEY)
-            result = service.cse().list(q=enhanced_query, cx=config.GOOGLE_SEARCH_ENGINE_ID, num=4).execute()
+            result = service.cse().list(q=enhanced_query, cx=config.GOOGLE_SEARCH_ENGINE_ID, num=10).execute()
             
             if 'items' not in result:
                 return f"No search results found for: {query}"
             
             basic_results = []
-            for i, item in enumerate(result['items'][:4], 1):
+            for i, item in enumerate(result['items'][:10], 1):
                 title = item['title']
                 link = item['link']
                 snippet = item.get('snippet', 'No description available')
