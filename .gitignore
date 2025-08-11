@@ -19,6 +19,8 @@
 /data/wow_characters.json
 /data/wow_runs.json
 /data/wow_seasons.json
+# Cleaning roster data
+/data/cleaning_rosters.json
 /data/*.backup
 /data/*.lock
 /data/*.tmp*
