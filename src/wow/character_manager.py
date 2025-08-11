@@ -11,9 +11,78 @@ import traceback
 import shutil
 import os
 from datetime import datetime
+import threading
+import time
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class FileMonitor:
+    """Monitor file changes to track who's writing to the character file"""
+    
+    def __init__(self, file_path: Path):
+        self.file_path = file_path
+        self.monitoring = True
+        self.last_size = None
+        self.last_mtime = None
+        
+    def start_monitoring(self):
+        """Start monitoring the file in a background thread"""
+        def monitor():
+            logger.critical(f"🔍 FILE MONITOR STARTED for {self.file_path}")
+            while self.monitoring:
+                try:
+                    if self.file_path.exists():
+                        stat = self.file_path.stat()
+                        current_size = stat.st_size
+                        current_mtime = stat.st_mtime
+                        
+                        if self.last_size is not None:
+                            # Check for size changes
+                            if current_size != self.last_size:
+                                logger.critical(f"🚨 FILE SIZE CHANGE DETECTED!")
+                                logger.critical(f"   File: {self.file_path}")
+                                logger.critical(f"   Old size: {self.last_size} bytes")  
+                                logger.critical(f"   New size: {current_size} bytes")
+                                logger.critical(f"   Time: {datetime.fromtimestamp(current_mtime)}")
+                                
+                                # If file became 2 bytes, this is the reset we're looking for
+                                if current_size == 2:
+                                    logger.critical(f"🚨🚨🚨 FOUND THE RESET! File is now 2 bytes!")
+                                    logger.critical(f"🚨 STACK TRACE OF CURRENT THREAD:")
+                                    logger.critical(f"🚨 {traceback.format_stack()}")
+                                    
+                                    # Try to read the content
+                                    try:
+                                        with open(self.file_path, 'r') as f:
+                                            content = f.read()
+                                        logger.critical(f"🚨 FILE CONTENT: '{content}'")
+                                    except Exception as e:
+                                        logger.critical(f"🚨 Could not read file content: {e}")
+                        
+                        self.last_size = current_size
+                        self.last_mtime = current_mtime
+                    else:
+                        if self.last_size is not None:
+                            logger.critical(f"🚨 FILE DELETED: {self.file_path}")
+                        self.last_size = None
+                        self.last_mtime = None
+                
+                except Exception as e:
+                    logger.error(f"File monitor error: {e}")
+                
+                time.sleep(0.1)  # Check every 100ms
+            
+            logger.critical(f"🔍 FILE MONITOR STOPPED for {self.file_path}")
+        
+        # Start monitoring in background thread
+        monitor_thread = threading.Thread(target=monitor, daemon=True)
+        monitor_thread.start()
+        
+    def stop_monitoring(self):
+        """Stop monitoring"""
+        self.monitoring = False
 
 
 class CharacterManager:
@@ -26,6 +95,11 @@ class CharacterManager:
         self.startup_errors = []  # Store errors to report to Discord later
         self.discord_channel = None  # Will be set by the bot later
         self._last_known_good_data = {}  # Store last known good data
+        
+        # Start file monitoring IMMEDIATELY to catch any resets
+        self.file_monitor = FileMonitor(self.data_file)
+        self.file_monitor.start_monitoring()
+        
         logger.info(f"Initializing CharacterManager with file: {self.data_file}")
         self._load_data()
         logger.info(f"CharacterManager initialized with {len(self.data)} users")
@@ -132,6 +206,11 @@ class CharacterManager:
     
     def _save_data(self):
         """CENTRALIZED SAVE METHOD - All character data saves go through here"""
+        # Log who called this save
+        stack = traceback.format_stack()
+        caller_info = stack[-2].strip() if len(stack) >= 2 else "unknown"
+        logger.critical(f"🔄 SAVE TRIGGERED BY: {caller_info}")
+        logger.critical(f"🔄 FULL SAVE STACK: {[line.strip() for line in stack[-4:]]}")
         return self._atomic_save(self.data)
     
     def _atomic_save(self, data_to_save: Dict[str, Any]) -> bool:
@@ -255,6 +334,7 @@ class CharacterManager:
                     return False
                 
                 # ATOMIC COMMIT: Move temp file to final location
+                logger.critical(f"🔄 LEGITIMATE SAVE: About to commit {len(data_to_save)} users to {self.data_file}")
                 temp_file.replace(self.data_file)
                 logger.critical(f"💾 ATOMIC SAVE COMPLETE: {len(data_to_save)} users, {total_chars} characters")
                 
