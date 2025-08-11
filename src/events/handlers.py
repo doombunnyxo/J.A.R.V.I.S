@@ -31,6 +31,59 @@ class EventHandlers(commands.Cog):
         """Called when the bot is ready"""
         logger.info(f'{self.bot.user} has connected to Discord!')
         
+        # Report character manager startup errors
+        try:
+            from ..wow.character_manager import character_manager
+            errors = character_manager.get_startup_errors()
+            
+            if errors:
+                # Find a suitable channel to report errors
+                # Try to find a channel with 'bot' or 'admin' in the name
+                report_channel = None
+                for guild in self.bot.guilds:
+                    for channel in guild.text_channels:
+                        if any(keyword in channel.name.lower() for keyword in ['bot', 'admin', 'jarvis', 'test']):
+                            report_channel = channel
+                            break
+                    if report_channel:
+                        break
+                
+                # If no specific channel found, use the first available text channel
+                if not report_channel:
+                    for guild in self.bot.guilds:
+                        if guild.text_channels:
+                            report_channel = guild.text_channels[0]
+                            break
+                
+                if report_channel:
+                    # Set the channel for future error reporting
+                    character_manager.discord_channel = report_channel
+                    
+                    # Send startup errors
+                    embed = discord.Embed(
+                        title="⚠️ Character Manager Startup Report",
+                        description=f"Found {len(errors)} issue(s) during startup:",
+                        color=0xe74c3c
+                    )
+                    
+                    error_text = "\n".join(errors)
+                    if len(error_text) > 1024:  # Discord field limit
+                        error_text = error_text[:1021] + "..."
+                    
+                    embed.add_field(
+                        name="🔍 Details",
+                        value=error_text,
+                        inline=False
+                    )
+                    
+                    embed.set_footer(text="Use !debug_chars for more info")
+                    await report_channel.send(embed=embed)
+                    logger.info(f"Reported {len(errors)} character manager errors to #{report_channel.name}")
+                else:
+                    logger.warning(f"Could not find channel to report {len(errors)} character manager errors")
+        except Exception as e:
+            logger.error(f"Failed to report character manager errors: {e}")
+        
         # Initialize channel context from recent messages
         if self.ai_handler and hasattr(self.ai_handler, 'context_manager'):
             await self._initialize_channel_contexts()

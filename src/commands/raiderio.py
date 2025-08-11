@@ -244,12 +244,12 @@ class RaiderIOCommands(commands.Cog):
                     await ctx.send(embed=embed)
                     return
                 
-                # Get current season setting
+                # Get current season setting with fallback
                 current_season = await season_manager.get_current_season()
                 
                 loading_msg = await ctx.send(f"🔍 Fetching details for run #{sequential_id}...")
-                run_data = await raiderio_client.get_mythic_plus_run_details(
-                    run_info['raiderio_id'], current_season, access_key=config.RAIDERIO_API_KEY
+                run_data = await self._fetch_run_details_with_fallback(
+                    run_info['raiderio_id'], current_season
                 )
                 
             # Manual run ID lookup
@@ -263,8 +263,8 @@ class RaiderIOCommands(commands.Cog):
                         season = await season_manager.get_current_season()
                     
                     loading_msg = await ctx.send(f"🔍 Fetching run details for ID: {run_id}...")
-                    run_data = await raiderio_client.get_mythic_plus_run_details(
-                        run_id, season, access_key=config.RAIDERIO_API_KEY
+                    run_data = await self._fetch_run_details_with_fallback(
+                        run_id, season
                     )
                 except ValueError:
                     await ctx.send("❌ **Usage**: `!rio_details <run_number>` or `!rio_details <run_id>`")
@@ -1049,9 +1049,20 @@ class RaiderIOCommands(commands.Cog):
             color=0xf39c12  # Orange for warning
         )
         
+        # Ensure score is a valid number
+        try:
+            score_text = f"{score:.1f}" if score else "0.0"
+        except (TypeError, ValueError):
+            score_text = "N/A"
+        
+        info_value = f"**Dungeon**: {dungeon}\n**Level**: +{level}\n**Score**: {score_text}"
+        # Ensure field value isn't too long
+        if len(info_value) > 1024:
+            info_value = info_value[:1021] + "..."
+        
         embed.add_field(
             name="📋 Basic Information",
-            value=f"**Dungeon**: {dungeon}\n**Level**: +{level}\n**Score**: {score:.1f}",
+            value=info_value,
             inline=True
         )
         
@@ -1080,9 +1091,14 @@ class RaiderIOCommands(commands.Cog):
         affixes = data.get("affixes", [])
         if affixes:
             affix_names = [affix.get("name", "Unknown") for affix in affixes]
+            affix_text = ", ".join(affix_names)
+            # Ensure field value isn't too long
+            if len(affix_text) > 1024:
+                affix_text = affix_text[:1021] + "..."
+            
             embed.add_field(
                 name="⚡ Affixes",
-                value="\n".join(f"• {name}" for name in affix_names),
+                value=affix_text or "No affix data",
                 inline=False
             )
         
@@ -1092,8 +1108,13 @@ class RaiderIOCommands(commands.Cog):
     async def _create_run_details_embed(self, data: Dict) -> discord.Embed:
         """Create embed for detailed run information"""
         
-        # Basic run info
-        dungeon = data.get("dungeon", "Unknown")
+        # Basic run info - handle both string and object dungeon formats
+        dungeon_data = data.get("dungeon", "Unknown")
+        if isinstance(dungeon_data, dict):
+            dungeon = dungeon_data.get("name", "Unknown")
+        else:
+            dungeon = dungeon_data
+        
         level = data.get("mythic_level", 0)
         score = data.get("score", 0)
         completed = "✅ Completed" if data.get("num_chests", 0) >= 1 else "❌ Depleted"
@@ -1113,12 +1134,24 @@ class RaiderIOCommands(commands.Cog):
         
         # Set dungeon icon as thumbnail if available
         icon_url = data.get("icon_url")
+        if not icon_url and isinstance(dungeon_data, dict):
+            icon_url = dungeon_data.get("icon_url")
+        
         if icon_url:
+            # Handle relative URLs from RaiderIO
+            if icon_url.startswith("/images/"):
+                icon_url = f"https://cdn.raiderio.net{icon_url}"
             embed.set_thumbnail(url=icon_url)
+        
+        # Ensure score is a valid number
+        try:
+            score_text = f"{score:.1f}" if score else "0.0"
+        except (TypeError, ValueError):
+            score_text = "N/A"
         
         embed.add_field(
             name="📋 Run Status",
-            value=f"{completed}\n**Score**: {score:.1f}",
+            value=f"{completed}\n**Score**: {score_text}",
             inline=True
         )
         
@@ -1147,15 +1180,20 @@ class RaiderIOCommands(commands.Cog):
                     diff_seconds = (abs(time_diff_ms) % 60000) // 1000
                     time_comparison = f"-{diff_minutes}:{diff_seconds:02d} overtime"
                 
+                timing_value = f"**Clear Time**: {time_str}\n**Par Time**: {par_str}\n{time_comparison}"
+                # Ensure field value isn't too long
+                if len(timing_value) > 1024:
+                    timing_value = timing_value[:1021] + "..."
+                
                 embed.add_field(
                     name="⏱️ Timing",
-                    value=f"**Clear Time**: {time_str}\n**Par Time**: {par_str}\n{time_comparison}",
+                    value=timing_value,
                     inline=True
                 )
             else:
                 embed.add_field(
                     name="⏱️ Clear Time",
-                    value=time_str,
+                    value=time_str or "Unknown",
                     inline=True
                 )
         
@@ -1163,9 +1201,13 @@ class RaiderIOCommands(commands.Cog):
         completed_at = data.get("completed_at", "")
         if completed_at:
             date_str = completed_at.split('T')[0] if 'T' in completed_at else completed_at
+            # Ensure date string isn't too long
+            if len(date_str) > 1024:
+                date_str = date_str[:1021] + "..."
+            
             embed.add_field(
                 name="📅 Completed",
-                value=date_str,
+                value=date_str or "Unknown",
                 inline=True
             )
         
@@ -1180,23 +1222,31 @@ class RaiderIOCommands(commands.Cog):
                 
                 team_text += f"**{name}** - {spec} {char_class}\n"
             
+            # Discord field value limit is 1024 characters
+            if len(team_text) > 1024:
+                team_text = team_text[:1021] + "..."
+            
             embed.add_field(
                 name="👥 Team Composition",
-                value=team_text.strip(),
+                value=team_text.strip() or "No team data",
                 inline=False
             )
         
-        # Affixes
-        affixes = data.get("affixes", [])
+        # Affixes - handle both 'affixes' and 'weekly_modifiers' fields
+        affixes = data.get("affixes", data.get("weekly_modifiers", []))
         if affixes:
             affix_text = ""
             for affix in affixes:
                 name = affix.get("name", "Unknown")
                 affix_text += f"• {name}\n"
             
+            # Discord field value limit is 1024 characters
+            if len(affix_text) > 1024:
+                affix_text = affix_text[:1021] + "..."
+            
             embed.add_field(
                 name="⚡ Affixes",
-                value=affix_text.strip(),
+                value=affix_text.strip() or "No affix data",
                 inline=False
             )
         
@@ -1294,7 +1344,53 @@ class RaiderIOCommands(commands.Cog):
             'realm': realm,
             'region': region
         }
-
+    async def _fetch_run_details_with_fallback(self, run_id: int, initial_season: str) -> Dict[str, Any]:
+        """
+        Fetch run details with season format fallback
+        Tries different season formats if the initial one fails
+        """
+        # Season formats to try in order
+        seasons_to_try = [
+            initial_season,  # Try the requested season first
+            "season-tww-2",  # Current season format that works
+            "season-tww-1"   # Previous season
+        ]
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_seasons = []
+        for season in seasons_to_try:
+            if season not in seen:
+                unique_seasons.append(season)
+                seen.add(season)
+        
+        logger.debug(f"Trying run details for ID {run_id} with seasons: {unique_seasons}")
+        
+        for season in unique_seasons:
+            try:
+                run_data = await raiderio_client.get_mythic_plus_run_details(
+                    run_id=run_id,
+                    season=season,
+                    access_key=config.RAIDERIO_API_KEY if hasattr(config, 'RAIDERIO_API_KEY') else None
+                )
+                
+                if "error" not in run_data:
+                    logger.debug(f"Successfully fetched run details with season: {season}")
+                    return run_data
+                else:
+                    logger.debug(f"Season {season} failed: {run_data.get('error', 'Unknown error')}")
+                    
+            except Exception as e:
+                logger.debug(f"Exception with season {season}: {e}")
+                continue
+        
+        # If all seasons failed, return the error from the original season
+        logger.warning(f"All season formats failed for run ID {run_id}")
+        return await raiderio_client.get_mythic_plus_run_details(
+            run_id=run_id,
+            season=initial_season,
+            access_key=config.RAIDERIO_API_KEY if hasattr(config, 'RAIDERIO_API_KEY') else None
+        )
 
 async def setup(bot):
     await bot.add_cog(RaiderIOCommands(bot))
