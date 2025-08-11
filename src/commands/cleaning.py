@@ -1,12 +1,11 @@
 """
 Cleaning Roster Commands
-Discord slash commands for managing cleaning rosters
+Discord commands for managing cleaning rosters
 """
 
 import discord
 from discord.ext import commands
-from discord import app_commands
-from typing import Optional, Literal
+from typing import Optional
 from ..cleaning.cleaning_manager import cleaning_manager
 from ..utils.logging import get_logger
 
@@ -19,19 +18,22 @@ class CleaningCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="create_roster", description="Create a new cleaning roster")
-    async def create_roster(self, interaction: discord.Interaction, name: str):
-        """Create a new cleaning roster"""
+    @commands.command(name="create_roster")
+    async def create_roster(self, ctx, *, name: str):
+        """Create a new cleaning roster
+        Usage: !create_roster <name>
+        Example: !create_roster Main House
+        """
         try:
             result = await cleaning_manager.create_roster(
                 roster_name=name,
-                creator_id=str(interaction.user.id),
-                guild_id=str(interaction.guild_id)
+                creator_id=str(ctx.author.id),
+                guild_id=str(ctx.guild.id)
             )
             
             if result["success"]:
                 # Create private channel for the roster
-                guild = interaction.guild
+                guild = ctx.guild
                 category = None
                 
                 # Try to find or create a "Cleaning" category
@@ -46,7 +48,7 @@ class CleaningCommands(commands.Cog):
                 # Create private channel
                 overwrites = {
                     guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                    interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                    ctx.author: discord.PermissionOverwrite(read_messages=True, send_messages=True)
                 }
                 
                 channel_name = f"cleaning-{name.lower().replace(' ', '-')}"
@@ -58,7 +60,7 @@ class CleaningCommands(commands.Cog):
                 )
                 
                 # Update roster with channel ID
-                await cleaning_manager.set_channel(name, str(channel.id), str(interaction.guild_id))
+                await cleaning_manager.set_channel(name, str(channel.id), str(ctx.guild.id))
                 
                 embed = discord.Embed(
                     title="🧹 Cleaning Roster Created",
@@ -67,7 +69,7 @@ class CleaningCommands(commands.Cog):
                 )
                 embed.add_field(
                     name="Next Steps",
-                    value="• Use `/add_member` to add people to the roster\n• Use `/add_task` to add cleaning tasks\n• Tasks reset weekly on Monday",
+                    value="• Use `!add_member` to add people to the roster\n• Use `!add_task` to add cleaning tasks\n• Tasks reset weekly on Monday",
                     inline=False
                 )
                 
@@ -78,25 +80,28 @@ class CleaningCommands(commands.Cog):
                     color=0xff0000
                 )
             
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error creating roster: {e}")
-            await interaction.response.send_message("❌ An error occurred while creating the roster.", ephemeral=True)
+            await ctx.send("❌ An error occurred while creating the roster.")
 
-    @app_commands.command(name="add_member", description="Add a member to a cleaning roster")
-    async def add_member(self, interaction: discord.Interaction, roster: str, user: discord.Member):
-        """Add a member to a cleaning roster"""
+    @commands.command(name="add_member")
+    async def add_member(self, ctx, roster: str, user: discord.Member):
+        """Add a member to a cleaning roster
+        Usage: !add_member <roster> @user
+        Example: !add_member "Main House" @John
+        """
         try:
             result = await cleaning_manager.add_member(
                 roster_name=roster,
                 user_id=str(user.id),
-                guild_id=str(interaction.guild_id)
+                guild_id=str(ctx.guild.id)
             )
             
             if result["success"]:
                 # Add user to the roster's private channel
-                roster_info = await cleaning_manager.get_roster_info(roster, str(interaction.guild_id))
+                roster_info = await cleaning_manager.get_roster_info(roster, str(ctx.guild.id))
                 if roster_info and roster_info["channel_id"]:
                     channel = self.bot.get_channel(int(roster_info["channel_id"]))
                     if channel:
@@ -119,24 +124,39 @@ class CleaningCommands(commands.Cog):
                     color=0xff0000
                 )
             
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error adding member: {e}")
-            await interaction.response.send_message("❌ An error occurred while adding the member.", ephemeral=True)
+            await ctx.send("❌ An error occurred while adding the member.")
 
-    @app_commands.command(name="add_task", description="Add a cleaning task to a roster")
-    async def add_task(self, interaction: discord.Interaction, roster: str, task_name: str, 
-                      category: Literal["personal", "household"], points: app_commands.Range[int, 1, 10]):
-        """Add a cleaning task to a roster"""
+    @commands.command(name="add_task")
+    async def add_task(self, ctx, roster: str, category: str, points: int, *, task_name: str):
+        """Add a cleaning task to a roster
+        Usage: !add_task <roster> <category> <points> <task_name>
+        Example: !add_task "Main House" personal 3 Clean bedroom
+        Example: !add_task "Main House" household 5 Vacuum living room
+        Category must be 'personal' or 'household'
+        Points must be between 1 and 10
+        """
         try:
+            # Validate category
+            if category.lower() not in ["personal", "household"]:
+                await ctx.send("❌ Category must be 'personal' or 'household'")
+                return
+                
+            # Validate points
+            if not 1 <= points <= 10:
+                await ctx.send("❌ Points must be between 1 and 10")
+                return
+            
             result = await cleaning_manager.add_task(
                 roster_name=roster,
-                guild_id=str(interaction.guild_id),
+                guild_id=str(ctx.guild.id),
                 task_name=task_name,
-                category=category,
+                category=category.lower(),
                 points=points,
-                user_id=str(interaction.user.id)
+                user_id=str(ctx.author.id)
             )
             
             if result["success"]:
@@ -157,23 +177,33 @@ class CleaningCommands(commands.Cog):
                     color=0xff0000
                 )
             
-            await interaction.response.send_message(embed=embed)
+            await ctx.send(embed=embed)
             
+        except ValueError:
+            await ctx.send("❌ Points must be a number between 1 and 10")
         except Exception as e:
             logger.error(f"Error adding task: {e}")
-            await interaction.response.send_message("❌ An error occurred while adding the task.", ephemeral=True)
+            await ctx.send("❌ An error occurred while adding the task.")
 
-    @app_commands.command(name="complete_task", description="Mark a cleaning task as completed")
-    async def complete_task(self, interaction: discord.Interaction, roster: str, task_name: str, 
-                          category: Literal["personal", "household"]):
-        """Mark a cleaning task as completed"""
+    @commands.command(name="complete_task")
+    async def complete_task(self, ctx, roster: str, category: str, *, task_name: str):
+        """Mark a cleaning task as completed
+        Usage: !complete_task <roster> <category> <task_name>
+        Example: !complete_task "Main House" personal Clean bedroom
+        Category must be 'personal' or 'household'
+        """
         try:
+            # Validate category
+            if category.lower() not in ["personal", "household"]:
+                await ctx.send("❌ Category must be 'personal' or 'household'")
+                return
+            
             result = await cleaning_manager.complete_task(
                 roster_name=roster,
-                guild_id=str(interaction.guild_id),
+                guild_id=str(ctx.guild.id),
                 task_name=task_name,
-                category=category,
-                user_id=str(interaction.user.id)
+                category=category.lower(),
+                user_id=str(ctx.author.id)
             )
             
             if result["success"]:
@@ -206,17 +236,20 @@ class CleaningCommands(commands.Cog):
                     color=0xff0000
                 )
             
-            await interaction.response.send_message(embed=embed)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error completing task: {e}")
-            await interaction.response.send_message("❌ An error occurred while completing the task.", ephemeral=True)
+            await ctx.send("❌ An error occurred while completing the task.")
 
-    @app_commands.command(name="list_tasks", description="List remaining cleaning tasks for this week")
-    async def list_tasks(self, interaction: discord.Interaction, roster: str):
-        """List remaining cleaning tasks for this week"""
+    @commands.command(name="list_tasks")
+    async def list_tasks(self, ctx, *, roster: str):
+        """List remaining cleaning tasks for this week
+        Usage: !list_tasks <roster>
+        Example: !list_tasks Main House
+        """
         try:
-            remaining_tasks = await cleaning_manager.get_remaining_tasks(roster, str(interaction.guild_id))
+            remaining_tasks = await cleaning_manager.get_remaining_tasks(roster, str(ctx.guild.id))
             
             if not remaining_tasks:
                 embed = discord.Embed(
@@ -224,7 +257,7 @@ class CleaningCommands(commands.Cog):
                     description=f"Roster **{roster}** not found",
                     color=0xff0000
                 )
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                await ctx.send(embed=embed)
                 return
             
             embed = discord.Embed(
@@ -260,17 +293,20 @@ class CleaningCommands(commands.Cog):
                     inline=False
                 )
             
-            await interaction.response.send_message(embed=embed)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error listing tasks: {e}")
-            await interaction.response.send_message("❌ An error occurred while listing tasks.", ephemeral=True)
+            await ctx.send("❌ An error occurred while listing tasks.")
 
-    @app_commands.command(name="completed_tasks", description="List completed cleaning tasks for this week")
-    async def completed_tasks(self, interaction: discord.Interaction, roster: str):
-        """List completed cleaning tasks for this week"""
+    @commands.command(name="completed_tasks")
+    async def completed_tasks(self, ctx, *, roster: str):
+        """List completed cleaning tasks for this week
+        Usage: !completed_tasks <roster>
+        Example: !completed_tasks Main House
+        """
         try:
-            completed_tasks = await cleaning_manager.get_completed_tasks(roster, str(interaction.guild_id))
+            completed_tasks = await cleaning_manager.get_completed_tasks(roster, str(ctx.guild.id))
             
             if completed_tasks is None:
                 embed = discord.Embed(
@@ -278,7 +314,7 @@ class CleaningCommands(commands.Cog):
                     description=f"Roster **{roster}** not found",
                     color=0xff0000
                 )
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                await ctx.send(embed=embed)
                 return
             
             embed = discord.Embed(
@@ -316,17 +352,20 @@ class CleaningCommands(commands.Cog):
                     inline=False
                 )
             
-            await interaction.response.send_message(embed=embed)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error listing completed tasks: {e}")
-            await interaction.response.send_message("❌ An error occurred while listing completed tasks.", ephemeral=True)
+            await ctx.send("❌ An error occurred while listing completed tasks.")
 
-    @app_commands.command(name="points", description="Show current week's points for all roster members")
-    async def points(self, interaction: discord.Interaction, roster: str):
-        """Show current week's points for all roster members"""
+    @commands.command(name="points")
+    async def points(self, ctx, *, roster: str):
+        """Show current week's points for all roster members
+        Usage: !points <roster>
+        Example: !points Main House
+        """
         try:
-            user_points = await cleaning_manager.get_user_points(roster, str(interaction.guild_id))
+            user_points = await cleaning_manager.get_user_points(roster, str(ctx.guild.id))
             
             if user_points is None:
                 embed = discord.Embed(
@@ -334,7 +373,7 @@ class CleaningCommands(commands.Cog):
                     description=f"Roster **{roster}** not found",
                     color=0xff0000
                 )
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                await ctx.send(embed=embed)
                 return
             
             embed = discord.Embed(
@@ -376,17 +415,20 @@ class CleaningCommands(commands.Cog):
                     inline=False
                 )
             
-            await interaction.response.send_message(embed=embed)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error showing points: {e}")
-            await interaction.response.send_message("❌ An error occurred while showing points.", ephemeral=True)
+            await ctx.send("❌ An error occurred while showing points.")
 
-    @app_commands.command(name="lifetime_points", description="Show lifetime points for all roster members")
-    async def lifetime_points(self, interaction: discord.Interaction, roster: str):
-        """Show lifetime points for all roster members"""
+    @commands.command(name="lifetime_points")
+    async def lifetime_points(self, ctx, *, roster: str):
+        """Show lifetime points for all roster members
+        Usage: !lifetime_points <roster>
+        Example: !lifetime_points Main House
+        """
         try:
-            lifetime_points = await cleaning_manager.get_lifetime_points(roster, str(interaction.guild_id))
+            lifetime_points = await cleaning_manager.get_lifetime_points(roster, str(ctx.guild.id))
             
             if lifetime_points is None:
                 embed = discord.Embed(
@@ -394,7 +436,7 @@ class CleaningCommands(commands.Cog):
                     description=f"Roster **{roster}** not found",
                     color=0xff0000
                 )
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                await ctx.send(embed=embed)
                 return
             
             embed = discord.Embed(
@@ -436,17 +478,20 @@ class CleaningCommands(commands.Cog):
                     inline=False
                 )
             
-            await interaction.response.send_message(embed=embed)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error showing lifetime points: {e}")
-            await interaction.response.send_message("❌ An error occurred while showing lifetime points.", ephemeral=True)
+            await ctx.send("❌ An error occurred while showing lifetime points.")
 
-    @app_commands.command(name="roster_info", description="Show information about a cleaning roster")
-    async def roster_info(self, interaction: discord.Interaction, roster: str):
-        """Show information about a cleaning roster"""
+    @commands.command(name="roster_info")
+    async def roster_info(self, ctx, *, roster: str):
+        """Show information about a cleaning roster
+        Usage: !roster_info <roster>
+        Example: !roster_info Main House
+        """
         try:
-            roster_info = await cleaning_manager.get_roster_info(roster, str(interaction.guild_id))
+            roster_info = await cleaning_manager.get_roster_info(roster, str(ctx.guild.id))
             
             if not roster_info:
                 embed = discord.Embed(
@@ -454,7 +499,7 @@ class CleaningCommands(commands.Cog):
                     description=f"Roster **{roster}** not found",
                     color=0xff0000
                 )
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                await ctx.send(embed=embed)
                 return
             
             embed = discord.Embed(
@@ -511,11 +556,11 @@ class CleaningCommands(commands.Cog):
             
             embed.set_footer(text=f"Created by User {roster_info['creator_id']}")
             
-            await interaction.response.send_message(embed=embed)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error showing roster info: {e}")
-            await interaction.response.send_message("❌ An error occurred while showing roster info.", ephemeral=True)
+            await ctx.send("❌ An error occurred while showing roster info.")
 
 
 async def setup(bot):
