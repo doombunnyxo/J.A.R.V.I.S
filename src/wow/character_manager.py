@@ -156,13 +156,10 @@ class CharacterManager:
                             protection_msg = f"File has {len(existing_data)} users, blocking empty save!"
                             logger.critical(protection_msg)
                             self.startup_errors.append(f"🛡️ **Protected**: {len(existing_data)} user(s) preserved")
-                            # Post critical error to Discord
-                            asyncio.create_task(self._report_critical_error(
-                                f"🚨 **CRITICAL DATA PROTECTION**\n"
-                                f"Blocked attempt to overwrite character file with empty data!\n"
-                                f"File contains {len(existing_data)} users with character data.\n"
-                                f"**Action**: Save operation cancelled to prevent data loss."
-                            ))
+                            # Store critical error for Discord reporting
+                            self.startup_errors.append(
+                                f"🚨 **CRITICAL**: Blocked empty save! File has {len(existing_data)} users"
+                            )
                             return False
                 except Exception as check_error:
                     logger.critical(f"Error checking existing file: {check_error}")
@@ -178,14 +175,10 @@ class CharacterManager:
                 error_msg = f"CRITICAL: Refusing to save! Memory has 0 users but last known good had {len(self._last_known_good_data)} users"
                 logger.critical(error_msg)
                 self.startup_errors.append(f"🚫 **Save Blocked**: Protected {len(self._last_known_good_data)} users from deletion")
-                # Post critical error to Discord
-                asyncio.create_task(self._report_critical_error(
-                    f"🚨 **CRITICAL DATA LOSS PREVENTION**\n"
-                    f"Blocked save operation that would delete {len(self._last_known_good_data)} users!\n"
-                    f"**Data in memory**: 0 users\n"
-                    f"**Last known good**: {len(self._last_known_good_data)} users\n"
-                    f"**Action**: Save cancelled, data restored from last known good state."
-                ))
+                # Store critical error for Discord reporting
+                self.startup_errors.append(
+                    f"🚨 **CRITICAL**: Blocked deletion of {len(self._last_known_good_data)} users! Data restored."
+                )
                 # Restore from last known good
                 self.data = self._last_known_good_data.copy()
                 logger.critical("Restored data from last known good state")
@@ -214,11 +207,7 @@ class CharacterManager:
                     error_msg = f"CRITICAL: Cannot create backup before save: {backup_error}"
                     logger.critical(error_msg)
                     self.startup_errors.append(f"❌ **Backup Failed**: {backup_error}")
-                    asyncio.create_task(self._report_critical_error(
-                        f"🚨 **BACKUP FAILURE - SAVE ABORTED**\n"
-                        f"Cannot create backup file: {backup_error}\n"
-                        f"**Action**: Save operation cancelled to prevent data loss without backup."
-                    ))
+                    self.startup_errors.append(f"🚨 **CRITICAL**: Save aborted - backup failure!")
                     return False
             
             # Log what we're about to save
@@ -243,11 +232,7 @@ class CharacterManager:
                     logger.critical(error_msg)
                     temp_file.unlink()  # Clean up bad temp file
                     self.startup_errors.append(f"❌ **Temp File Error**: Only {temp_size} bytes written")
-                    asyncio.create_task(self._report_critical_error(
-                        f"🚨 **SAVE CORRUPTION DETECTED**\n"
-                        f"Temporary file was only {temp_size} bytes!\n"
-                        f"**Action**: Save aborted, temp file deleted, original preserved."
-                    ))
+                    self.startup_errors.append(f"🚨 **CRITICAL**: Save corruption detected! Temp file only {temp_size} bytes!")
                     return False
                 
                 # Verify temp file can be loaded back as valid JSON
@@ -262,11 +247,7 @@ class CharacterManager:
                     logger.critical(error_msg)
                     temp_file.unlink()  # Clean up corrupted temp file
                     self.startup_errors.append(f"❌ **Verification Failed**: {verify_error}")
-                    asyncio.create_task(self._report_critical_error(
-                        f"🚨 **SAVE VERIFICATION FAILED**\n"
-                        f"Temp file failed JSON verification: {verify_error}\n"
-                        f"**Action**: Save aborted, corrupted temp file deleted."
-                    ))
+                    self.startup_errors.append(f"🚨 **CRITICAL**: Temp file verification failed!")
                     return False
                 
                 # ATOMIC COMMIT: Move temp file to final location
@@ -280,12 +261,7 @@ class CharacterManager:
                     if final_size <= 2:
                         error_msg = f"CRITICAL: File was committed but is only {final_size} bytes! External interference detected!"
                         logger.critical(error_msg)
-                        asyncio.create_task(self._report_critical_error(
-                            f"🚨 **POST-SAVE CORRUPTION DETECTED**\n"
-                            f"File was saved successfully but immediately corrupted to {final_size} bytes!\n"
-                            f"**Possible cause**: External process overwriting file\n"
-                            f"**Action**: Investigation required - backup available."
-                        ))
+                        self.startup_errors.append(f"🚨 **CRITICAL**: File corrupted after save! {final_size} bytes!")
                         return False
                 
                 # SUCCESS: Update last known good data
@@ -314,15 +290,9 @@ class CharacterManager:
             self.startup_errors.append(
                 f"❌ **Critical Save Error**: {type(e).__name__}: {str(e)[:100]}"
             )
-            
-            # Report critical error to Discord
-            asyncio.create_task(self._report_critical_error(
-                f"🚨 **CRITICAL SAVE SYSTEM FAILURE**\n"
-                f"**Error**: {type(e).__name__}: {str(e)[:200]}\n"
-                f"**File**: {self.data_file}\n"
-                f"**Action**: Save failed, original file preserved unchanged.\n"
-                f"**Status**: System in read-only mode until resolved."
-            ))
+            self.startup_errors.append(
+                f"🚨 **CRITICAL**: Save system failure! Read-only mode active."
+            )
             
             # Clean up any temp files but NEVER touch the original
             try:
