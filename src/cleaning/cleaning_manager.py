@@ -425,7 +425,9 @@ class CleaningManager:
         current_week = self._get_current_week_start()
         self._ensure_current_week_data(roster_key, current_week)
         
-        return self.data[roster_key]
+        roster_data = self.data[roster_key].copy()
+        roster_data["roster_key"] = roster_key
+        return roster_data
 
     async def get_remaining_tasks(self, roster_name: str, guild_id: str) -> Optional[Dict[str, Any]]:
         """Get remaining tasks for the current week"""
@@ -476,6 +478,14 @@ class CleaningManager:
             if roster_data["guild_id"] == guild_id:
                 rosters.append(roster_data)
         return rosters
+
+    async def get_roster_by_channel(self, channel_id: str) -> Optional[Dict[str, Any]]:
+        """Get roster associated with a specific channel"""
+        for roster_key, roster_data in self.data.items():
+            if roster_data.get("channel_id") == channel_id:
+                roster_data["roster_key"] = roster_key
+                return roster_data
+        return None
 
 
 # Global cleaning manager instance

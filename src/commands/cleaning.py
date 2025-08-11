@@ -18,6 +18,11 @@ class CleaningCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def _get_roster_from_context(self, ctx) -> Optional[dict]:
+        """Get roster information from channel context"""
+        roster_info = await cleaning_manager.get_roster_by_channel(str(ctx.channel.id))
+        return roster_info
+
     @commands.command(name="create_roster")
     async def create_roster(self, ctx, *, name: str):
         """Create a new cleaning roster
@@ -45,10 +50,11 @@ class CleaningCommands(commands.Cog):
                 if not category:
                     category = await guild.create_category("Cleaning")
                 
-                # Create private channel
+                # Create private channel with bot access
                 overwrites = {
                     guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                    ctx.author: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                    ctx.author: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+                    guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)  # Bot access
                 }
                 
                 channel_name = f"cleaning-{name.lower().replace(' ', '-')}"
@@ -69,7 +75,7 @@ class CleaningCommands(commands.Cog):
                 )
                 embed.add_field(
                     name="Next Steps",
-                    value="• Use `!add_member` to add people to the roster\n• Use `!add_task` to add cleaning tasks\n• Tasks reset weekly on Monday",
+                    value=f"• Go to {channel.mention} to manage your roster\n• Use `!add_member @user` to add people\n• Use `!add_task` to add cleaning tasks\n• Tasks reset weekly on Monday",
                     inline=False
                 )
                 
@@ -87,29 +93,32 @@ class CleaningCommands(commands.Cog):
             await ctx.send("❌ An error occurred while creating the roster.")
 
     @commands.command(name="add_member")
-    async def add_member(self, ctx, roster: str, user: discord.Member):
-        """Add a member to a cleaning roster
-        Usage: !add_member <roster> @user
-        Example: !add_member "Main House" @John
+    async def add_member(self, ctx, user: discord.Member):
+        """Add a member to this roster's channel
+        Usage: !add_member @user
+        Example: !add_member @John
+        Must be used in a cleaning roster channel
         """
         try:
+            # Check if this is a roster channel
+            roster_info = await self._get_roster_from_context(ctx)
+            if not roster_info:
+                await ctx.send("❌ This command must be used in a cleaning roster channel. Use `!create_roster` to create one.")
+                return
+            
             result = await cleaning_manager.add_member(
-                roster_name=roster,
+                roster_name=roster_info["name"],
                 user_id=str(user.id),
                 guild_id=str(ctx.guild.id)
             )
             
             if result["success"]:
-                # Add user to the roster's private channel
-                roster_info = await cleaning_manager.get_roster_info(roster, str(ctx.guild.id))
-                if roster_info and roster_info["channel_id"]:
-                    channel = self.bot.get_channel(int(roster_info["channel_id"]))
-                    if channel:
-                        await channel.set_permissions(user, read_messages=True, send_messages=True)
+                # Add user to the current channel
+                await ctx.channel.set_permissions(user, read_messages=True, send_messages=True)
                 
                 embed = discord.Embed(
                     title="✅ Member Added",
-                    description=f"{user.mention} has been added to **{roster}**",
+                    description=f"{user.mention} has been added to **{roster_info['name']}**",
                     color=0x00ff00
                 )
                 embed.add_field(
@@ -131,15 +140,22 @@ class CleaningCommands(commands.Cog):
             await ctx.send("❌ An error occurred while adding the member.")
 
     @commands.command(name="add_task")
-    async def add_task(self, ctx, roster: str, category: str, points: int, *, task_name: str):
-        """Add a cleaning task to a roster
-        Usage: !add_task <roster> <category> <points> <task_name>
-        Example: !add_task "Main House" personal 3 Clean bedroom
-        Example: !add_task "Main House" household 5 Vacuum living room
+    async def add_task(self, ctx, category: str, points: int, *, task_name: str):
+        """Add a cleaning task to this roster
+        Usage: !add_task <category> <points> <task_name>
+        Example: !add_task personal 3 Clean bedroom
+        Example: !add_task household 5 Vacuum living room
         Category must be 'personal' or 'household'
         Points must be between 1 and 10
+        Must be used in a cleaning roster channel
         """
         try:
+            # Check if this is a roster channel
+            roster_info = await self._get_roster_from_context(ctx)
+            if not roster_info:
+                await ctx.send("❌ This command must be used in a cleaning roster channel. Use `!create_roster` to create one.")
+                return
+            
             # Validate category
             if category.lower() not in ["personal", "household"]:
                 await ctx.send("❌ Category must be 'personal' or 'household'")
@@ -151,7 +167,7 @@ class CleaningCommands(commands.Cog):
                 return
             
             result = await cleaning_manager.add_task(
-                roster_name=roster,
+                roster_name=roster_info["name"],
                 guild_id=str(ctx.guild.id),
                 task_name=task_name,
                 category=category.lower(),
@@ -185,24 +201,70 @@ class CleaningCommands(commands.Cog):
             logger.error(f"Error adding task: {e}")
             await ctx.send("❌ An error occurred while adding the task.")
 
-    @commands.command(name="complete_task")
-    async def complete_task(self, ctx, roster: str, category: str, *, task_name: str):
+    @commands.command(name="complete_task", aliases=["complete", "done"])
+    async def complete_task(self, ctx, task_identifier: str, category: str = None):
         """Mark a cleaning task as completed
-        Usage: !complete_task <roster> <category> <task_name>
-        Example: !complete_task "Main House" personal Clean bedroom
-        Category must be 'personal' or 'household'
+        Usage: !complete_task <number> or !complete_task <category> <task_name>
+        Examples: 
+            !complete_task 1 (completes task #1 from !tasks list)
+            !complete_task personal Clean bedroom
+            !done 3 (alias for complete_task)
+        Must be used in a cleaning roster channel
         """
         try:
-            # Validate category
-            if category.lower() not in ["personal", "household"]:
-                await ctx.send("❌ Category must be 'personal' or 'household'")
+            # Check if this is a roster channel
+            roster_info = await self._get_roster_from_context(ctx)
+            if not roster_info:
+                await ctx.send("❌ This command must be used in a cleaning roster channel.")
                 return
             
+            # Get remaining tasks to create numbered list
+            remaining_tasks = await cleaning_manager.get_remaining_tasks(roster_info["name"], str(ctx.guild.id))
+            if not remaining_tasks:
+                await ctx.send("❌ Could not fetch tasks for this roster.")
+                return
+            
+            # Create numbered task list
+            all_tasks = []
+            for task in remaining_tasks["personal"]:
+                all_tasks.append({"task": task, "category": "personal"})
+            for task in remaining_tasks["household"]:
+                all_tasks.append({"task": task, "category": "household"})
+            
+            if not all_tasks:
+                await ctx.send("🎉 No tasks remaining! All done for this week!")
+                return
+            
+            # Check if first argument is a number
+            try:
+                task_number = int(task_identifier)
+                if 1 <= task_number <= len(all_tasks):
+                    # Complete task by number
+                    selected_task = all_tasks[task_number - 1]
+                    task_name = selected_task["task"]["name"]
+                    task_category = selected_task["category"]
+                else:
+                    await ctx.send(f"❌ Task number must be between 1 and {len(all_tasks)}. Use `!tasks` to see the numbered list.")
+                    return
+            except ValueError:
+                # First argument is not a number, treat as category
+                if category is None:
+                    await ctx.send("❌ Usage: `!complete_task <number>` or `!complete_task <category> <task_name>`")
+                    return
+                
+                # Validate category
+                if task_identifier.lower() not in ["personal", "household"]:
+                    await ctx.send("❌ Category must be 'personal' or 'household'")
+                    return
+                
+                task_category = task_identifier.lower()
+                task_name = category  # category parameter is actually task name in this case
+            
             result = await cleaning_manager.complete_task(
-                roster_name=roster,
+                roster_name=roster_info["name"],
                 guild_id=str(ctx.guild.id),
                 task_name=task_name,
-                category=category.lower(),
+                category=task_category,
                 user_id=str(ctx.author.id)
             )
             
@@ -242,34 +304,50 @@ class CleaningCommands(commands.Cog):
             logger.error(f"Error completing task: {e}")
             await ctx.send("❌ An error occurred while completing the task.")
 
-    @commands.command(name="list_tasks")
-    async def list_tasks(self, ctx, *, roster: str):
+    @commands.command(name="list_tasks", aliases=["tasks"])
+    async def list_tasks(self, ctx):
         """List remaining cleaning tasks for this week
-        Usage: !list_tasks <roster>
-        Example: !list_tasks Main House
+        Usage: !list_tasks or !tasks
+        Shows numbered tasks that can be completed with !complete_task <number>
+        Must be used in a cleaning roster channel
         """
         try:
-            remaining_tasks = await cleaning_manager.get_remaining_tasks(roster, str(ctx.guild.id))
+            # Check if this is a roster channel
+            roster_info = await self._get_roster_from_context(ctx)
+            if not roster_info:
+                await ctx.send("❌ This command must be used in a cleaning roster channel.")
+                return
+            
+            remaining_tasks = await cleaning_manager.get_remaining_tasks(roster_info["name"], str(ctx.guild.id))
             
             if not remaining_tasks:
                 embed = discord.Embed(
                     title="❌ Error",
-                    description=f"Roster **{roster}** not found",
+                    description=f"Could not fetch tasks for **{roster_info['name']}**",
                     color=0xff0000
                 )
                 await ctx.send(embed=embed)
                 return
             
             embed = discord.Embed(
-                title=f"📋 Remaining Tasks - {roster}",
-                description=f"Tasks remaining for this week ({remaining_tasks['total_remaining']} total)",
+                title=f"📋 Remaining Tasks - {roster_info['name']}",
+                description=f"Tasks remaining for this week ({remaining_tasks['total_remaining']} total)\nUse `!complete_task <number>` or `!done <number>` to complete",
                 color=0x0099ff
             )
+            
+            # Create numbered list combining personal and household tasks
+            all_tasks = []
+            task_number = 1
             
             # Personal tasks
             personal_tasks = remaining_tasks["personal"]
             if personal_tasks:
-                personal_text = "\n".join([f"• **{task['name']}** ({task['points']} pts)" for task in personal_tasks])
+                personal_text = ""
+                for task in personal_tasks:
+                    doubled_indicator = " ⚠️ *doubled*" if task.get("doubled_from_previous") else ""
+                    personal_text += f"`{task_number}.` **{task['name']}** ({task['points']} pts){doubled_indicator}\n"
+                    task_number += 1
+                
                 embed.add_field(
                     name=f"👤 Personal Tasks ({len(personal_tasks)})",
                     value=personal_text[:1024],  # Discord field limit
@@ -279,7 +357,12 @@ class CleaningCommands(commands.Cog):
             # Household tasks
             household_tasks = remaining_tasks["household"]
             if household_tasks:
-                household_text = "\n".join([f"• **{task['name']}** ({task['points']} pts)" for task in household_tasks])
+                household_text = ""
+                for task in household_tasks:
+                    doubled_indicator = " ⚠️ *doubled*" if task.get("doubled_from_previous") else ""
+                    household_text += f"`{task_number}.` **{task['name']}** ({task['points']} pts){doubled_indicator}\n"
+                    task_number += 1
+                
                 embed.add_field(
                     name=f"🏠 Household Tasks ({len(household_tasks)})",
                     value=household_text[:1024],  # Discord field limit
@@ -292,6 +375,12 @@ class CleaningCommands(commands.Cog):
                     value="No tasks remaining for this week!",
                     inline=False
                 )
+            else:
+                embed.add_field(
+                    name="💡 Quick Complete",
+                    value="Use `!done 1` to complete task #1, or `!complete_task personal Clean bedroom` for full name",
+                    inline=False
+                )
             
             await ctx.send(embed=embed)
             
@@ -299,26 +388,32 @@ class CleaningCommands(commands.Cog):
             logger.error(f"Error listing tasks: {e}")
             await ctx.send("❌ An error occurred while listing tasks.")
 
-    @commands.command(name="completed_tasks")
-    async def completed_tasks(self, ctx, *, roster: str):
+    @commands.command(name="completed_tasks", aliases=["completed"])
+    async def completed_tasks(self, ctx):
         """List completed cleaning tasks for this week
-        Usage: !completed_tasks <roster>
-        Example: !completed_tasks Main House
+        Usage: !completed_tasks or !completed
+        Must be used in a cleaning roster channel
         """
         try:
-            completed_tasks = await cleaning_manager.get_completed_tasks(roster, str(ctx.guild.id))
+            # Check if this is a roster channel
+            roster_info = await self._get_roster_from_context(ctx)
+            if not roster_info:
+                await ctx.send("❌ This command must be used in a cleaning roster channel.")
+                return
+            
+            completed_tasks = await cleaning_manager.get_completed_tasks(roster_info["name"], str(ctx.guild.id))
             
             if completed_tasks is None:
                 embed = discord.Embed(
                     title="❌ Error",
-                    description=f"Roster **{roster}** not found",
+                    description=f"Could not fetch completed tasks for **{roster_info['name']}**",
                     color=0xff0000
                 )
                 await ctx.send(embed=embed)
                 return
             
             embed = discord.Embed(
-                title=f"✅ Completed Tasks - {roster}",
+                title=f"✅ Completed Tasks - {roster_info['name']}",
                 description=f"Tasks completed this week ({len(completed_tasks)} total)",
                 color=0x00ff00
             )
@@ -359,25 +454,31 @@ class CleaningCommands(commands.Cog):
             await ctx.send("❌ An error occurred while listing completed tasks.")
 
     @commands.command(name="points")
-    async def points(self, ctx, *, roster: str):
+    async def points(self, ctx):
         """Show current week's points for all roster members
-        Usage: !points <roster>
-        Example: !points Main House
+        Usage: !points
+        Must be used in a cleaning roster channel
         """
         try:
-            user_points = await cleaning_manager.get_user_points(roster, str(ctx.guild.id))
+            # Check if this is a roster channel
+            roster_info = await self._get_roster_from_context(ctx)
+            if not roster_info:
+                await ctx.send("❌ This command must be used in a cleaning roster channel.")
+                return
+            
+            user_points = await cleaning_manager.get_user_points(roster_info["name"], str(ctx.guild.id))
             
             if user_points is None:
                 embed = discord.Embed(
                     title="❌ Error",
-                    description=f"Roster **{roster}** not found",
+                    description=f"Could not fetch points for **{roster_info['name']}**",
                     color=0xff0000
                 )
                 await ctx.send(embed=embed)
                 return
             
             embed = discord.Embed(
-                title=f"📊 Weekly Points - {roster}",
+                title=f"📊 Weekly Points - {roster_info['name']}",
                 description="Points earned this week (Goal: 4 points per person)",
                 color=0x0099ff
             )
@@ -421,26 +522,32 @@ class CleaningCommands(commands.Cog):
             logger.error(f"Error showing points: {e}")
             await ctx.send("❌ An error occurred while showing points.")
 
-    @commands.command(name="lifetime_points")
-    async def lifetime_points(self, ctx, *, roster: str):
+    @commands.command(name="lifetime_points", aliases=["lifetime"])
+    async def lifetime_points(self, ctx):
         """Show lifetime points for all roster members
-        Usage: !lifetime_points <roster>
-        Example: !lifetime_points Main House
+        Usage: !lifetime_points or !lifetime
+        Must be used in a cleaning roster channel
         """
         try:
-            lifetime_points = await cleaning_manager.get_lifetime_points(roster, str(ctx.guild.id))
+            # Check if this is a roster channel
+            roster_info = await self._get_roster_from_context(ctx)
+            if not roster_info:
+                await ctx.send("❌ This command must be used in a cleaning roster channel.")
+                return
+            
+            lifetime_points = await cleaning_manager.get_lifetime_points(roster_info["name"], str(ctx.guild.id))
             
             if lifetime_points is None:
                 embed = discord.Embed(
                     title="❌ Error",
-                    description=f"Roster **{roster}** not found",
+                    description=f"Could not fetch lifetime points for **{roster_info['name']}**",
                     color=0xff0000
                 )
                 await ctx.send(embed=embed)
                 return
             
             embed = discord.Embed(
-                title=f"🏆 Lifetime Points - {roster}",
+                title=f"🏆 Lifetime Points - {roster_info['name']}",
                 description="All-time points earned by roster members",
                 color=0xffd700  # Gold color
             )
@@ -484,22 +591,17 @@ class CleaningCommands(commands.Cog):
             logger.error(f"Error showing lifetime points: {e}")
             await ctx.send("❌ An error occurred while showing lifetime points.")
 
-    @commands.command(name="roster_info")
-    async def roster_info(self, ctx, *, roster: str):
-        """Show information about a cleaning roster
-        Usage: !roster_info <roster>
-        Example: !roster_info Main House
+    @commands.command(name="roster_info", aliases=["roster", "info"])
+    async def roster_info(self, ctx):
+        """Show information about this cleaning roster
+        Usage: !roster_info, !roster, or !info
+        Must be used in a cleaning roster channel
         """
         try:
-            roster_info = await cleaning_manager.get_roster_info(roster, str(ctx.guild.id))
-            
+            # Check if this is a roster channel
+            roster_info = await self._get_roster_from_context(ctx)
             if not roster_info:
-                embed = discord.Embed(
-                    title="❌ Error",
-                    description=f"Roster **{roster}** not found",
-                    color=0xff0000
-                )
-                await ctx.send(embed=embed)
+                await ctx.send("❌ This command must be used in a cleaning roster channel.")
                 return
             
             embed = discord.Embed(
@@ -515,7 +617,7 @@ class CleaningCommands(commands.Cog):
             
             embed.add_field(
                 name="👥 Members",
-                value="\n".join([f"• {name}" for name in member_names]),
+                value="\n".join([f"• {name}" for name in member_names]) if member_names else "No members yet",
                 inline=True
             )
             
@@ -524,21 +626,8 @@ class CleaningCommands(commands.Cog):
             household_count = len(roster_info["base_tasks"]["household"])
             
             embed.add_field(
-                name="📋 Tasks",
+                name="📋 Base Tasks",
                 value=f"Personal: {personal_count}\nHousehold: {household_count}",
-                inline=True
-            )
-            
-            # Channel info
-            if roster_info["channel_id"]:
-                channel = self.bot.get_channel(int(roster_info["channel_id"]))
-                channel_mention = channel.mention if channel else "Channel not found"
-            else:
-                channel_mention = "No channel set"
-            
-            embed.add_field(
-                name="💬 Channel",
-                value=channel_mention,
                 inline=True
             )
             
@@ -554,13 +643,74 @@ class CleaningCommands(commands.Cog):
                 inline=True
             )
             
-            embed.set_footer(text=f"Created by User {roster_info['creator_id']}")
+            # Add help text
+            embed.add_field(
+                name="📖 Available Commands",
+                value=(
+                    "`!add_member @user` - Add member\n"
+                    "`!add_task <category> <points> <name>` - Add task\n"
+                    "`!tasks` - Show numbered task list\n"
+                    "`!done <number>` - Complete task by number\n"
+                    "`!complete_task <number>` - Complete task by number\n"
+                    "`!completed` - Show completed tasks\n"
+                    "`!points` - Show weekly points\n"
+                    "`!lifetime` - Show lifetime points"
+                ),
+                inline=False
+            )
+            
+            embed.set_footer(text=f"Tasks reset every Monday • Weekly goal: 4 points per person")
             
             await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error showing roster info: {e}")
             await ctx.send("❌ An error occurred while showing roster info.")
+
+    @commands.command(name="my_rosters")
+    async def my_rosters(self, ctx):
+        """List all cleaning rosters you're a member of
+        Usage: !my_rosters
+        """
+        try:
+            guild_rosters = await cleaning_manager.get_guild_rosters(str(ctx.guild.id))
+            user_rosters = []
+            
+            for roster in guild_rosters:
+                if str(ctx.author.id) in roster["members"]:
+                    user_rosters.append(roster)
+            
+            if user_rosters:
+                embed = discord.Embed(
+                    title="🧹 Your Cleaning Rosters",
+                    description=f"You are a member of {len(user_rosters)} roster(s)",
+                    color=0x0099ff
+                )
+                
+                for roster in user_rosters:
+                    channel_mention = "No channel"
+                    if roster["channel_id"]:
+                        channel = self.bot.get_channel(int(roster["channel_id"]))
+                        if channel:
+                            channel_mention = channel.mention
+                    
+                    embed.add_field(
+                        name=roster["name"],
+                        value=f"Channel: {channel_mention}\nMembers: {len(roster['members'])}",
+                        inline=False
+                    )
+            else:
+                embed = discord.Embed(
+                    title="📋 No Rosters",
+                    description="You are not a member of any cleaning rosters.\nAsk someone to add you with `!add_member` or create your own with `!create_roster`",
+                    color=0xff9900
+                )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Error listing user rosters: {e}")
+            await ctx.send("❌ An error occurred while listing your rosters.")
 
 
 async def setup(bot):
