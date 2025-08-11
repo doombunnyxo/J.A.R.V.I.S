@@ -63,13 +63,11 @@ class CharacterManager:
                                     self.data = loaded_data
                                     self.startup_errors.append(f"✅ Restored {len(self.data)} users from backup")
                                     # Save the restored data
-                                    logger.critical(f"🔄 ABOUT TO SAVE RESTORED DATA: {len(self.data)} users")
-                                    logger.critical(f"🔄 DATA PREVIEW: {str(self.data)[:200]}")
                                     save_result = self._save_data()
-                                    logger.critical(f"🔄 SAVE RESULT: {save_result}")
                                     if not save_result:
-                                        logger.critical("🚨 RESTORE SAVE FAILED! This might explain the file reset!")
+                                        logger.critical("🚨 RESTORE SAVE FAILED!")
                                         self.startup_errors.append("🚨 **CRITICAL**: Restore save failed!")
+                                        return  # CRITICAL: Don't continue processing if restore save fails
                                     return
                 
                 with open(self.data_file, 'r', encoding='utf-8') as f:
@@ -134,8 +132,6 @@ class CharacterManager:
     
     def _save_data(self):
         """CENTRALIZED SAVE METHOD - All character data saves go through here"""
-        logger.critical(f"📝 _save_data() called with self.data = {len(self.data)} users")
-        logger.critical(f"📝 DATA STRUCTURE CHECK: {type(self.data)} = {str(self.data)[:100]}...")
         return self._atomic_save(self.data)
     
     def _atomic_save(self, data_to_save: Dict[str, Any]) -> bool:
