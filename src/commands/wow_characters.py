@@ -139,12 +139,19 @@ class WoWCharacterCommands(commands.Cog):
         Usage:
         !debug_chars
         """
-        # Check if user is admin
-        if str(ctx.author.id) != str(config.AUTHORIZED_USER_ID):
-            await ctx.send("❌ This command is admin-only")
+        # Prevent duplicate execution
+        command_key = f"debug_chars_{ctx.author.id}"
+        if command_key in self._executing_commands:
             return
         
+        self._executing_commands.add(command_key)
+        
         try:
+            # Check if user is admin
+            if str(ctx.author.id) != str(config.AUTHORIZED_USER_ID):
+                await ctx.send("❌ This command is admin-only")
+                return
+            
             # Show raw data structure
             embed = discord.Embed(
                 title="🔧 Character Manager Debug Info",
@@ -227,6 +234,8 @@ class WoWCharacterCommands(commands.Cog):
             
         except Exception as e:
             await ctx.send(f"❌ Debug error: {type(e).__name__}: {str(e)}")
+        finally:
+            self._executing_commands.discard(command_key)
     
     @commands.command(name='reload_chars')
     async def reload_characters(self, ctx):
