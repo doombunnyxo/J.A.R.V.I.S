@@ -13,6 +13,10 @@ Features:
 import asyncio
 import discord
 from discord.ext import commands
+import fcntl
+import os
+import sys
+from pathlib import Path
 from src.config import config
 from src.data.persistence import data_manager
 from src.ai.handler_refactored import AIHandler
@@ -20,6 +24,44 @@ from src.utils.logging import setup_logger
 
 # Set up logging
 logger = setup_logger("discord_bot", level="INFO")
+
+def acquire_instance_lock():
+    """Ensure only one bot instance runs at a time"""
+    lock_file = Path("data/bot.lock")
+    
+    # Create data directory if it doesn't exist
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        # Open lock file
+        lock_fd = os.open(str(lock_file), os.O_CREAT | os.O_WRONLY | os.O_TRUNC)
+        
+        # Try to acquire exclusive lock (non-blocking)
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        
+        # Write current PID to lock file
+        os.write(lock_fd, f"{os.getpid()}\n".encode())
+        os.fsync(lock_fd)
+        
+        logger.info(f"✅ Acquired instance lock (PID: {os.getpid()})")
+        return lock_fd
+        
+    except OSError as e:
+        logger.critical(f"❌ ANOTHER BOT INSTANCE IS ALREADY RUNNING!")
+        logger.critical(f"Lock file: {lock_file}")
+        logger.critical(f"Error: {e}")
+        
+        # Try to read PID from existing lock file
+        try:
+            with open(lock_file, 'r') as f:
+                existing_pid = f.read().strip()
+            logger.critical(f"Existing instance PID: {existing_pid}")
+        except:
+            pass
+            
+        logger.critical("This prevents file corruption from multiple instances!")
+        logger.critical("Stop the other instance or wait for it to finish.")
+        sys.exit(1)
 
 async def setup_bot():
     """Setup and configure the bot"""
@@ -121,6 +163,9 @@ async def main():
     """Main entry point"""
     logger.info("Starting Discord Bot...")
     
+    # CRITICAL: Acquire single instance lock to prevent race conditions
+    lock_fd = acquire_instance_lock()
+    
     bot = await setup_bot()
     if not bot:
         logger.error("Bot setup failed. Exiting.")
@@ -141,6 +186,14 @@ async def main():
         if bot:
             await bot.close()
             logger.info("Bot shutdown complete")
+        
+        # Release instance lock
+        try:
+            if 'lock_fd' in locals():
+                os.close(lock_fd)
+                logger.info("✅ Released instance lock")
+        except:
+            pass
 
 if __name__ == '__main__':
     asyncio.run(main())
