@@ -50,8 +50,6 @@ class FileMonitor:
                                 # If file became 2 bytes, this is the reset we're looking for
                                 if current_size == 2:
                                     logger.critical(f"🚨🚨🚨 FOUND THE RESET! File is now 2 bytes!")
-                                    logger.critical(f"🚨 STACK TRACE OF CURRENT THREAD:")
-                                    logger.critical(f"🚨 {traceback.format_stack()}")
                                     
                                     # Try to read the content
                                     try:
@@ -60,6 +58,16 @@ class FileMonitor:
                                         logger.critical(f"🚨 FILE CONTENT: '{content}'")
                                     except Exception as e:
                                         logger.critical(f"🚨 Could not read file content: {e}")
+                                    
+                                    # Log ALL threads and their stacks
+                                    import sys
+                                    logger.critical(f"🚨 ALL THREAD STACK TRACES:")
+                                    for thread_id, frame in sys._current_frames().items():
+                                        logger.critical(f"🚨 THREAD {thread_id}:")
+                                        stack = traceback.format_stack(frame)
+                                        for line in stack[-10:]:  # Last 10 stack frames
+                                            logger.critical(f"🚨   {line.strip()}")
+                                        logger.critical(f"🚨 --- END THREAD {thread_id} ---")
                         
                         self.last_size = current_size
                         self.last_mtime = current_mtime
@@ -364,6 +372,7 @@ class CharacterManager:
                 
                 # ATOMIC COMMIT: Move temp file to final location
                 logger.critical(f"🔄 LEGITIMATE SAVE: About to commit {len(data_to_save)} users to {self.data_file}")
+                logger.critical(f"🔄 LEGITIMATE SAVE THREAD: {threading.current_thread().name} (ID: {threading.get_ident()})")
                 temp_file.replace(self.data_file)
                 logger.critical(f"💾 ATOMIC SAVE COMPLETE: {len(data_to_save)} users, {total_chars} characters")
                 
