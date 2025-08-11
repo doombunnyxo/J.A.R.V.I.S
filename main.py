@@ -137,13 +137,16 @@ async def setup_bot():
         
         for cog in cogs_to_load:
             try:
+                logger.critical(f"🔄 ABOUT TO LOAD COG: {cog}")
                 await bot.load_extension(cog)
-                logger.info(f"Loaded {cog}")
+                logger.critical(f"✅ LOADED COG: {cog}")
             except Exception as e:
                 logger.error(f"Failed to load {cog}: {e}")
         
         # Set up event handler references
+        logger.critical(f"🔄 ABOUT TO GET EVENT HANDLER COG")
         event_handler = bot.get_cog('EventHandlers')
+        logger.critical(f"✅ GOT EVENT HANDLER COG")
         search_handler = bot.get_cog('GoogleSearch')
         
         if event_handler:
