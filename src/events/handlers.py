@@ -124,6 +124,14 @@ class EventHandlers(commands.Cog):
         is_direct_mention = self.bot.user in message.mentions
         is_in_thread = hasattr(message.channel, 'type') and str(message.channel.type) in ['public_thread', 'private_thread']
         
+        # Check if this is a command (starts with the bot's command prefix)
+        is_command = message.content.startswith('!')
+        
+        # Don't process AI if this is a command - let process_commands handle it
+        if is_command:
+            await self.bot.process_commands(message)
+            return
+        
         if is_reply_to_bot or is_direct_mention or is_in_thread:
             # Log the interaction type for debugging
             interaction_type = []
@@ -210,10 +218,6 @@ class EventHandlers(commands.Cog):
                         logger.error(f"[EventHandler-{self.instance_id}] AI handler failed for message {message.id}: {e}")
                         await message.channel.send(f"❌ Error processing your request: {str(e)}")
                         return
-        
-        
-        # Process commands
-        await self.bot.process_commands(message)
     
     async def _initialize_channel_contexts(self) -> None:
         """Initialize channel context from recent messages on startup"""

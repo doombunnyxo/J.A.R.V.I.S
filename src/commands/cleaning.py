@@ -17,6 +17,7 @@ class CleaningCommands(commands.Cog):
     
     def __init__(self, bot):
         self.bot = bot
+        self._executing_commands = set()  # Track executing commands to prevent duplicates
 
     async def _get_roster_from_context(self, ctx) -> Optional[dict]:
         """Get roster information from channel context"""
@@ -29,6 +30,13 @@ class CleaningCommands(commands.Cog):
         Usage: !create_roster <name>
         Example: !create_roster Main House
         """
+        # Prevent duplicate execution
+        command_key = f"create_roster_{ctx.author.id}_{name}"
+        if command_key in self._executing_commands:
+            return
+        
+        self._executing_commands.add(command_key)
+        
         try:
             result = await cleaning_manager.create_roster(
                 roster_name=name,
@@ -91,6 +99,8 @@ class CleaningCommands(commands.Cog):
         except Exception as e:
             logger.error(f"Error creating roster: {e}")
             await ctx.send("❌ An error occurred while creating the roster.")
+        finally:
+            self._executing_commands.discard(command_key)
 
     @commands.command(name="add_member")
     async def add_member(self, ctx, user: discord.Member):
@@ -99,6 +109,13 @@ class CleaningCommands(commands.Cog):
         Example: !add_member @John
         Must be used in a cleaning roster channel
         """
+        # Prevent duplicate execution
+        command_key = f"add_member_{ctx.channel.id}_{user.id}"
+        if command_key in self._executing_commands:
+            return
+        
+        self._executing_commands.add(command_key)
+        
         try:
             # Check if this is a roster channel
             roster_info = await self._get_roster_from_context(ctx)
@@ -138,13 +155,19 @@ class CleaningCommands(commands.Cog):
         except Exception as e:
             logger.error(f"Error adding member: {e}")
             await ctx.send("❌ An error occurred while adding the member.")
+        finally:
+            self._executing_commands.discard(command_key)
 
     @commands.command(name="add_task")
     async def add_task(self, ctx, category: str, points: int, *, task_name: str):
         """Add a cleaning task to this roster
         Usage: !add_task <category> <points> <task_name>
-        Example: !add_task personal 3 Clean bedroom
-        Example: !add_task household 5 Vacuum living room
+        Example: !add_task personal 3 Clean bedroom (one-time task)
+        Example: !add_task household 5 Vacuum living room (recurring weekly)
+        
+        Personal tasks: One-time only, won't refresh next week (unless incomplete)
+        Household tasks: Recurring weekly, will refresh every Monday
+        
         Category must be 'personal' or 'household'
         Points must be between 1 and 10
         Must be used in a cleaning roster channel
@@ -275,20 +298,23 @@ class CleaningCommands(commands.Cog):
                     color=0x00ff00
                 )
                 
-                # Check if user has completed 4+ points this week
+                # Get the dynamic weekly goal
+                weekly_goal = await cleaning_manager.get_weekly_goal(roster_info["name"], str(ctx.guild.id))
+                
+                # Check if user has completed the weekly goal
                 weekly_points = result["weekly_points"]
                 lifetime_points = result["lifetime_points"]
-                if weekly_points >= 4:
+                if weekly_points >= weekly_goal:
                     embed.add_field(
                         name="🎉 Weekly Goal Achieved!",
                         value=f"You've completed {weekly_points} points this week! Great job!\nLifetime total: {lifetime_points} points",
                         inline=False
                     )
                 else:
-                    remaining = 4 - weekly_points
+                    remaining = weekly_goal - weekly_points
                     embed.add_field(
                         name="📊 Progress",
-                        value=f"Weekly points: {weekly_points}/4 ({remaining} points remaining)\nLifetime total: {lifetime_points} points",
+                        value=f"Weekly points: {weekly_points}/{weekly_goal} ({remaining} points remaining)\nLifetime total: {lifetime_points} points",
                         inline=False
                     )
             else:
@@ -477,9 +503,12 @@ class CleaningCommands(commands.Cog):
                 await ctx.send(embed=embed)
                 return
             
+            # Get the dynamic weekly goal
+            weekly_goal = await cleaning_manager.get_weekly_goal(roster_info["name"], str(ctx.guild.id))
+            
             embed = discord.Embed(
                 title=f"📊 Weekly Points - {roster_info['name']}",
-                description="Points earned this week (Goal: 4 points per person)",
+                description=f"Points earned this week (Goal: {weekly_goal} points per person)",
                 color=0x0099ff
             )
             
@@ -493,22 +522,37 @@ class CleaningCommands(commands.Cog):
                     user_name = user.display_name if user else f"User {user_id}"
                     
                     # Add emoji based on goal achievement
-                    if points >= 4:
+                    if points >= weekly_goal:
                         emoji = "🏆"
-                    elif points >= 2:
+                    elif points >= weekly_goal * 0.75:
                         emoji = "🔥"
                     elif points >= 1:
                         emoji = "⭐"
                     else:
                         emoji = "📋"
                     
-                    points_text += f"{emoji} **{user_name}**: {points}/4 points\n"
+                    points_text += f"{emoji} **{user_name}**: {points}/{weekly_goal} points\n"
                 
                 embed.add_field(
                     name="Member Points",
                     value=points_text,
                     inline=False
                 )
+                
+                # Show goal explanation if it's increased
+                if weekly_goal > 4:
+                    roster_details = await cleaning_manager.get_roster_info(roster_info["name"], str(ctx.guild.id))
+                    current_week_data = roster_details["weekly_data"][roster_details["current_week"]]
+                    goal_reason = current_week_data.get("goal_increase_reason")
+                    
+                    if goal_reason:
+                        increase = weekly_goal - 4
+                        embed.add_field(
+                            name=f"⚠️ Increased Goal (+{increase} points)",
+                            value=f"Due to {goal_reason['incomplete_tasks']} incomplete tasks from last week\n"
+                                  f"Average point increase: {goal_reason['average_increase']:.2f} → +{goal_reason['goal_increase']} to goal",
+                            inline=False
+                        )
             else:
                 embed.add_field(
                     name="No points yet",
@@ -621,13 +665,14 @@ class CleaningCommands(commands.Cog):
                 inline=True
             )
             
-            # Task counts
-            personal_count = len(roster_info["base_tasks"]["personal"])
-            household_count = len(roster_info["base_tasks"]["household"])
+            # Task counts (different for personal vs household)
+            current_week_data = roster_info["weekly_data"][roster_info["current_week"]]
+            personal_count = len(current_week_data["remaining_tasks"]["personal"])  # Personal: current week only
+            household_base_count = len(roster_info["base_tasks"]["household"])  # Household: base recurring tasks
             
             embed.add_field(
-                name="📋 Base Tasks",
-                value=f"Personal: {personal_count}\nHousehold: {household_count}",
+                name="📋 Tasks",
+                value=f"Personal (one-time): {personal_count}\nHousehold (recurring): {household_base_count}",
                 inline=True
             )
             
@@ -648,10 +693,10 @@ class CleaningCommands(commands.Cog):
                 name="📖 Available Commands",
                 value=(
                     "`!add_member @user` - Add member\n"
-                    "`!add_task <category> <points> <name>` - Add task\n"
+                    "`!add_task personal <pts> <name>` - One-time task\n"
+                    "`!add_task household <pts> <name>` - Recurring task\n"
                     "`!tasks` - Show numbered task list\n"
                     "`!done <number>` - Complete task by number\n"
-                    "`!complete_task <number>` - Complete task by number\n"
                     "`!completed` - Show completed tasks\n"
                     "`!points` - Show weekly points\n"
                     "`!lifetime` - Show lifetime points"
@@ -659,7 +704,16 @@ class CleaningCommands(commands.Cog):
                 inline=False
             )
             
-            embed.set_footer(text=f"Tasks reset every Monday • Weekly goal: 4 points per person")
+            # Get the dynamic weekly goal for footer
+            try:
+                weekly_goal = await cleaning_manager.get_weekly_goal(roster_info["name"], str(ctx.guild.id))
+                goal_text = f"Goal: {weekly_goal} points/week"
+                if weekly_goal > 4:
+                    goal_text += f" (+{weekly_goal-4} from incomplete tasks)"
+            except:
+                goal_text = "Goal: 4 points/week"
+            
+            embed.set_footer(text=f"Household tasks reset weekly • Personal tasks are one-time • {goal_text}")
             
             await ctx.send(embed=embed)
             

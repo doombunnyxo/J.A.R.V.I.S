@@ -252,11 +252,22 @@ class CleaningManager:
                 }
             
             # Check if task already exists
-            for task in self.data[roster_key]["base_tasks"][category]:
+            if category == "personal":
+                # For personal tasks, check current week's tasks
+                current_week = self._get_current_week_start()
+                self._ensure_current_week_data(roster_key, current_week)
+                existing_tasks = self.data[roster_key]["weekly_data"][current_week]["remaining_tasks"][category]
+                location = "this week"
+            else:
+                # For household tasks, check base tasks
+                existing_tasks = self.data[roster_key]["base_tasks"][category]
+                location = "base tasks"
+            
+            for task in existing_tasks:
                 if task["name"].lower() == task_name.lower():
                     return {
                         "success": False,
-                        "message": f"Task **{task_name}** already exists in {category} category"
+                        "message": f"Task **{task_name}** already exists in {category} {location}"
                     }
             
             task_data = {
@@ -266,32 +277,45 @@ class CleaningManager:
                 "added_at": datetime.now().isoformat()
             }
             
-            # Store original tasks for rollback
-            original_base_tasks = self.data[roster_key]["base_tasks"][category].copy()
-            self.data[roster_key]["base_tasks"][category].append(task_data)
-            
-            # Add to current week's remaining tasks
-            current_week = self._get_current_week_start()
-            self._ensure_current_week_data(roster_key, current_week)
-            
-            original_remaining = self.data[roster_key]["weekly_data"][current_week]["remaining_tasks"][category].copy()
-            self.data[roster_key]["weekly_data"][current_week]["remaining_tasks"][category].append(task_data)
+            # Handle different task types based on what we already set up above
+            if category == "personal":
+                # Personal tasks are one-off: add only to current week, not base tasks
+                original_remaining = self.data[roster_key]["weekly_data"][current_week]["remaining_tasks"][category].copy()
+                self.data[roster_key]["weekly_data"][current_week]["remaining_tasks"][category].append(task_data)
+                original_base_tasks = None  # No base tasks change for personal
+            else:  # household
+                # Household tasks are recurring: add to base tasks and current week
+                original_base_tasks = self.data[roster_key]["base_tasks"][category].copy()
+                self.data[roster_key]["base_tasks"][category].append(task_data)
+                
+                original_remaining = self.data[roster_key]["weekly_data"][current_week]["remaining_tasks"][category].copy()
+                self.data[roster_key]["weekly_data"][current_week]["remaining_tasks"][category].append(task_data)
             
             try:
                 self._save_data()
             except Exception as e:
                 # Rollback the in-memory changes if save fails
-                self.data[roster_key]["base_tasks"][category] = original_base_tasks
+                if original_base_tasks is not None:  # Only rollback base tasks if we changed them
+                    self.data[roster_key]["base_tasks"][category] = original_base_tasks
                 self.data[roster_key]["weekly_data"][current_week]["remaining_tasks"][category] = original_remaining
                 return {
                     "success": False,
                     "message": f"❌ Failed to save roster data: {str(e)}"
                 }
             
+            if category == "personal":
+                # For personal tasks, count current week's personal tasks
+                task_count = len(self.data[roster_key]["weekly_data"][current_week]["remaining_tasks"]["personal"])
+                message_suffix = " (one-time task)"
+            else:
+                # For household tasks, count base tasks
+                task_count = len(self.data[roster_key]["base_tasks"][category])
+                message_suffix = " (recurring weekly)"
+            
             return {
                 "success": True,
-                "message": f"✅ Added {category} task **{task_name}** ({points} points)",
-                "task_count": len(self.data[roster_key]["base_tasks"][category])
+                "message": f"✅ Added {category} task **{task_name}** ({points} points){message_suffix}",
+                "task_count": task_count
             }
 
     def _ensure_current_week_data(self, roster_key: str, current_week: str):
@@ -299,30 +323,96 @@ class CleaningManager:
         roster = self.data[roster_key]
         
         if current_week not in roster["weekly_data"]:
-            # Create new week data by copying all base tasks as remaining
+            # Create new week data
             roster["weekly_data"][current_week] = {
                 "remaining_tasks": {
-                    "personal": roster["base_tasks"]["personal"].copy(),
-                    "household": roster["base_tasks"]["household"].copy()
+                    "personal": [],  # Personal tasks don't auto-refresh
+                    "household": roster["base_tasks"]["household"].copy()  # Household tasks refresh weekly
                 },
                 "completed_tasks": [],
-                "user_points": {member_id: 0 for member_id in roster["members"]}
+                "user_points": {member_id: 0 for member_id in roster["members"]},
+                "weekly_goal": 4  # Default goal
             }
             
-            # Add any undone tasks from previous week with double points
+            # Handle carryover from previous week
             if len(roster["weekly_data"]) > 1:
                 previous_weeks = sorted([w for w in roster["weekly_data"].keys() if w != current_week])
                 if previous_weeks:
                     last_week = previous_weeks[-1]
                     last_week_data = roster["weekly_data"][last_week]
                     
-                    # Add undone tasks with doubled points
-                    for category in ["personal", "household"]:
-                        for task in last_week_data["remaining_tasks"][category]:
-                            doubled_task = task.copy()
-                            doubled_task["points"] = task["points"] * 2
-                            doubled_task["doubled_from_previous"] = True
-                            roster["weekly_data"][current_week]["remaining_tasks"][category].append(doubled_task)
+                    # Calculate total point increase from incomplete tasks
+                    total_point_increase = 0
+                    all_incomplete_tasks = []
+                    
+                    # Add undone PERSONAL tasks with increased points (add base value only once)
+                    for task in last_week_data["remaining_tasks"]["personal"]:
+                        # Find original base point value (the value when first created)
+                        original_points = task.get("original_points", task["points"])
+                        
+                        # Always increase by the original base amount only
+                        increased_task = task.copy()
+                        increased_task["points"] = original_points + original_points  # base + base = double
+                        increased_task["original_points"] = original_points
+                        increased_task["doubled_from_previous"] = True
+                        
+                        roster["weekly_data"][current_week]["remaining_tasks"]["personal"].append(increased_task)
+                        all_incomplete_tasks.append(task)
+                        total_point_increase += original_points
+                    
+                    # Add undone HOUSEHOLD tasks with increased points (these also refresh from base)
+                    for task in last_week_data["remaining_tasks"]["household"]:
+                        # Find if this task is still in base_tasks (it should be)
+                        base_task_exists = any(
+                            base_task["name"].lower() == task["name"].lower() 
+                            for base_task in roster["base_tasks"]["household"]
+                        )
+                        
+                        if base_task_exists:
+                            # Find original base point value (the value when first created in base_tasks)
+                            original_points = task.get("original_points")
+                            if not original_points:
+                                # Find from base tasks
+                                for base_task in roster["base_tasks"]["household"]:
+                                    if base_task["name"].lower() == task["name"].lower():
+                                        original_points = base_task["points"]
+                                        break
+                            
+                            # Always increase by the original base amount only
+                            increased_task = task.copy()
+                            increased_task["points"] = original_points + original_points  # base + base = double
+                            increased_task["original_points"] = original_points
+                            increased_task["doubled_from_previous"] = True
+                            increased_task["name"] = f"{task['name']} (Overdue)"  # Mark as overdue
+                            
+                            roster["weekly_data"][current_week]["remaining_tasks"]["household"].append(increased_task)
+                            all_incomplete_tasks.append(task)
+                            total_point_increase += original_points
+                    
+                    # Calculate new weekly goal
+                    if all_incomplete_tasks:
+                        # Count total tasks this week (fresh + carried over)
+                        total_personal_tasks = len(roster["weekly_data"][current_week]["remaining_tasks"]["personal"])
+                        total_household_tasks = len(roster["weekly_data"][current_week]["remaining_tasks"]["household"])
+                        total_tasks_this_week = total_personal_tasks + total_household_tasks
+                        
+                        # Calculate average point increase across ALL tasks this week and round up
+                        average_increase = total_point_increase / total_tasks_this_week
+                        goal_increase = int(average_increase) + (1 if average_increase > int(average_increase) else 0)
+                        new_weekly_goal = 4 + goal_increase
+                        
+                        # Store the new goal for this week
+                        roster["weekly_data"][current_week]["weekly_goal"] = new_weekly_goal
+                        roster["weekly_data"][current_week]["goal_increase_reason"] = {
+                            "incomplete_tasks": len(all_incomplete_tasks),
+                            "total_tasks_this_week": total_tasks_this_week,
+                            "total_point_increase": total_point_increase,
+                            "average_increase": average_increase,
+                            "goal_increase": goal_increase
+                        }
+                    else:
+                        # No incomplete tasks, standard goal
+                        roster["weekly_data"][current_week]["weekly_goal"] = 4
         
         # Update current week pointer
         roster["current_week"] = current_week
@@ -478,6 +568,15 @@ class CleaningManager:
             if roster_data["guild_id"] == guild_id:
                 rosters.append(roster_data)
         return rosters
+
+    async def get_weekly_goal(self, roster_name: str, guild_id: str) -> int:
+        """Get the weekly goal for the current week"""
+        roster_info = await self.get_roster_info(roster_name, guild_id)
+        if not roster_info:
+            return 4  # Default goal
+        
+        current_week = roster_info["current_week"]
+        return roster_info["weekly_data"][current_week].get("weekly_goal", 4)
 
     async def get_roster_by_channel(self, channel_id: str) -> Optional[Dict[str, Any]]:
         """Get roster associated with a specific channel"""
