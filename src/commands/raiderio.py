@@ -15,15 +15,18 @@ from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+logger.info("RaiderIO module loading...")
 
 class RaiderIOCommands(commands.Cog):
     """RaiderIO integration commands for World of Warcraft data"""
     
     def __init__(self, bot):
+        logger.info("Initializing RaiderIOCommands cog...")
         self.bot = bot
         self._executing_commands = set()
         # Store recent run data for quick access: {user_id: {character_key: [run_data]}}
         self._cached_runs = {}
+        logger.info("RaiderIOCommands cog initialized successfully")
     
     @commands.command(name='rio')
     async def raiderio_lookup(self, ctx, *, args: str = None):
@@ -1393,4 +1396,12 @@ class RaiderIOCommands(commands.Cog):
         )
 
 async def setup(bot):
-    await bot.add_cog(RaiderIOCommands(bot))
+    logger.info("Setting up RaiderIO cog...")
+    try:
+        await bot.add_cog(RaiderIOCommands(bot))
+        logger.info("RaiderIO cog setup completed successfully")
+    except Exception as e:
+        logger.error(f"Failed to setup RaiderIO cog: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise

@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Any
 from pathlib import Path
 import traceback
 import shutil
+import os
 from datetime import datetime
 from ..utils.logging import get_logger
 
@@ -31,6 +32,12 @@ class CharacterManager:
     
     def _load_data(self):
         """Load character data from file with extensive debugging"""
+        # Check file status BEFORE we do anything
+        if self.data_file.exists():
+            file_stats = self.data_file.stat()
+            logger.critical(f"🔍 BEFORE LOAD: {self.data_file} exists, size: {file_stats.st_size} bytes, modified: {datetime.fromtimestamp(file_stats.st_mtime)}")
+        else:
+            logger.critical(f"🔍 BEFORE LOAD: {self.data_file} does not exist")
         try:
             if self.data_file.exists():
                 file_size = self.data_file.stat().st_size
@@ -78,6 +85,7 @@ class CharacterManager:
                         total_chars = sum(len(u.get("characters", [])) for u in self.data.values() if isinstance(u, dict))
                         logger.info(f"Successfully loaded {len(self.data)} users with {total_chars} total characters")
                         if len(self.data) == 0:
+                            logger.critical(f"🚨 LOADED EMPTY DATA! File contained valid JSON but 0 users. Content was: {file_content[:200]}")
                             self.startup_errors.append("⚠️ Loaded file but found 0 users")
                         else:
                             # Store as last known good data
@@ -119,91 +127,244 @@ class CharacterManager:
             self.data = {}
     
     def _save_data(self):
-        """Save character data to file with error handling and debugging"""
+        """CENTRALIZED SAVE METHOD - All character data saves go through here"""
+        return self._atomic_save(self.data)
+    
+    def _atomic_save(self, data_to_save: Dict[str, Any]) -> bool:
+        """Atomic save operation that never corrupts existing files on error"""
         try:
+            # CRITICAL: Validate data before any file operations
+            if not isinstance(data_to_save, dict):
+                error_msg = f"CRITICAL: Invalid data type for save: {type(data_to_save)}"
+                logger.critical(error_msg)
+                self.startup_errors.append(f"❌ **Save Blocked**: Invalid data type {type(data_to_save).__name__}")
+                return False
+            
             # CRITICAL: Don't save empty data if we had data before
-            if not self.data and self.data_file.exists():
+            if not data_to_save and self.data_file.exists():
                 file_size = self.data_file.stat().st_size
                 error_msg = f"CRITICAL: Attempted to save empty data! Current file size: {file_size} bytes"
-                logger.error(error_msg)
-                logger.error(f"Stack trace of save attempt: {traceback.format_stack()}")
+                logger.critical(error_msg)
+                logger.critical(f"Stack trace of save attempt: {traceback.format_stack()[-5:]}")
                 self.startup_errors.append(f"🛡️ **Data Protection**: Blocked saving empty data (file: {file_size} bytes)")
                 
-                # Check if file has data
+                # Check if file has data and report to Discord
                 try:
                     with open(self.data_file, 'r', encoding='utf-8') as f:
                         existing_data = json.load(f)
                         if existing_data:
                             protection_msg = f"File has {len(existing_data)} users, blocking empty save!"
-                            logger.error(protection_msg)
+                            logger.critical(protection_msg)
                             self.startup_errors.append(f"🛡️ **Protected**: {len(existing_data)} user(s) preserved")
-                            return  # Abort save
+                            # Post critical error to Discord
+                            asyncio.create_task(self._report_critical_error(
+                                f"🚨 **CRITICAL DATA PROTECTION**\n"
+                                f"Blocked attempt to overwrite character file with empty data!\n"
+                                f"File contains {len(existing_data)} users with character data.\n"
+                                f"**Action**: Save operation cancelled to prevent data loss."
+                            ))
+                            return False
                 except Exception as check_error:
-                    logger.error(f"Error checking existing file: {check_error}")
-                    # Still abort save to be safe
-                    return
+                    logger.critical(f"Error checking existing file: {check_error}")
+                    self.startup_errors.append(f"❌ **File Check Failed**: {check_error}")
+                    # Still abort save to be safe - NEVER risk data loss
+                    return False
             
             # Ensure directory exists
             self.data_file.parent.mkdir(parents=True, exist_ok=True)
             
             # EXTRA PROTECTION: Never save if we're about to destroy data
-            if len(self.data) == 0 and len(self._last_known_good_data) > 0:
+            if len(data_to_save) == 0 and len(self._last_known_good_data) > 0:
                 error_msg = f"CRITICAL: Refusing to save! Memory has 0 users but last known good had {len(self._last_known_good_data)} users"
-                logger.error(error_msg)
+                logger.critical(error_msg)
                 self.startup_errors.append(f"🚫 **Save Blocked**: Protected {len(self._last_known_good_data)} users from deletion")
+                # Post critical error to Discord
+                asyncio.create_task(self._report_critical_error(
+                    f"🚨 **CRITICAL DATA LOSS PREVENTION**\n"
+                    f"Blocked save operation that would delete {len(self._last_known_good_data)} users!\n"
+                    f"**Data in memory**: 0 users\n"
+                    f"**Last known good**: {len(self._last_known_good_data)} users\n"
+                    f"**Action**: Save cancelled, data restored from last known good state."
+                ))
                 # Restore from last known good
                 self.data = self._last_known_good_data.copy()
-                logger.info("Restored data from last known good state")
-                return
+                logger.critical("Restored data from last known good state")
+                return False
             
-            # Create backup before saving if file exists and has data
-            if self.data_file.exists() and self.data_file.stat().st_size > 100:
+            # MANDATORY backup before any file operations
+            backup_created = False
+            if self.data_file.exists() and self.data_file.stat().st_size > 2:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 backup_file = self.data_file.parent / f"wow_characters_{timestamp}.backup"
                 try:
                     shutil.copy2(self.data_file, backup_file)
-                    logger.debug(f"Created pre-save backup: {backup_file}")
-                    # Clean up old backups (keep only last 5)
+                    backup_created = True
+                    logger.critical(f"📦 Created mandatory backup: {backup_file}")
+                    # Clean up old backups (keep only last 10)
                     backups = sorted(self.data_file.parent.glob("wow_characters_*.backup"))
-                    if len(backups) > 5:
-                        for old_backup in backups[:-5]:
-                            old_backup.unlink()
-                            logger.debug(f"Deleted old backup: {old_backup}")
+                    if len(backups) > 10:
+                        for old_backup in backups[:-10]:
+                            try:
+                                old_backup.unlink()
+                                logger.debug(f"Cleaned up old backup: {old_backup}")
+                            except:
+                                pass  # Don't fail save for cleanup issues
                 except Exception as backup_error:
-                    logger.warning(f"Failed to create backup: {backup_error}")
+                    # CRITICAL: If we can't backup, we don't save
+                    error_msg = f"CRITICAL: Cannot create backup before save: {backup_error}"
+                    logger.critical(error_msg)
+                    self.startup_errors.append(f"❌ **Backup Failed**: {backup_error}")
+                    asyncio.create_task(self._report_critical_error(
+                        f"🚨 **BACKUP FAILURE - SAVE ABORTED**\n"
+                        f"Cannot create backup file: {backup_error}\n"
+                        f"**Action**: Save operation cancelled to prevent data loss without backup."
+                    ))
+                    return False
             
             # Log what we're about to save
             total_chars = sum(len(u.get("characters", [])) for u in self.data.values() if isinstance(u, dict))
-            logger.info(f"Saving: {len(self.data)} users, {total_chars} chars to {self.data_file}")
-            logger.debug(f"First 500 chars of data to save: {str(self.data)[:500]}")
+            logger.critical(f"💾 SAVING: {len(self.data)} users, {total_chars} chars to {self.data_file}")
+            logger.critical(f"💾 SAVE DATA PREVIEW: {str(self.data)[:300]}")
+            logger.critical(f"💾 SAVE STACK TRACE: {traceback.format_stack()[-3:]}")
             
-            # Write to temporary file first to avoid corruption
-            temp_file = self.data_file.with_suffix('.tmp')
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                json.dump(self.data, f, indent=2, ensure_ascii=False)
-            
-            # Verify temp file was written correctly
-            temp_size = temp_file.stat().st_size
-            logger.debug(f"Temp file written: {temp_file}, size: {temp_size} bytes")
-            
-            # Atomic move to final location
-            temp_file.replace(self.data_file)
-            logger.info(f"Character data saved successfully: {len(self.data)} users, {total_chars} characters")
-            
-            # Update last known good data after successful save
-            if len(self.data) > 0:
-                self._last_known_good_data = self.data.copy()
+            # ATOMIC SAVE: Write to temp file first, then atomic move
+            temp_file = self.data_file.with_suffix(f'.tmp_{os.getpid()}')
+            try:
+                with open(temp_file, 'w', encoding='utf-8') as f:
+                    json.dump(data_to_save, f, indent=2, ensure_ascii=False)
+                
+                # CRITICAL: Verify temp file was written correctly before committing
+                temp_size = temp_file.stat().st_size
+                logger.critical(f"📝 Temp file written: {temp_file}, size: {temp_size} bytes")
+                
+                # Sanity check: temp file should not be tiny
+                if temp_size <= 2:
+                    error_msg = f"CRITICAL: Temp file is only {temp_size} bytes - refusing to commit!"
+                    logger.critical(error_msg)
+                    temp_file.unlink()  # Clean up bad temp file
+                    self.startup_errors.append(f"❌ **Temp File Error**: Only {temp_size} bytes written")
+                    asyncio.create_task(self._report_critical_error(
+                        f"🚨 **SAVE CORRUPTION DETECTED**\n"
+                        f"Temporary file was only {temp_size} bytes!\n"
+                        f"**Action**: Save aborted, temp file deleted, original preserved."
+                    ))
+                    return False
+                
+                # Verify temp file can be loaded back as valid JSON
+                try:
+                    with open(temp_file, 'r', encoding='utf-8') as f:
+                        verification_data = json.load(f)
+                    if not isinstance(verification_data, dict):
+                        raise ValueError(f"Temp file contains {type(verification_data)}, not dict")
+                    logger.critical(f"✅ Temp file verification passed: {len(verification_data)} users")
+                except Exception as verify_error:
+                    error_msg = f"CRITICAL: Temp file verification failed: {verify_error}"
+                    logger.critical(error_msg)
+                    temp_file.unlink()  # Clean up corrupted temp file
+                    self.startup_errors.append(f"❌ **Verification Failed**: {verify_error}")
+                    asyncio.create_task(self._report_critical_error(
+                        f"🚨 **SAVE VERIFICATION FAILED**\n"
+                        f"Temp file failed JSON verification: {verify_error}\n"
+                        f"**Action**: Save aborted, corrupted temp file deleted."
+                    ))
+                    return False
+                
+                # ATOMIC COMMIT: Move temp file to final location
+                temp_file.replace(self.data_file)
+                logger.critical(f"💾 ATOMIC SAVE COMPLETE: {len(data_to_save)} users, {total_chars} characters")
+                
+                # Final verification of committed file
+                if self.data_file.exists():
+                    final_size = self.data_file.stat().st_size
+                    logger.critical(f"🔍 POST-COMMIT VERIFICATION: Final file size: {final_size} bytes")
+                    if final_size <= 2:
+                        error_msg = f"CRITICAL: File was committed but is only {final_size} bytes! External interference detected!"
+                        logger.critical(error_msg)
+                        asyncio.create_task(self._report_critical_error(
+                            f"🚨 **POST-SAVE CORRUPTION DETECTED**\n"
+                            f"File was saved successfully but immediately corrupted to {final_size} bytes!\n"
+                            f"**Possible cause**: External process overwriting file\n"
+                            f"**Action**: Investigation required - backup available."
+                        ))
+                        return False
+                
+                # SUCCESS: Update last known good data
+                if len(data_to_save) > 0:
+                    self._last_known_good_data = data_to_save.copy()
+                    logger.critical(f"✅ Last known good updated: {len(data_to_save)} users")
+                
+                return True
+                
+            except Exception as write_error:
+                # Clean up temp file on any error
+                try:
+                    if temp_file.exists():
+                        temp_file.unlink()
+                except:
+                    pass
+                raise write_error
             
         except Exception as e:
-            logger.error(f"Failed to save character data to {self.data_file}: {e}")
-            # Try to clean up temp file if it exists
+            # CRITICAL ERROR HANDLING: Never corrupt or reset files on error
+            error_msg = f"CRITICAL SAVE FAILURE: {type(e).__name__}: {str(e)}"
+            logger.critical(error_msg)
+            logger.critical(f"Save error stack trace: {traceback.format_exc()}")
+            
+            # Add to startup errors for Discord reporting
+            self.startup_errors.append(
+                f"❌ **Critical Save Error**: {type(e).__name__}: {str(e)[:100]}"
+            )
+            
+            # Report critical error to Discord
+            asyncio.create_task(self._report_critical_error(
+                f"🚨 **CRITICAL SAVE SYSTEM FAILURE**\n"
+                f"**Error**: {type(e).__name__}: {str(e)[:200]}\n"
+                f"**File**: {self.data_file}\n"
+                f"**Action**: Save failed, original file preserved unchanged.\n"
+                f"**Status**: System in read-only mode until resolved."
+            ))
+            
+            # Clean up any temp files but NEVER touch the original
             try:
-                temp_file = self.data_file.with_suffix('.tmp')
-                if temp_file.exists():
+                temp_files = list(self.data_file.parent.glob(f"{self.data_file.stem}.tmp*"))
+                for temp_file in temp_files:
                     temp_file.unlink()
+                    logger.debug(f"Cleaned up temp file: {temp_file}")
             except:
-                pass
-            raise  # Re-raise to let caller know save failed
+                pass  # Don't fail on cleanup
+            
+            # IMPORTANT: Do NOT raise exception - return False instead
+            # This prevents cascading failures and keeps system stable
+            return False
+    
+    async def _report_critical_error(self, error_msg: str):
+        """Report critical errors that could cause data loss"""
+        logger.critical(f"CRITICAL ERROR BEING REPORTED: {error_msg}")
+        
+        # Add to startup errors for immediate visibility
+        self.startup_errors.append(f"🚨 {error_msg[:200]}")
+        
+        # Send to Discord if channel is available
+        if self.discord_channel:
+            try:
+                import discord
+                embed = discord.Embed(
+                    title="🚨 CRITICAL CHARACTER MANAGER ERROR",
+                    description=error_msg,
+                    color=0xff0000  # Red
+                )
+                embed.add_field(
+                    name="🔍 System Status",
+                    value="Character manager in protective mode\nNo data will be modified until resolved",
+                    inline=False
+                )
+                embed.set_footer(text="Immediate attention required")
+                await self.discord_channel.send(embed=embed)
+            except Exception as e:
+                logger.critical(f"Failed to send critical error to Discord: {e}")
+        else:
+            # If no Discord channel available, store for later reporting
+            logger.critical("No Discord channel available for critical error reporting")
     
     async def add_character(
         self, 
