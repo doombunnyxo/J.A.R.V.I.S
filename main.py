@@ -16,6 +16,7 @@ from discord.ext import commands
 import fcntl
 import os
 import sys
+import time
 from pathlib import Path
 from src.config import config
 from src.data.persistence import data_manager
@@ -62,6 +63,37 @@ def acquire_instance_lock():
         logger.critical("This prevents file corruption from multiple instances!")
         logger.critical("Stop the other instance or wait for it to finish.")
         sys.exit(1)
+
+def check_deployment_status():
+    """Check if deployment/shutdown is in progress and wait if needed"""
+    deployment_lock = Path("data/deployment.lock")
+    
+    if deployment_lock.exists():
+        try:
+            with open(deployment_lock, 'r') as f:
+                lock_content = f.read().strip()
+            
+            logger.warning(f"🔒 Deployment lock detected: {lock_content}")
+            logger.warning("Waiting for previous instance to shut down completely...")
+            
+            # Wait up to 30 seconds for clean shutdown
+            for i in range(30):
+                if not deployment_lock.exists():
+                    logger.info("✅ Deployment lock cleared, proceeding with startup")
+                    return
+                time.sleep(1)
+                
+            # If still locked after 30 seconds, force removal
+            logger.warning("⚠️ Timeout waiting for deployment lock, forcing removal")
+            deployment_lock.unlink()
+            
+        except Exception as e:
+            logger.warning(f"Error checking deployment lock: {e}")
+            # Remove corrupted lock file
+            try:
+                deployment_lock.unlink()
+            except:
+                pass
 
 async def setup_bot():
     """Setup and configure the bot"""
@@ -165,6 +197,9 @@ async def setup_bot():
 async def main():
     """Main entry point"""
     logger.info("Starting Discord Bot...")
+    
+    # CRITICAL: Check for deployment in progress
+    check_deployment_status()
     
     # CRITICAL: Acquire single instance lock to prevent race conditions
     lock_fd = acquire_instance_lock()

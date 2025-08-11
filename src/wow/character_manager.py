@@ -68,6 +68,20 @@ class FileMonitor:
                                         for line in stack[-10:]:  # Last 10 stack frames
                                             logger.critical(f"🚨   {line.strip()}")
                                         logger.critical(f"🚨 --- END THREAD {thread_id} ---")
+                                    
+                                    # Try to identify what process wrote to the file
+                                    logger.critical(f"🚨 CHECKING FOR EXTERNAL PROCESSES:")
+                                    try:
+                                        import subprocess
+                                        # Check lsof for file access
+                                        result = subprocess.run(['lsof', str(self.file_path)], 
+                                                              capture_output=True, text=True, timeout=5)
+                                        if result.stdout:
+                                            logger.critical(f"🚨 PROCESSES ACCESSING FILE: {result.stdout}")
+                                        else:
+                                            logger.critical(f"🚨 NO PROCESSES CURRENTLY ACCESSING FILE")
+                                    except Exception as e:
+                                        logger.critical(f"🚨 Could not check file access: {e}")
                         
                         self.last_size = current_size
                         self.last_mtime = current_mtime
@@ -126,7 +140,18 @@ class CharacterManager:
         logger.critical(f"🚨 CURRENT DATA STATE: {len(self.data)} users")
         logger.critical(f"🚨 DATA PREVIEW: {str(self.data)[:200]}")
         self._shutdown_in_progress = True
-        # Don't save during shutdown - this might be the cause!
+        
+        # DEPLOYMENT PROTECTION: If this looks like a deployment restart,
+        # create a deployment lock to prevent the new instance from starting too early
+        try:
+            deployment_lock = Path("data/deployment.lock")
+            with open(deployment_lock, 'w') as f:
+                f.write(f"shutdown_in_progress:{os.getpid()}:{datetime.now().isoformat()}\n")
+            logger.critical(f"🔒 Created deployment lock: {deployment_lock}")
+        except Exception as e:
+            logger.error(f"Failed to create deployment lock: {e}")
+        
+        # Don't save during shutdown - prevents race conditions!
         
     def _atexit_handler(self):
         """Handle Python exit"""

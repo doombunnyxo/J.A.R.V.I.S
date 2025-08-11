@@ -15,6 +15,13 @@
 /data/unfiltered_permanent_context.json
 /data/user_settings.json
 /data/blocked_domains.json
+# WoW data files (user character data)
+/data/wow_characters.json
+/data/wow_runs.json
+/data/wow_seasons.json
+/data/*.backup
+/data/*.lock
+/data/*.tmp*
 # Allow static game data files
 !data/dune_recipes.json
 
