@@ -5,7 +5,7 @@ World of Warcraft Mythic+ and character lookup functionality
 
 import discord
 from discord.ext import commands
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from ..wow.raiderio_client import raiderio_client
 from ..wow.character_manager import character_manager
 from ..wow.run_manager import run_manager

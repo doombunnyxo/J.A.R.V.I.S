@@ -95,14 +95,38 @@ class CharacterManager:
         self.startup_errors = []  # Store errors to report to Discord later
         self.discord_channel = None  # Will be set by the bot later
         self._last_known_good_data = {}  # Store last known good data
+        self._shutdown_in_progress = False  # Track shutdown state
         
         # Start file monitoring IMMEDIATELY to catch any resets
         self.file_monitor = FileMonitor(self.data_file)
         self.file_monitor.start_monitoring()
         
+        # Register shutdown handler to catch shutdown-time saves
+        import signal
+        import atexit
+        signal.signal(signal.SIGTERM, self._shutdown_handler)
+        signal.signal(signal.SIGINT, self._shutdown_handler)
+        atexit.register(self._atexit_handler)
+        
         logger.info(f"Initializing CharacterManager with file: {self.data_file}")
         self._load_data()
         logger.info(f"CharacterManager initialized with {len(self.data)} users")
+    
+    def _shutdown_handler(self, signum, frame):
+        """Handle shutdown signals"""
+        logger.critical(f"🚨 SHUTDOWN SIGNAL RECEIVED: {signum}")
+        logger.critical(f"🚨 CURRENT DATA STATE: {len(self.data)} users")
+        logger.critical(f"🚨 DATA PREVIEW: {str(self.data)[:200]}")
+        self._shutdown_in_progress = True
+        # Don't save during shutdown - this might be the cause!
+        
+    def _atexit_handler(self):
+        """Handle Python exit"""
+        logger.critical(f"🚨 PYTHON ATEXIT CALLED")
+        logger.critical(f"🚨 CURRENT DATA STATE: {len(self.data)} users") 
+        logger.critical(f"🚨 DATA PREVIEW: {str(self.data)[:200]}")
+        self._shutdown_in_progress = True
+        # Don't save during exit - this might be the cause!
     
     def _load_data(self):
         """Load character data from file with extensive debugging"""
@@ -206,6 +230,11 @@ class CharacterManager:
     
     def _save_data(self):
         """CENTRALIZED SAVE METHOD - All character data saves go through here"""
+        # CRITICAL: Prevent saves during shutdown
+        if self._shutdown_in_progress:
+            logger.critical(f"🚨 BLOCKED SAVE DURING SHUTDOWN! Data: {len(self.data)} users")
+            return False
+            
         # Log who called this save
         stack = traceback.format_stack()
         caller_info = stack[-2].strip() if len(stack) >= 2 else "unknown"
