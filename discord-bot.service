@@ -11,12 +11,8 @@ WorkingDirectory=/opt/jarvis
 Environment=PATH=/opt/jarvis/venv/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/opt/jarvis/start.sh
 ExecReload=/bin/kill -HUP $MAINPID
-# Ensure clean shutdown to prevent file corruption
 ExecStop=/bin/kill -TERM $MAINPID
-TimeoutStopSec=30
-KillMode=mixed
-KillSignal=SIGTERM
-FinalKillSignal=SIGKILL
+TimeoutStopSec=15
 Restart=always
 RestartSec=15
 StandardOutput=journal
