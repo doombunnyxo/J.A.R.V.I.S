@@ -18,8 +18,8 @@ class SeasonManager:
     def __init__(self, data_file: str = "data/wow_seasons.json"):
         self.data_file = Path(data_file)
         self.lock = asyncio.Lock()
-        # Structure: {"current_season": "season-tww-2", "seasons": {"season-tww-2": {"name": "...", "active": true}}}
-        self.data = {"current_season": "season-tww-2", "seasons": {}}
+        # Structure: {"current_season": "season-tww-3", "seasons": {"season-tww-3": {"name": "...", "active": true}}}
+        self.data = {"current_season": "season-tww-3", "seasons": {}}
         self._load_data()
     
     def _load_data(self):
@@ -29,14 +29,14 @@ class SeasonManager:
                 with open(self.data_file, 'r', encoding='utf-8') as f:
                     loaded_data = json.load(f)
                     self.data = {
-                        "current_season": loaded_data.get("current_season", "season-tww-2"),
+                        "current_season": loaded_data.get("current_season", "season-tww-3"),
                         "seasons": loaded_data.get("seasons", {})
                     }
                     logger.debug(f"Loaded season data: current={self.data['current_season']}")
             else:
                 # Create data directory if it doesn't exist
                 self.data_file.parent.mkdir(parents=True, exist_ok=True)
-                self.data = {"current_season": "season-tww-2", "seasons": {}}
+                self.data = {"current_season": "season-tww-3", "seasons": {}}
         except Exception as e:
             logger.error(f"Failed to load season data: {e}")
             self.data = {"current_season": "season-tww-2", "seasons": {}}
