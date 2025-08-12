@@ -320,6 +320,37 @@ class RunManager:
             "next_sequential_id": self.data["next_id"],
             "latest_run_id": max([r["sequential_id"] for r in self.data["runs"]]) if self.data["runs"] else 0
         }
+    
+    async def reset_database(self) -> Dict[str, Any]:
+        """
+        Reset the runs database for a new season
+        
+        Returns:
+            Status dictionary with run count before reset
+        """
+        async with self.lock:
+            # Store stats before reset
+            runs_before = len(self.data["runs"])
+            
+            # Reset the data
+            self.data = {"runs": [], "next_id": 1}
+            
+            try:
+                self._save_data()
+                logger.info(f"Reset runs database - cleared {runs_before} runs")
+                return {
+                    "success": True,
+                    "runs_cleared": runs_before,
+                    "message": f"✅ Successfully reset runs database - cleared {runs_before} runs"
+                }
+            except Exception as e:
+                logger.error(f"Failed to reset runs database: {e}")
+                # Reload original data on failure
+                self._load_data()
+                return {
+                    "success": False,
+                    "message": f"❌ Failed to reset database: {str(e)}"
+                }
 
 
 # Global run manager instance

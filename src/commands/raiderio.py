@@ -5,6 +5,7 @@ World of Warcraft Mythic+ and character lookup functionality
 
 import discord
 from discord.ext import commands
+import asyncio
 from typing import Dict, Optional, Any
 from ..wow.raiderio_client import raiderio_client
 from ..wow.character_manager import character_manager
@@ -590,6 +591,53 @@ class RaiderIOCommands(commands.Cog):
             await ctx.send("❌ **Error**: Failed to manage season settings")
         finally:
             self._executing_commands.discard(command_key)
+    
+    @commands.command(name='rio_reset_runs')
+    @commands.has_permissions(administrator=True)
+    async def reset_runs_database(self, ctx):
+        """
+        Reset the rio_runs database (Admin only)
+        Clears all stored runs for a new season
+        """
+        # Send confirmation message
+        confirm_msg = await ctx.send("⚠️ **Warning:** This will permanently delete all stored runs in the database. React with ✅ to confirm or ❌ to cancel.")
+        await confirm_msg.add_reaction("✅")
+        await confirm_msg.add_reaction("❌")
+        
+        def check(reaction, user):
+            return user == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == confirm_msg.id
+        
+        try:
+            reaction, user = await self.bot.wait_for('reaction_add', timeout=30.0, check=check)
+            
+            if str(reaction.emoji) == "✅":
+                # Reset the database
+                result = await run_manager.reset_database()
+                
+                if result["success"]:
+                    embed = discord.Embed(
+                        title="🔄 Database Reset Complete",
+                        description=result["message"],
+                        color=0x00ff00
+                    )
+                    embed.add_field(
+                        name="Runs Cleared",
+                        value=f"{result['runs_cleared']} runs",
+                        inline=True
+                    )
+                    embed.add_field(
+                        name="New Season",
+                        value="Database ready for Season 3",
+                        inline=True
+                    )
+                    await ctx.send(embed=embed)
+                else:
+                    await ctx.send(result["message"])
+            else:
+                await ctx.send("❌ Database reset cancelled.")
+                
+        except asyncio.TimeoutError:
+            await ctx.send("❌ Reset cancelled - no response received within 30 seconds.")
     
     async def _show_help(self, ctx):
         """Show RaiderIO command help"""
