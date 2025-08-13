@@ -39,7 +39,7 @@ class SeasonManager:
                 self.data = {"current_season": "season-tww-3", "seasons": {}}
         except Exception as e:
             logger.error(f"Failed to load season data: {e}")
-            self.data = {"current_season": "season-tww-2", "seasons": {}}
+            self.data = {"current_season": "season-tww-3", "seasons": {}}
     
     def _save_data(self):
         """Save season data to file with error handling"""

@@ -1403,8 +1403,9 @@ class RaiderIOCommands(commands.Cog):
         # Season formats to try in order
         seasons_to_try = [
             initial_season,  # Try the requested season first
-            "season-tww-2",  # Current season format that works
-            "season-tww-1"   # Previous season
+            "season-tww-3",  # Current season (Season 3)
+            "season-tww-2",  # Previous season (Season 2)
+            "season-tww-1"   # Older season (Season 1)
         ]
         
         # Remove duplicates while preserving order
