@@ -342,7 +342,12 @@ class RaiderIOCommands(commands.Cog):
                 # Extract run information
                 dungeon = run_data.get("dungeon", "Unknown")
                 level = run_data.get("mythic_level", 0)
-                completed = "✅" if run_data.get("num_chests", 0) >= 1 else "❌"
+                # Check if run was completed (even if depleted) vs abandoned
+                # Runs with score > 0 or clear_time_ms > 0 were completed
+                if run_data.get("score", 0) > 0 or run_data.get("clear_time_ms", 0) > 0:
+                    completed = "✅" if run_data.get("num_chests", 0) >= 1 else "⏱️"  # Timed vs Depleted
+                else:
+                    completed = "❌"  # Abandoned/Failed
                 
                 # Character information
                 char_name = character_info.get("name", "Unknown")
@@ -885,7 +890,12 @@ class RaiderIOCommands(commands.Cog):
                 dungeon = run.get("dungeon", "Unknown")
                 level = run.get("mythic_level", 0)
                 score = run.get("score", 0)
-                completed = "✅" if run.get("num_chests", 0) >= 1 else "❌"
+                # Check if run was completed (even if depleted) vs abandoned
+                # Runs with score > 0 or clear_time_ms > 0 were completed
+                if run.get("score", 0) > 0 or run.get("clear_time_ms", 0) > 0:
+                    completed = "✅" if run.get("num_chests", 0) >= 1 else "⏱️"  # Timed vs Depleted
+                else:
+                    completed = "❌"  # Abandoned/Failed
                 
                 # Try to get completion time if available
                 clear_time_ms = run.get("clear_time_ms", 0)
