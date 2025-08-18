@@ -49,6 +49,11 @@ class OpenAIAPI:
                     return result["choices"][0]["message"]["content"]
                 else:
                     error_text = await response.text()
+                    # Log detailed error info
+                    from ..utils.logging import get_logger
+                    logger = get_logger(__name__)
+                    logger.error(f"OpenAI API error {response.status}: {error_text}")
+                    logger.debug(f"Model: {self.model}, Max tokens: {max_tokens}")
                     raise Exception(f"OpenAI API error {response.status}: {error_text}")
 
 async def openai_optimize_search_query(user_query: str, filtered_context: str = "", model: str = "gpt-4o-mini") -> str:
@@ -378,6 +383,14 @@ Discord-formatted Answer:"""
         return f"**{model_display} Web Search** ({website_count} sites, ~{single_stage_tokens} tokens): {response}"
         
     except Exception as e:
+        # Log the full error for debugging
+        from ..utils.logging import get_logger
+        logger = get_logger(__name__)
+        logger.error(f"OpenAI search analysis failed: {e}")
+        logger.debug(f"Query: {user_query[:100]}...")
+        logger.debug(f"Model: {model}")
+        logger.debug(f"Search results length: {len(search_results)}")
+        
         return f"Error analyzing search results with OpenAI: {str(e)}"
 
 async def test_openai_api() -> bool:

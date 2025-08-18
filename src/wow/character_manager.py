@@ -20,6 +20,7 @@ class CharacterManager:
         self.data_file = Path(data_file)
         self.data = {}
         self.lock = asyncio.Lock()
+        self.startup_errors = []  # Track startup errors
         logger.info(f"Initializing CharacterManager with file: {self.data_file}")
         self._load_data()
         logger.info(f"CharacterManager initialized with {len(self.data)} users")
@@ -45,10 +46,12 @@ class CharacterManager:
                 
         except json.JSONDecodeError as e:
             logger.error(f"JSON decode error: {e}")
+            self.startup_errors.append(f"JSON decode error in character data: {e}")
             self.data = {}
             
         except Exception as e:
             logger.error(f"Error loading character data: {e}")
+            self.startup_errors.append(f"Failed to load character data: {e}")
             self.data = {}
     
     def _save_data(self):
@@ -356,6 +359,10 @@ class CharacterManager:
                 "success": True,
                 "message": f"✅ Cleared all {char_count} character(s)"
             }
+    
+    def get_startup_errors(self) -> List[str]:
+        """Get any startup errors that occurred during initialization"""
+        return self.startup_errors.copy()
 
 
 # Global character manager instance
