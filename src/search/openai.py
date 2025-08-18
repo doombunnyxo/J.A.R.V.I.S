@@ -298,17 +298,14 @@ Answer:"""
     # Set output limits for final responses
     max_tokens = 512
     
-    # Log two-stage synthesis message composition
+    # Log two-stage synthesis message composition (WARNING level to show in logs)
     from ..utils.logging import get_logger
     logger = get_logger(__name__)
-    logger.debug(f"Two-stage synthesis - System message size: {len(system_message)} chars")
-    logger.debug(f"Two-stage synthesis - User message size: {len(user_message)} chars")
-    logger.debug(f"Two-stage synthesis - Combined summaries size: {len(combined_summaries)} chars")
+    logger.warning(f"Two-stage Synthesis - System: {len(system_message)} chars, User: {len(user_message)} chars, Summaries: {len(combined_summaries)} chars")
     
     total_synthesis_size = len(system_message) + len(user_message)
     final_prompt_tokens = total_synthesis_size // 4
-    logger.debug(f"Two-stage synthesis - Total message size: {total_synthesis_size} chars (~{final_prompt_tokens} tokens)")
-    logger.debug(f"Two-stage synthesis - Max tokens requested: {max_tokens}")
+    logger.warning(f"Two-stage Synthesis - Total: {total_synthesis_size} chars (~{final_prompt_tokens} tokens), Max tokens: {max_tokens}")
     
     # Call OpenAI API for final synthesis
     response = await openai_client.create_completion(
@@ -369,22 +366,20 @@ Instructions:
         # Build user message with size limits
         context_section = filtered_context.strip() if filtered_context and filtered_context.strip() else "No previous context available."
         
-        # Log component sizes
+        # Log component sizes (WARNING level to show in logs)
         from ..utils.logging import get_logger
         logger = get_logger(__name__)
-        logger.debug(f"Query size: {len(user_query)} chars")
-        logger.debug(f"Context size before limit: {len(context_section)} chars")
-        logger.debug(f"Search results size before limit: {len(search_results)} chars")
+        logger.warning(f"Query Components - Query: {len(user_query)} chars, Context: {len(context_section)} chars, Search results: {len(search_results)} chars")
         
         # Limit context size to prevent timeouts
         if len(context_section) > 2000:
             context_section = context_section[:2000] + "\n[Context truncated for performance]"
-            logger.debug(f"Context truncated to: {len(context_section)} chars")
+            logger.warning(f"Context truncated to: {len(context_section)} chars")
         
         # Limit search results size  
         if len(search_results) > 4000:
             search_results = search_results[:4000] + "\n[Search results truncated for performance]"
-            logger.debug(f"Search results truncated to: {len(search_results)} chars")
+            logger.warning(f"Search results truncated to: {len(search_results)} chars")
         
         user_message = f"""User Query:
 {user_query}
@@ -405,15 +400,13 @@ Discord-formatted Answer:"""
         # Set reasonable output token limits based on model
         max_tokens = 2048 if model == "gpt-4o" else 512
         
-        # Log final message composition before API call
-        logger.debug(f"System message size: {len(system_message)} chars")
-        logger.debug(f"User message size: {len(user_message)} chars")
+        # Log final message composition before API call (WARNING level to show in logs)
+        logger.warning(f"OpenAI Request Size - System: {len(system_message)} chars, User: {len(user_message)} chars")
         
         # Calculate and log total message size
         total_message_size = len(system_message) + len(user_message)
         single_stage_tokens = total_message_size // 4
-        logger.debug(f"Total message size: {total_message_size} chars (~{single_stage_tokens} tokens)")
-        logger.debug(f"Max tokens requested: {max_tokens}")
+        logger.warning(f"OpenAI Request Size - Total: {total_message_size} chars (~{single_stage_tokens} tokens), Max tokens: {max_tokens}")
         
         # Call OpenAI API
         response = await openai_client.create_completion(
