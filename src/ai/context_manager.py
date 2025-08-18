@@ -27,23 +27,12 @@ class ContextManager:
     def __init__(self):
         # We'll use OpenAI GPT-4o mini for context filtering
         
-        # Unified conversation context shared between AIs
-        self.unified_conversations: Dict[str, deque] = defaultdict(lambda: deque(maxlen=12))
-        self.last_activity: Dict[str, datetime] = {}
-        self.context_expiry_minutes = 30
-        
-        # Channel conversation storage - keyed by channel_id
-        self.channel_conversations: Dict[int, deque] = defaultdict(lambda: deque(maxlen=35))
-        self.channel_last_activity: Dict[int, datetime] = {}
-        
-        # Thread conversation storage - unlimited storage for active threads
-        self.thread_conversations: Dict[int, deque] = defaultdict(lambda: deque())  # No maxlen for threads
-        self.thread_last_activity: Dict[int, datetime] = {}
-        self.thread_parent_map: Dict[int, int] = {}  # thread_id -> parent_channel_id
-        
-        # Vector database enhancer (optional)
+        # Vector database enhancer - primary context storage
         self.vector_enhancer = None
         self._init_vector_enhancer()
+        
+        # Note: All conversation and channel context is now stored in vector database
+        # Only permanent context remains in JSON files for raw inclusion
     
     def _init_vector_enhancer(self):
         """Initialize vector database enhancer if available"""
@@ -80,30 +69,8 @@ class ContextManager:
                 else:
                     raise Exception(f"OpenAI API error {response.status}: {await response.text()}")
     
-    def get_conversation_key(self, user_id: int, channel_id: int) -> str:
-        """Generate conversation key for tracking"""
-        return f"{user_id}_{channel_id}"
-    
-    def is_context_fresh(self, user_id: int, channel_id: int) -> bool:
-        """Check if conversation context is still fresh"""
-        key = self.get_conversation_key(user_id, channel_id)
-        last_activity = self.last_activity.get(key)
-        
-        if not last_activity:
-            return False
-            
-        return datetime.now() - last_activity < timedelta(minutes=self.context_expiry_minutes)
-    
     def add_to_conversation(self, user_id: int, channel_id: int, user_message: str, ai_response: str):
-        """Add exchange to conversation context"""
-        key = self.get_conversation_key(user_id, channel_id)
-        context = self.unified_conversations[key]
-        
-        context.append({"role": "user", "content": user_message})
-        context.append({"role": "assistant", "content": ai_response})
-        self.last_activity[key] = datetime.now()
-        
-        # Store in vector database if available
+        """Add exchange to conversation context (vector DB only)"""
         if self.vector_enhancer and self.vector_enhancer.initialized:
             try:
                 import asyncio
@@ -115,15 +82,16 @@ class ContextManager:
                 ))
             except Exception as e:
                 logger.debug(f"Failed to store conversation in vector DB: {e}")
+        else:
+            logger.warning("Vector database not available - conversation not stored")
     
     def clear_conversation(self, user_id: int, channel_id: int):
-        """Clear conversation context for user in channel"""
-        key = self.get_conversation_key(user_id, channel_id)
-        self.unified_conversations.pop(key, None)
-        self.last_activity.pop(key, None)
+        """Clear conversation context - now a no-op since we use vector DB"""
+        # Note: Vector DB handles its own cleanup based on age
+        pass
     
     def add_channel_message(self, channel_id: int, user_name: str, message_content: str, channel=None):
-        """Add message to channel conversation history"""
+        """Add message to channel conversation history (vector DB only)"""
         # Check if this is a thread
         is_thread = False
         parent_channel_id = None
@@ -134,58 +102,13 @@ class ContextManager:
                 is_thread = True
                 parent_channel_id = channel.parent_id if hasattr(channel, 'parent_id') else None
         
-        # Create message object with timestamp
-        message_obj = ChannelMessage(
-            content=f"{user_name}: {message_content[:100]}",
-            timestamp=datetime.now(),
-            user_name=user_name
-        )
-        
-        # Store in vector database if available
-        if self.vector_enhancer and self.vector_enhancer.initialized and not is_thread:
+        if self.vector_enhancer and self.vector_enhancer.initialized:
             try:
                 import asyncio
-                message_id = channel.last_message_id if channel and hasattr(channel, 'last_message_id') else None
-                asyncio.create_task(self.vector_enhancer.store_channel_message(
-                    channel_id=channel_id,
-                    user_name=user_name,
-                    message=message_content,
-                    message_id=message_id
-                ))
-            except Exception as e:
-                logger.debug(f"Failed to store channel message in vector DB: {e}")
-        
-        if is_thread:
-            # Check if this is a new thread we haven't seen before
-            is_new_thread = channel_id not in self.thread_conversations or len(self.thread_conversations[channel_id]) == 0
-            
-            # Store in thread-specific storage (unlimited)
-            thread_messages = self.thread_conversations[channel_id]
-            
-            # If this is a new thread, inherit parent channel context first
-            if is_new_thread and parent_channel_id:
-                parent_context = self.get_smart_channel_context(parent_channel_id, limit=35)
-                if parent_context:
-                    # Add parent context with a marker (preserve original timestamps)
-                    for parent_msg in parent_context:
-                        parent_msg_obj = ChannelMessage(
-                            content=f"[Parent] {parent_msg}",
-                            timestamp=datetime.now() - timedelta(minutes=1),  # Slightly older than current
-                            user_name="system"
-                        )
-                        thread_messages.append(parent_msg_obj)
+                message_id = getattr(channel, 'last_message_id', None) if channel else None
                 
-                # Map thread to parent channel
-                self.thread_parent_map[channel_id] = parent_channel_id
-            
-            thread_messages.append(message_obj)
-            self.thread_last_activity[channel_id] = datetime.now()
-            
-            # Store thread message in vector database
-            if self.vector_enhancer and self.vector_enhancer.initialized:
-                try:
-                    import asyncio
-                    message_id = channel.last_message_id if channel and hasattr(channel, 'last_message_id') else None
+                if is_thread:
+                    # Store thread message
                     asyncio.create_task(self.vector_enhancer.vector_db.add_thread_message(
                         thread_id=channel_id,
                         parent_channel_id=parent_channel_id or 0,
@@ -193,43 +116,78 @@ class ContextManager:
                         message=message_content,
                         message_id=message_id
                     ))
-                except Exception as e:
-                    logger.debug(f"Failed to store thread message in vector DB: {e}")
+                else:
+                    # Store regular channel message
+                    asyncio.create_task(self.vector_enhancer.store_channel_message(
+                        channel_id=channel_id,
+                        user_name=user_name,
+                        message=message_content,
+                        message_id=message_id
+                    ))
+            except Exception as e:
+                logger.debug(f"Failed to store message in vector DB: {e}")
         else:
-            # Store in regular channel storage
-            channel_messages = self.channel_conversations[channel_id]
-            channel_messages.append(message_obj)
-            self.channel_last_activity[channel_id] = datetime.now()
+            logger.warning("Vector database not available - message not stored")
     
-    def get_channel_context(self, channel_id: int, limit: int = 35) -> List[str]:
-        """Get recent channel messages for context (legacy method for compatibility)"""
-        return self.get_smart_channel_context(channel_id, limit)
+    async def get_conversation_context(self, user_id: int, channel_id: int, query: str = "") -> List[str]:
+        """Get conversation context from vector database using semantic search"""
+        if self.vector_enhancer and self.vector_enhancer.initialized:
+            try:
+                results = await self.vector_enhancer.get_semantic_conversation_context(
+                    query=query or "recent conversation",
+                    user_id=user_id,
+                    channel_id=channel_id,
+                    limit=5
+                )
+                return results
+            except Exception as e:
+                logger.debug(f"Failed to get conversation context from vector DB: {e}")
+        return []
     
+    async def get_channel_context(self, channel_id: int, query: str = "", limit: int = 10) -> List[str]:
+        """Get channel messages from vector database using semantic search"""
+        if self.vector_enhancer and self.vector_enhancer.initialized:
+            try:
+                results = await self.vector_enhancer.get_semantic_channel_context(
+                    query=query or "recent channel discussion",
+                    channel_id=channel_id,
+                    limit=limit
+                )
+                return results
+            except Exception as e:
+                logger.debug(f"Failed to get channel context from vector DB: {e}")
+        return []
+    
+    async def get_thread_context(self, thread_id: int, query: str = "", limit: int = 10) -> List[str]:
+        """Get thread messages from vector database"""
+        if self.vector_enhancer and self.vector_enhancer.initialized:
+            try:
+                # Search thread context collection specifically
+                results = self.vector_enhancer.vector_db.collections['thread_context'].query(
+                    query_texts=[query or "thread discussion"],
+                    n_results=limit,
+                    where={"thread_id": str(thread_id)}
+                )
+                
+                if results['documents'] and results['documents'][0]:
+                    return results['documents'][0]
+            except Exception as e:
+                logger.debug(f"Failed to get thread context from vector DB: {e}")
+        return []
+    
+    # Legacy compatibility methods
     def get_smart_channel_context(self, channel_id: int, limit: int = 35, include_weights: bool = False) -> List[str]:
-        """Get channel messages (weights parameter kept for compatibility but ignored)"""
-        channel_messages = self.channel_conversations.get(channel_id, deque())
-        
-        if not channel_messages:
+        """Legacy method - now uses vector DB async call"""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Create a task for later execution
+                return []  # Return empty for now, will be handled by new context system
+            else:
+                return loop.run_until_complete(self.get_channel_context(channel_id, limit=limit))
+        except:
             return []
-        
-        # Just get all messages (already limited to 35 by storage)
-        messages = list(channel_messages)
-        
-        # Return just the content strings (no more weights)
-        return [msg.content for msg in messages]
-    
-    def get_thread_context(self, thread_id: int) -> List[str]:
-        """Get thread messages (parent context already inherited when thread was first seen)"""
-        thread_messages = self.thread_conversations.get(thread_id, deque())
-        return [msg.content for msg in thread_messages]
-    
-    def get_conversation_context(self, user_id: int, channel_id: int) -> List[dict]:
-        """Get conversation context if fresh"""
-        if not self.is_context_fresh(user_id, channel_id):
-            return []
-        
-        key = self.get_conversation_key(user_id, channel_id)
-        return list(self.unified_conversations.get(key, []))
     
     async def filter_conversation_context(self, query: str, conversation_context: List[dict], user_name: str) -> str:
         """Filter conversation context for relevance using OpenAI GPT-4o mini"""
@@ -380,63 +338,50 @@ Return only relevant permanent context items, one per line, in the exact same fo
         return ""
 
     async def build_unfiltered_context(self, user_id: int, channel_id: int, user_name: str, message=None) -> str:
-        """Build complete unfiltered context for casual AI chat"""
+        """Build complete unfiltered context for casual AI chat using vector database"""
         user_key = data_manager.get_user_key(message.author) if message else None
         
-        # Build structured context
+        # Build structured context using vector database
         structured_context = []
         
-        # [Reply Context] - If this is a reply, show what they're replying to
+        # [Reply Context] - Always preserved
         reply_context = self.extract_reply_context(message)
         if reply_context:
             structured_context.append(f"[Reply Context]\n{reply_context}")
         
-        # [Channel Summary] - Recent channel/thread messages
-        if user_key:
-            user_settings = data_manager.get_user_settings(user_key)
-            if user_settings.get("use_channel_context", True):
-                # If user mentioned specific channels, only use those
-                if message and message.channel_mentions:
-                    for mentioned_channel in message.channel_mentions:
-                        mentioned_messages = self.get_channel_context(mentioned_channel.id, limit=35)
-                        if mentioned_messages:
-                            mentioned_context_text = "\n".join(mentioned_messages)
-                            structured_context.append(f"[Channel Summary - #{mentioned_channel.name}]\nRecent messages:\n{mentioned_context_text}")
-                else:
-                    # Check if current channel is a thread
-                    is_current_thread = (message and hasattr(message.channel, 'type') and 
-                                       str(message.channel.type) in ['public_thread', 'private_thread'])
-                    
-                    if is_current_thread:
-                        # Use thread context
-                        thread_messages = self.get_thread_context(channel_id)
-                        if thread_messages:
-                            thread_context_text = "\n".join(thread_messages)
-                            thread_name = message.channel.name if hasattr(message.channel, 'name') else "current thread"
-                            structured_context.append(f"[Thread Summary - {thread_name}]\nThis is a thread conversation. Recent messages:\n{thread_context_text}")
-                    else:
-                        # Regular channel context
-                        channel_messages = self.get_channel_context(channel_id, limit=35)
-                        if channel_messages:
-                            channel_context_text = "\n".join(channel_messages)
-                            current_channel_name = message.channel.name if message and hasattr(message.channel, 'name') else "current channel"
-                            structured_context.append(f"[Channel Summary - #{current_channel_name}]\nRecent messages in this channel:\n{channel_context_text}")
+        # [Recent Conversations] - From vector database
+        if self.vector_enhancer and self.vector_enhancer.initialized:
+            try:
+                recent_conversations = await self.get_conversation_context(user_id, channel_id, "recent conversation")
+                if recent_conversations:
+                    conv_text = "\n".join(recent_conversations)
+                    structured_context.append(f"[Recent Conversations]\n{conv_text}")
+                
+                # [Channel Context] - From vector database
+                channel_messages = await self.get_channel_context(channel_id, "recent discussion", limit=10)
+                if channel_messages:
+                    channel_text = "\n".join(channel_messages)
+                    channel_name = message.channel.name if message and hasattr(message.channel, 'name') else "current channel"
+                    structured_context.append(f"[Channel Summary - #{channel_name}]\n{channel_text}")
+                
+                # [Thread Context] if applicable
+                if message and hasattr(message.channel, 'type') and str(message.channel.type) in ['public_thread', 'private_thread']:
+                    thread_messages = await self.get_thread_context(channel_id, "thread discussion")
+                    if thread_messages:
+                        thread_text = "\n".join(thread_messages)
+                        thread_name = message.channel.name if hasattr(message.channel, 'name') else "current thread"
+                        structured_context.append(f"[Thread Summary - {thread_name}]\n{thread_text}")
+            
+            except Exception as e:
+                logger.debug(f"Failed to get vector context for unfiltered build: {e}")
         
-        # [User Context] - Information about the user and their preferences
+        # [User Context] - Always include user info and permanent context
         user_context_parts = []
         
-        # Add user name
         if user_name:
             user_context_parts.append(f"Current user: {user_name}")
         
-        # Add conversation history
-        conversation_context = self.get_conversation_context(user_id, channel_id)
-        if conversation_context:
-            user_context_parts.append(f"Recent conversation with this user ({len(conversation_context)} messages in memory)")
-            for msg in conversation_context[-4:]:  # Show last 2 exchanges
-                user_context_parts.append(f"- {msg['role'].title()}: {msg['content'][:100]}...")
-        
-        # Add permanent context about user
+        # Add permanent context about user (raw, unfiltered)
         if user_key:
             permanent_items = data_manager.get_permanent_context(user_key)
             if permanent_items:
@@ -447,7 +392,7 @@ Return only relevant permanent context items, one per line, in the exact same fo
         if user_context_parts:
             structured_context.append(f"[User Context]\n" + "\n".join(user_context_parts))
         
-        # [Global Settings] - System-wide preferences
+        # [Global Settings] - System-wide preferences (always unfiltered)
         unfiltered_items = data_manager.get_unfiltered_permanent_context()
         if unfiltered_items:
             settings_text = "\n".join([f"- {item}" for item in unfiltered_items])
@@ -456,13 +401,13 @@ Return only relevant permanent context items, one per line, in the exact same fo
         return "\n\n".join(structured_context) if structured_context else ""
 
     async def build_full_context(self, query: str, user_id: int, channel_id: int, user_name: str, message=None) -> str:
-        """Build complete filtered context for AI (conversation + channel + permanent context filtered together)"""
+        """Build complete context using vector database and raw permanent context"""
         user_key = data_manager.get_user_key(message.author) if message else None
         
-        # Try to enhance with vector database semantic search first
+        # Use vector database for all context retrieval
         if self.vector_enhancer and self.vector_enhancer.initialized:
             try:
-                # Get semantically relevant context from vector DB (conversations and channels)
+                # Get semantically relevant context from vector DB
                 semantic_context = await self.vector_enhancer.enhance_context_with_semantic_search(
                     query=query,
                     user_id=user_id,
@@ -470,150 +415,76 @@ Return only relevant permanent context items, one per line, in the exact same fo
                     existing_context=""
                 )
                 
-                # Always add permanent context raw from JSON (not filtered)
+                # Build final context with all components
+                context_parts = []
+                
+                # Add user identification
+                if user_name:
+                    context_parts.append(f"User: {user_name}")
+                
+                # Add reply context if exists (always preserved)
+                reply_context = self.extract_reply_context(message)
+                if reply_context:
+                    context_parts.append(reply_context)
+                
+                # Add semantic search results
+                if semantic_context:
+                    context_parts.append(semantic_context)
+                
+                # Add permanent context raw (never filtered)
                 if user_key:
                     permanent_items = data_manager.get_permanent_context(user_key)
                     if permanent_items:
                         permanent_text = "Permanent user context:\n" + "\n".join([
                             f"- {item}" for item in permanent_items
                         ])
-                        semantic_context = f"{semantic_context}\n\n{permanent_text}" if semantic_context else permanent_text
+                        context_parts.append(permanent_text)
                 
-                # Add reply context if exists
-                reply_context = self.extract_reply_context(message)
-                if reply_context:
-                    semantic_context = f"{reply_context}\n\n{semantic_context}" if semantic_context else reply_context
-                
-                # Add global unfiltered context
+                # Add global unfiltered context (always included)
                 unfiltered_items = data_manager.get_unfiltered_permanent_context()
                 if unfiltered_items:
                     unfiltered_context = "Global preferences (always apply):\n" + "\n".join([
                         f"- [MANDATORY] {item}" for item in unfiltered_items
                     ])
-                    semantic_context = f"{semantic_context}\n\n{unfiltered_context}" if semantic_context else unfiltered_context
+                    context_parts.append(unfiltered_context)
                 
-                if semantic_context:
-                    logger.debug("Using vector-enhanced semantic context with raw permanent context")
-                    return semantic_context
+                final_context = "\n\n".join(context_parts)
+                logger.debug("Using vector database context with raw permanent context")
+                return final_context
+                
             except Exception as e:
-                logger.debug(f"Vector context enhancement failed, falling back to standard: {e}")
+                logger.debug(f"Vector context building failed: {e}")
         
-        # Gather all available context
-        context_parts = []
+        # Fallback for when vector DB is not available
+        logger.warning("Vector database not available - using minimal context")
+        fallback_parts = []
         
-        # Always include user name
         if user_name:
-            context_parts.append(f"User: {user_name}")
+            fallback_parts.append(f"User: {user_name}")
         
-        # Get conversation context
-        conversation_context = self.get_conversation_context(user_id, channel_id)
-        if conversation_context:
-            conversation_text = "\n".join([
-                f"[Previous] {msg['role']}: {msg['content']}" 
-                for msg in conversation_context[-6:]
-            ])
-            context_parts.append(f"Previous conversation:\n{conversation_text}")
+        # Add reply context
+        reply_context = self.extract_reply_context(message)
+        if reply_context:
+            fallback_parts.append(reply_context)
         
-        # Get channel context (always include for filtering)
-        # If user mentioned specific channels, only use those
-        if message and message.channel_mentions:
-            for mentioned_channel in message.channel_mentions:
-                mentioned_messages = self.get_channel_context(mentioned_channel.id, limit=35)
-                if mentioned_messages:
-                    mentioned_context_text = "\n".join(mentioned_messages)
-                    context_parts.append(f"Recent discussion in #{mentioned_channel.name}:\n{mentioned_context_text}")
-        else:
-            # Check if current channel is a thread
-            is_current_thread = (message and hasattr(message.channel, 'type') and 
-                               str(message.channel.type) in ['public_thread', 'private_thread'])
-            
-            if is_current_thread:
-                # Use thread context (parent context already inherited when thread was created)
-                thread_messages = self.get_thread_context(channel_id)
-                if thread_messages:
-                    thread_context_text = "\n".join(thread_messages)
-                    thread_name = message.channel.name if hasattr(message.channel, 'name') else "current thread"
-                    context_parts.append(f"Thread discussion in {thread_name}:\n{thread_context_text}")
-            else:
-                # No channels mentioned, use current channel context
-                channel_messages = self.get_smart_channel_context(channel_id, limit=35)
-                if channel_messages:
-                    channel_context_text = "\n".join(channel_messages)
-                    current_channel_name = message.channel.name if message and hasattr(message.channel, 'name') else "current channel"
-                    context_parts.append(f"Recent discussion in #{current_channel_name}:\n{channel_context_text}")
-        
-        # Separate permanent context to add after filtering
-        permanent_context_text = ""
+        # Add permanent context (still raw)
         if user_key:
             permanent_items = data_manager.get_permanent_context(user_key)
             if permanent_items:
-                permanent_context_text = "Permanent user context:\n" + "\n".join([f"- {item}" for item in permanent_items])
+                permanent_text = "Permanent user context:\n" + "\n".join([
+                    f"- {item}" for item in permanent_items
+                ])
+                fallback_parts.append(permanent_text)
         
-        # Filter context (excluding permanent context which is added raw)
-        if context_parts and config.has_openai_api():
-            try:
-                full_context = "\n\n".join(context_parts)
-                filtered_context = await self.filter_all_context(query, full_context, user_name)
-                
-                # Add permanent context AFTER filtering (always raw)
-                if permanent_context_text:
-                    filtered_context = f"{filtered_context}\n\n{permanent_context_text}" if filtered_context else permanent_context_text
-                
-                # Add reply context after filtering (always preserved, unfiltered)
-                reply_context = self.extract_reply_context(message)
-                if reply_context:
-                    filtered_context = f"{reply_context}\n\n{filtered_context}" if filtered_context else reply_context
-                
-                # Add global unfiltered permanent context after filtering
-                unfiltered_items = data_manager.get_unfiltered_permanent_context()
-                if unfiltered_items:
-                    unfiltered_context = "Global preferences (always apply):\n" + "\n".join([
-                        f"- [MANDATORY] {item}" for item in unfiltered_items
-                    ])
-                    return f"{filtered_context}\n\n{unfiltered_context}" if filtered_context else unfiltered_context
-                
-                return filtered_context
-            except Exception as e:
-                logger.debug(f"Context filtering failed: {e}")
-                # Fallback to unfiltered context
-                full_context = "\n\n".join(context_parts)
-                
-                # Add permanent context (always raw)
-                if permanent_context_text:
-                    full_context = f"{full_context}\n\n{permanent_context_text}" if full_context else permanent_context_text
-                
-                # Add reply context to fallback as well
-                reply_context = self.extract_reply_context(message)
-                if reply_context:
-                    full_context = f"{reply_context}\n\n{full_context}" if full_context else reply_context
-                
-                unfiltered_items = data_manager.get_unfiltered_permanent_context()
-                if unfiltered_items:
-                    unfiltered_context = "Global preferences (always apply):\n" + "\n".join([
-                        f"- [MANDATORY] {item}" for item in unfiltered_items
-                    ])
-                    return f"{full_context}\n\n{unfiltered_context}" if full_context else unfiltered_context
-                return full_context
-        
-        # Return unfiltered context if no OpenAI API
-        full_context = "\n\n".join(context_parts) if context_parts else f"User: {user_name}" if user_name else ""
-        
-        # Add permanent context (always raw)
-        if permanent_context_text:
-            full_context = f"{full_context}\n\n{permanent_context_text}" if full_context else permanent_context_text
-        
-        # Add reply context even when no OpenAI API
-        reply_context = self.extract_reply_context(message)
-        if reply_context:
-            full_context = f"{reply_context}\n\n{full_context}" if full_context else reply_context
-        
+        # Add global context
         unfiltered_items = data_manager.get_unfiltered_permanent_context()
         if unfiltered_items:
             unfiltered_context = "Global preferences (always apply):\n" + "\n".join([
                 f"- [MANDATORY] {item}" for item in unfiltered_items
             ])
-            return f"{full_context}\n\n{unfiltered_context}" if full_context else unfiltered_context
-        return full_context
+            fallback_parts.append(unfiltered_context)
+        
+        return "\n\n".join(fallback_parts) if fallback_parts else f"User: {user_name}" if user_name else ""
     
     async def filter_all_context(self, query: str, full_context: str, user_name: str) -> str:
         """Filter all context types together for relevance using OpenAI GPT-4o mini"""

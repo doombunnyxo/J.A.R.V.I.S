@@ -91,6 +91,11 @@ class ChromaVectorDB:
             logger.info(f"Chroma database initialized at {self.persist_directory}")
             return True
             
+        except ImportError as e:
+            logger.warning(f"ChromaDB dependencies not available: {e}")
+            logger.info("Bot will run without vector database features - install build tools and retry")
+            self._initialized = False
+            return False
         except Exception as e:
             logger.error(f"Failed to initialize Chroma database: {e}")
             logger.info("Bot will run without vector database features")
