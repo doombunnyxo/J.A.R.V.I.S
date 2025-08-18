@@ -166,7 +166,7 @@ class ContextManager:
                 results = self.vector_enhancer.vector_db.collections['thread_context'].query(
                     query_texts=[query or "thread discussion"],
                     n_results=limit,
-                    where={"thread_id": str(thread_id)}
+                    where={"thread_id": {"$eq": str(thread_id)}}
                 )
                 
                 if results['documents'] and results['documents'][0]:

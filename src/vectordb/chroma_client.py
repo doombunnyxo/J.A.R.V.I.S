@@ -258,12 +258,12 @@ class ChromaVectorDB:
             return []
             
         try:
-            # Build where clause for filtering
+            # Build where clause for filtering (ChromaDB 1.0+ format)
             where_clause = {}
             if user_id:
-                where_clause["user_id"] = str(user_id)
+                where_clause["user_id"] = {"$eq": str(user_id)}
             if channel_id:
-                where_clause["channel_id"] = str(channel_id)
+                where_clause["channel_id"] = {"$eq": str(channel_id)}
             
             # Perform semantic search
             results = self.collections['conversations'].query(
@@ -308,7 +308,7 @@ class ChromaVectorDB:
             results = self.collections['channel_context'].query(
                 query_texts=[query],
                 n_results=limit,
-                where={"channel_id": str(channel_id)}
+                where={"channel_id": {"$eq": str(channel_id)}}
             )
             
             # Format results
@@ -529,20 +529,33 @@ class ChromaVectorDB:
             # Clean up each collection
             for name, collection in self.collections.items():
                     
-                # Get all items
-                all_items = collection.get()
-                
-                if all_items['ids']:
-                    # Find old items
-                    old_ids = []
-                    for i, metadata in enumerate(all_items['metadatas'] or []):
-                        if 'timestamp' in metadata and metadata['timestamp'] < cutoff_date:
-                            old_ids.append(all_items['ids'][i])
+                # Get items older than cutoff date
+                try:
+                    old_items = collection.get(
+                        where={"timestamp": {"$lt": cutoff_date}}
+                    )
                     
-                    # Delete old items
-                    if old_ids:
-                        collection.delete(ids=old_ids)
-                        logger.info(f"Cleaned {len(old_ids)} old items from {name}")
+                    if old_items['ids']:
+                        # Delete old items
+                        collection.delete(ids=old_items['ids'])
+                        logger.info(f"Cleaned {len(old_items['ids'])} old items from {name}")
+                        
+                except Exception as e:
+                    # Fallback to getting all items if timestamp query fails
+                    logger.debug(f"Timestamp query failed, using fallback cleanup for {name}: {e}")
+                    all_items = collection.get()
+                    
+                    if all_items['ids']:
+                        # Find old items manually
+                        old_ids = []
+                        for i, metadata in enumerate(all_items['metadatas'] or []):
+                            if 'timestamp' in metadata and metadata['timestamp'] < cutoff_date:
+                                old_ids.append(all_items['ids'][i])
+                        
+                        # Delete old items
+                        if old_ids:
+                            collection.delete(ids=old_ids)
+                            logger.info(f"Cleaned {len(old_ids)} old items from {name}")
             
             return True
             
