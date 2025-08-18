@@ -36,6 +36,17 @@ class AdminCommands(commands.Cog):
             return
             
         try:
+            # Debug: Check Python path and chromadb availability
+            import sys
+            await ctx.send(f"**Debug Info:**\nPython path: {sys.executable}\nPython version: {sys.version}")
+            
+            try:
+                import chromadb
+                await ctx.send(f"✅ ChromaDB module found: v{chromadb.__version__}")
+            except ImportError as e:
+                await ctx.send(f"❌ ChromaDB import failed: {e}")
+                return
+                
             from ..vectordb.chroma_client import ChromaDBClient
             
             # Try to get the vector enhancer from context manager

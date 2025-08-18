@@ -41,11 +41,14 @@ class OpenAIAPI:
             "temperature": temperature
         }
         
-        # Log request size for debugging
+        # Log request size and timing for debugging
         from ..utils.logging import get_logger
         logger = get_logger(__name__)
         total_chars = sum(len(str(msg.get('content', ''))) for msg in messages)
-        logger.debug(f"OpenAI request: {total_chars} chars, max_tokens: {max_tokens}, model: {self.model}")
+        logger.warning(f"OpenAI API Call Starting - Model: {self.model}, Input: {total_chars} chars (~{total_chars//4} tokens), Max output: {max_tokens} tokens")
+        
+        import time
+        request_start_time = time.time()
         
         # Try with increasing timeouts
         timeouts = [30, 60, 90]  # 30s, 60s, 90s
@@ -55,16 +58,16 @@ class OpenAIAPI:
                 timeout = aiohttp.ClientTimeout(total=timeout_seconds)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.post(self.base_url, headers=headers, json=payload) as response:
+                        request_duration = time.time() - request_start_time
                         if response.status == 200:
                             result = await response.json()
+                            logger.warning(f"OpenAI API Success - Duration: {request_duration:.2f}s, Response length: {len(result['choices'][0]['message']['content'])} chars")
                             return result["choices"][0]["message"]["content"]
                         else:
                             error_text = await response.text()
                             # Log detailed error info
-                            from ..utils.logging import get_logger
-                            logger = get_logger(__name__)
-                            logger.error(f"OpenAI API error {response.status}: {error_text}")
-                            logger.debug(f"Model: {self.model}, Max tokens: {max_tokens}")
+                            logger.error(f"OpenAI API HTTP Error {response.status} after {request_duration:.2f}s: {error_text}")
+                            logger.error(f"Request details - Model: {self.model}, Input tokens: ~{total_chars//4}, Max output tokens: {max_tokens}")
                             raise Exception(f"OpenAI API error {response.status}: {error_text}")
             
             except asyncio.TimeoutError:
