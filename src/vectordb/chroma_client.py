@@ -259,17 +259,22 @@ class ChromaVectorDB:
             
         try:
             # Build where clause for filtering (ChromaDB 1.0+ format)
-            where_clause = {}
-            if user_id:
-                where_clause["user_id"] = {"$eq": str(user_id)}
-            if channel_id:
-                where_clause["channel_id"] = {"$eq": str(channel_id)}
+            where_clause = None
+            if user_id and channel_id:
+                where_clause = {"$and": [
+                    {"user_id": {"$eq": str(user_id)}},
+                    {"channel_id": {"$eq": str(channel_id)}}
+                ]}
+            elif user_id:
+                where_clause = {"user_id": {"$eq": str(user_id)}}
+            elif channel_id:
+                where_clause = {"channel_id": {"$eq": str(channel_id)}}
             
             # Perform semantic search
             results = self.collections['conversations'].query(
                 query_texts=[query],
                 n_results=limit,
-                where=where_clause if where_clause else None
+                where=where_clause
             )
             
             # Format results
