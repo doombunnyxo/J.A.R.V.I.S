@@ -169,27 +169,16 @@ class AIHandler:
             else:  # Default to OpenAI
                 response = await self._handle_with_openai(message, cleaned_query)
             
-            # Store conversation context
+            # Store conversation context (background task - don't block response)
             if response and not response.startswith("Error"):
-                self.context_manager.add_to_conversation(
-                    message.author.id, message.channel.id, ai_query, response
-                )
-                
-                # Store bot response in vector database
-                if hasattr(self.context_manager, 'vector_enhancer') and self.context_manager.vector_enhancer:
-                    try:
-                        import asyncio
-                        asyncio.create_task(
-                            self.context_manager.vector_enhancer.vector_db.add_bot_response(
-                                channel_id=message.channel.id,
-                                user_id=message.author.id,
-                                response=response,
-                                response_type=provider,
-                                metadata={"query": ai_query[:500]}
-                            )
-                        )
-                    except Exception as e:
-                        logger.debug(f"Failed to store bot response in vector DB: {e}")
+                # Store in vector database asynchronously
+                asyncio.create_task(self._store_conversation_async(
+                    user_id=message.author.id,
+                    channel_id=message.channel.id,
+                    user_message=ai_query,
+                    ai_response=response,
+                    provider=provider
+                ))
             
             # Send response if not already sent (admin actions send their own)
             if response and response.strip():
@@ -647,3 +636,22 @@ Finally, respond with a clear answer.
                 f"❌ **Role reorganization failed**: No roles could be renamed\n"
                 f"**Errors**: {len(errors)}"
             )
+    
+    async def _store_conversation_async(self, user_id: int, channel_id: int, 
+                                       user_message: str, ai_response: str, provider: str):
+        """Store conversation in vector database asynchronously (background task)"""
+        try:
+            # Store conversation using context manager
+            self.context_manager.add_to_conversation(user_id, channel_id, user_message, ai_response)
+            
+            # Store bot response in vector database
+            if hasattr(self.context_manager, 'vector_enhancer') and self.context_manager.vector_enhancer:
+                await self.context_manager.vector_enhancer.vector_db.add_bot_response(
+                    channel_id=channel_id,
+                    user_id=user_id,
+                    response=ai_response,
+                    response_type=provider,
+                    metadata={"query": user_message[:500]}
+                )
+        except Exception as e:
+            logger.debug(f"Failed to store conversation in background: {e}")

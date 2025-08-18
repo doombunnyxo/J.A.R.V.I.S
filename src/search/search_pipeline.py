@@ -76,38 +76,8 @@ class SearchPipeline:
             
             total_time = time.time() - start_time
             
-            # Store search results in vector database
-            try:
-                from ..vectordb.context_enhancer import vector_enhancer
-                if vector_enhancer and vector_enhancer.initialized:
-                    # Extract user_id and channel_id from channel object if available
-                    user_id = None
-                    channel_id = None
-                    if channel:
-                        channel_id = channel.id
-                        # Try to get user_id from the last message in the channel
-                        try:
-                            async for msg in channel.history(limit=1):
-                                if msg.author:
-                                    user_id = msg.author.id
-                                    break
-                        except:
-                            pass
-                    
-                    # Store the search result
-                    import asyncio
-                    asyncio.create_task(
-                        vector_enhancer.vector_db.add_search_result(
-                            query=query,
-                            result=f"Optimized: {optimized_query}\n\nResponse: {response}",
-                            source="google_search",
-                            user_id=user_id,
-                            channel_id=channel_id
-                        )
-                    )
-            except Exception as e:
-                # Silently fail - vector DB is optional
-                pass
+            # Store search results in vector database (background task - don't block response)
+            asyncio.create_task(self._store_search_result_async(query, optimized_query, response, channel))
             
             # Step 4: Update blacklist immediately after getting response
             if hasattr(self, '_tracking_data') and self._tracking_data:
@@ -337,3 +307,36 @@ Decision:"""
         
         except Exception as e:
             return f"Search failed: {str(e)}"
+    
+    async def _store_search_result_async(self, query: str, optimized_query: str, response: str, channel):
+        """Store search results in vector database asynchronously (background task)"""
+        try:
+            from ..vectordb.context_enhancer import vector_enhancer
+            if vector_enhancer and vector_enhancer.initialized:
+                # Extract user_id and channel_id from channel object if available
+                user_id = None
+                channel_id = None
+                if channel:
+                    channel_id = channel.id
+                    # Try to get user_id from the last message in the channel
+                    try:
+                        async for msg in channel.history(limit=1):
+                            if msg.author:
+                                user_id = msg.author.id
+                                break
+                    except:
+                        pass
+                
+                # Store the search result
+                await vector_enhancer.vector_db.add_search_result(
+                    query=query,
+                    result=f"Optimized: {optimized_query}\n\nResponse: {response}",
+                    source="google_search",
+                    user_id=user_id,
+                    channel_id=channel_id
+                )
+        except Exception as e:
+            # Silently fail - vector DB is optional for search functionality
+            from ..utils.logging import get_logger
+            logger = get_logger(__name__)
+            logger.debug(f"Failed to store search result in vector DB: {e}")

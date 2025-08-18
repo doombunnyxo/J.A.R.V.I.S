@@ -28,7 +28,7 @@ class OpenAIAPI:
         self.model = model_map.get(model, "gpt-4o-mini")
         
     async def create_completion(self, messages: list, max_tokens: int = 1000, temperature: float = 0.2) -> str:
-        """Create a completion using OpenAI API"""
+        """Create a completion using OpenAI API with retry logic"""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -41,20 +41,35 @@ class OpenAIAPI:
             "temperature": temperature
         }
         
-        timeout = aiohttp.ClientTimeout(total=15)  # Faster timeout for API calls
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(self.base_url, headers=headers, json=payload) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    return result["choices"][0]["message"]["content"]
+        # Try with increasing timeouts
+        timeouts = [30, 60, 90]  # 30s, 60s, 90s
+        
+        for attempt, timeout_seconds in enumerate(timeouts, 1):
+            try:
+                timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(self.base_url, headers=headers, json=payload) as response:
+                        if response.status == 200:
+                            result = await response.json()
+                            return result["choices"][0]["message"]["content"]
+                        else:
+                            error_text = await response.text()
+                            # Log detailed error info
+                            from ..utils.logging import get_logger
+                            logger = get_logger(__name__)
+                            logger.error(f"OpenAI API error {response.status}: {error_text}")
+                            logger.debug(f"Model: {self.model}, Max tokens: {max_tokens}")
+                            raise Exception(f"OpenAI API error {response.status}: {error_text}")
+            
+            except asyncio.TimeoutError:
+                from ..utils.logging import get_logger
+                logger = get_logger(__name__)
+                if attempt < len(timeouts):
+                    logger.warning(f"OpenAI API timeout after {timeout_seconds}s, retrying with longer timeout (attempt {attempt}/{len(timeouts)})")
+                    await asyncio.sleep(2)  # Brief delay before retry
                 else:
-                    error_text = await response.text()
-                    # Log detailed error info
-                    from ..utils.logging import get_logger
-                    logger = get_logger(__name__)
-                    logger.error(f"OpenAI API error {response.status}: {error_text}")
-                    logger.debug(f"Model: {self.model}, Max tokens: {max_tokens}")
-                    raise Exception(f"OpenAI API error {response.status}: {error_text}")
+                    logger.error(f"OpenAI API failed after {len(timeouts)} timeout attempts")
+                    raise Exception(f"OpenAI API timeout after {timeout_seconds} seconds")
 
 async def openai_optimize_search_query(user_query: str, filtered_context: str = "", model: str = "gpt-4o-mini") -> str:
     """

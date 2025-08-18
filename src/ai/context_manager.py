@@ -404,15 +404,14 @@ Return only relevant permanent context items, one per line, in the exact same fo
         """Build complete context using vector database and raw permanent context"""
         user_key = data_manager.get_user_key(message.author) if message else None
         
-        # Use vector database for all context retrieval
+        # Use vector database for fast context retrieval (no embedding during request)
         if self.vector_enhancer and self.vector_enhancer.initialized:
             try:
-                # Get semantically relevant context from vector DB
-                semantic_context = await self.vector_enhancer.enhance_context_with_semantic_search(
+                # Get semantically relevant context from existing vector DB data
+                semantic_context = await self._get_fast_semantic_context(
                     query=query,
                     user_id=user_id,
-                    channel_id=channel_id,
-                    existing_context=""
+                    channel_id=channel_id
                 )
                 
                 # Build final context with all components
@@ -485,6 +484,38 @@ Return only relevant permanent context items, one per line, in the exact same fo
             fallback_parts.append(unfiltered_context)
         
         return "\n\n".join(fallback_parts) if fallback_parts else f"User: {user_name}" if user_name else ""
+    
+    async def _get_fast_semantic_context(self, query: str, user_id: int, channel_id: int) -> str:
+        """Get semantic context quickly from existing vector data (no new embeddings)"""
+        try:
+            context_parts = []
+            
+            # Get relevant conversations (fast - uses existing embeddings)
+            conv_results = await self.vector_enhancer.get_semantic_conversation_context(
+                query=query,
+                user_id=user_id,
+                channel_id=channel_id,
+                limit=3
+            )
+            if conv_results:
+                context_parts.append("[Relevant Previous Conversations]")
+                context_parts.extend(conv_results[:3])  # Limit to prevent token bloat
+            
+            # Get relevant channel messages (fast - uses existing embeddings)
+            channel_results = await self.vector_enhancer.get_semantic_channel_context(
+                query=query,
+                channel_id=channel_id,
+                limit=5
+            )
+            if channel_results:
+                context_parts.append("[Relevant Channel Discussion]")
+                context_parts.extend(channel_results[:5])  # Limit to prevent token bloat
+            
+            return "\n\n".join(context_parts) if context_parts else ""
+            
+        except Exception as e:
+            logger.debug(f"Fast semantic context retrieval failed: {e}")
+            return ""
     
     async def filter_all_context(self, query: str, full_context: str, user_name: str) -> str:
         """Filter all context types together for relevance using OpenAI GPT-4o mini"""
