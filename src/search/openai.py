@@ -298,6 +298,18 @@ Answer:"""
     # Set output limits for final responses
     max_tokens = 512
     
+    # Log two-stage synthesis message composition
+    from ..utils.logging import get_logger
+    logger = get_logger(__name__)
+    logger.debug(f"Two-stage synthesis - System message size: {len(system_message)} chars")
+    logger.debug(f"Two-stage synthesis - User message size: {len(user_message)} chars")
+    logger.debug(f"Two-stage synthesis - Combined summaries size: {len(combined_summaries)} chars")
+    
+    total_synthesis_size = len(system_message) + len(user_message)
+    final_prompt_tokens = total_synthesis_size // 4
+    logger.debug(f"Two-stage synthesis - Total message size: {total_synthesis_size} chars (~{final_prompt_tokens} tokens)")
+    logger.debug(f"Two-stage synthesis - Max tokens requested: {max_tokens}")
+    
     # Call OpenAI API for final synthesis
     response = await openai_client.create_completion(
         messages=messages,
@@ -305,10 +317,6 @@ Answer:"""
         temperature=0.2
     )
     synthesis_time = time.time() - synthesis_start
-    
-    
-    # Calculate actual input tokens for the final synthesis prompt (combined_summaries is already in user_message)
-    final_prompt_tokens = (len(system_message) + len(user_message)) // 4
     
     return f"**OpenAI GPT-4o Mini Web Search** ({len(webpage_sections)} sites, ~{final_prompt_tokens} tokens): {response}"
 
@@ -358,8 +366,25 @@ Instructions:
 - Keep the answer focused and as concise as possible given the input size.
 - Optionally, limit your answer length to 1000 tokens."""
 
-        # Build user message in the specified format
+        # Build user message with size limits
         context_section = filtered_context.strip() if filtered_context and filtered_context.strip() else "No previous context available."
+        
+        # Log component sizes
+        from ..utils.logging import get_logger
+        logger = get_logger(__name__)
+        logger.debug(f"Query size: {len(user_query)} chars")
+        logger.debug(f"Context size before limit: {len(context_section)} chars")
+        logger.debug(f"Search results size before limit: {len(search_results)} chars")
+        
+        # Limit context size to prevent timeouts
+        if len(context_section) > 2000:
+            context_section = context_section[:2000] + "\n[Context truncated for performance]"
+            logger.debug(f"Context truncated to: {len(context_section)} chars")
+        
+        # Limit search results size  
+        if len(search_results) > 4000:
+            search_results = search_results[:4000] + "\n[Search results truncated for performance]"
+            logger.debug(f"Search results truncated to: {len(search_results)} chars")
         
         user_message = f"""User Query:
 {user_query}
@@ -380,6 +405,16 @@ Discord-formatted Answer:"""
         # Set reasonable output token limits based on model
         max_tokens = 2048 if model == "gpt-4o" else 512
         
+        # Log final message composition before API call
+        logger.debug(f"System message size: {len(system_message)} chars")
+        logger.debug(f"User message size: {len(user_message)} chars")
+        
+        # Calculate and log total message size
+        total_message_size = len(system_message) + len(user_message)
+        single_stage_tokens = total_message_size // 4
+        logger.debug(f"Total message size: {total_message_size} chars (~{single_stage_tokens} tokens)")
+        logger.debug(f"Max tokens requested: {max_tokens}")
+        
         # Call OpenAI API
         response = await openai_client.create_completion(
             messages=messages,
@@ -387,10 +422,6 @@ Discord-formatted Answer:"""
             temperature=0.2
         )
         single_stage_time = time.time() - single_stage_start
-        
-        
-        # Calculate actual input tokens for the single-stage approach
-        single_stage_tokens = (len(system_message) + len(user_message)) // 4
         
         # Count websites in search results (look for numbered results like "1. **Title**")
         import re

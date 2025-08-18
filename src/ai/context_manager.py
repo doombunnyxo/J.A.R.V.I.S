@@ -404,9 +404,8 @@ Return only relevant permanent context items, one per line, in the exact same fo
         """Build complete context using vector database and raw permanent context"""
         user_key = data_manager.get_user_key(message.author) if message else None
         
-        # TEMPORARILY DISABLE vector context to test if this is causing timeouts
-        # TODO: Re-enable after testing
-        if False and self.vector_enhancer and self.vector_enhancer.initialized:
+        # Use vector database for fast context retrieval with size limits
+        if self.vector_enhancer and self.vector_enhancer.initialized:
             try:
                 # Get semantically relevant context from existing vector DB data
                 semantic_context = await self._get_fast_semantic_context(
@@ -415,41 +414,58 @@ Return only relevant permanent context items, one per line, in the exact same fo
                     channel_id=channel_id
                 )
                 
-                # Build final context with all components
+                # Build final context with all components and SIZE LIMITS
                 context_parts = []
                 
-                # Add user identification
+                # Add user identification (always small)
                 if user_name:
                     context_parts.append(f"User: {user_name}")
                 
-                # Add reply context if exists (always preserved)
+                # Add reply context if exists (always preserved but limited)
                 reply_context = self.extract_reply_context(message)
                 if reply_context:
+                    # Limit reply context to prevent bloat
+                    if len(reply_context) > 300:
+                        reply_context = reply_context[:300] + "..."
                     context_parts.append(reply_context)
                 
-                # Add semantic search results
+                # Add semantic search results (LIMITED SIZE)
                 if semantic_context:
+                    # Limit semantic context to prevent timeout
+                    if len(semantic_context) > 1500:  # Hard limit
+                        semantic_context = semantic_context[:1500] + "\n[Context truncated for performance]"
                     context_parts.append(semantic_context)
                 
-                # Add permanent context raw (never filtered)
+                # Add permanent context raw (never filtered, but limited)
                 if user_key:
                     permanent_items = data_manager.get_permanent_context(user_key)
                     if permanent_items:
+                        # Limit permanent context items
+                        limited_items = permanent_items[:10]  # Max 10 items
                         permanent_text = "Permanent user context:\n" + "\n".join([
-                            f"- {item}" for item in permanent_items
+                            f"- {item[:200]}..." if len(item) > 200 else f"- {item}" 
+                            for item in limited_items
                         ])
                         context_parts.append(permanent_text)
                 
-                # Add global unfiltered context (always included)
+                # Add global unfiltered context (always included but limited)
                 unfiltered_items = data_manager.get_unfiltered_permanent_context()
                 if unfiltered_items:
+                    limited_unfiltered = unfiltered_items[:5]  # Max 5 global items
                     unfiltered_context = "Global preferences (always apply):\n" + "\n".join([
-                        f"- [MANDATORY] {item}" for item in unfiltered_items
+                        f"- [MANDATORY] {item[:150]}..." if len(item) > 150 else f"- [MANDATORY] {item}"
+                        for item in limited_unfiltered
                     ])
                     context_parts.append(unfiltered_context)
                 
                 final_context = "\n\n".join(context_parts)
-                logger.debug("Using vector database context with raw permanent context")
+                
+                # FINAL SIZE CHECK - hard limit to prevent timeouts
+                if len(final_context) > 3000:  # Hard character limit
+                    logger.warning(f"Context too large ({len(final_context)} chars), truncating")
+                    final_context = final_context[:3000] + "\n[Context truncated for performance]"
+                
+                logger.debug(f"Built vector context: {len(final_context)} characters")
                 return final_context
                 
             except Exception as e:
