@@ -386,10 +386,16 @@ Discord-formatted Answer:"""
         # Log the full error for debugging
         from ..utils.logging import get_logger
         logger = get_logger(__name__)
-        logger.error(f"OpenAI search analysis failed: {e}")
-        logger.debug(f"Query: {user_query[:100]}...")
-        logger.debug(f"Model: {model}")
-        logger.debug(f"Search results length: {len(search_results)}")
+        logger.error(f"OpenAI search analysis failed")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error message: {str(e)}")
+        logger.error(f"Query: {user_query[:100]}...")
+        logger.error(f"Model: {model}")
+        logger.error(f"Search results length: {len(search_results)}")
+        
+        # Import traceback for full error details
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         
         return f"Error analyzing search results with OpenAI: {str(e)}"
 
