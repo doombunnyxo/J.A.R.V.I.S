@@ -31,9 +31,10 @@ class SearchPipeline:
     async def search_and_respond(self, query: str, context: str = "", channel=None) -> str:
         """
         Execute the full search pipeline:
-        1. Optimize the query using the AI provider
-        2. Perform Google search
-        3. Analyze results using the AI provider
+        1. Check if context can answer the query
+        2. If not, optimize the query using the AI provider
+        3. Perform Google search
+        4. Analyze results using the AI provider
         
         Args:
             query: User's search query
@@ -46,6 +47,11 @@ class SearchPipeline:
         try:
             import time
             start_time = time.time()
+            
+            # First, check if we can answer from context alone
+            context_response = await self._check_context_for_answer(query, context, channel)
+            if context_response:
+                return context_response
             
             # Simple approach: Optimize query first, then search
             context_size = len(context) if context else 0
@@ -79,6 +85,80 @@ class SearchPipeline:
         except Exception as e:
             provider_name = self.provider.__class__.__name__
             return f"Error in {provider_name} search pipeline: {str(e)}"
+    
+    async def _check_context_for_answer(self, query: str, context: str, channel=None) -> Optional[str]:
+        """
+        Check if the query can be answered from the Discord channel conversation history
+        before performing a web search. This saves API calls and provides faster responses
+        when information was recently discussed in the channel.
+        
+        Args:
+            query: User's search query
+            context: The context including recent channel messages
+            channel: Discord channel object
+            
+        Returns:
+            Response string if channel history has the answer, None otherwise
+        """
+        try:
+            # Skip if context is empty or too short (not enough conversation history)
+            if not context or len(context.strip()) < 200:
+                return None
+            
+            # Use OpenAI to analyze if the channel history contains the answer
+            from ..ai.openai_client import get_openai_client
+            from ..config import config
+            
+            if not config.has_openai_api():
+                return None
+            
+            openai_client = get_openai_client()
+            
+            # Build prompt to check if channel history has the answer
+            system_message = """You are analyzing a Discord channel's conversation history to see if it contains information that answers a user's question.
+
+Review the recent channel messages and the user's question. If the conversation history contains relevant information that directly answers the question, respond with "ANSWER: " followed by a clear answer based on what was discussed.
+
+If the channel history doesn't contain the information needed, or if the question requires current web information not in the chat, respond with "NEEDS_SEARCH".
+
+Guidelines:
+- Only answer if the information was explicitly discussed in the channel
+- Reference who said what when relevant (e.g., "As mentioned by UserX earlier...")
+- For questions about current events, prices, news, or external information not discussed in chat, respond "NEEDS_SEARCH"
+- For questions about the ongoing conversation or recent discussions, provide the answer from context"""
+            
+            user_message = f"""User's Question: {query}
+
+Recent Channel Conversation:
+{context}
+
+Decision:"""
+            
+            messages = [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message}
+            ]
+            
+            # Use GPT-4o mini for quick context analysis
+            response = await openai_client.create_completion(
+                messages=messages,
+                model="gpt-4o-mini",
+                max_tokens=500,
+                temperature=0.1
+            )
+            
+            # Check if channel history had the answer
+            if response.startswith("ANSWER:"):
+                answer = response[7:].strip()
+                # Indicate this came from channel context, not web search
+                return f"**OpenAI GPT-4o Mini (from channel context)**: {answer}"
+            
+            # Channel doesn't have the answer, proceed with Google web search
+            return None
+            
+        except Exception as e:
+            # On error, continue with web search
+            return None
     
     async def _update_blacklist_sync(self, tracking_data: dict):
         """Update blacklist synchronously after search completion"""
