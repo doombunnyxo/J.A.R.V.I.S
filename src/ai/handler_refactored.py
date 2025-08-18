@@ -174,6 +174,22 @@ class AIHandler:
                 self.context_manager.add_to_conversation(
                     message.author.id, message.channel.id, ai_query, response
                 )
+                
+                # Store bot response in vector database
+                if hasattr(self.context_manager, 'vector_enhancer') and self.context_manager.vector_enhancer:
+                    try:
+                        import asyncio
+                        asyncio.create_task(
+                            self.context_manager.vector_enhancer.vector_db.add_bot_response(
+                                channel_id=message.channel.id,
+                                user_id=message.author.id,
+                                response=response,
+                                response_type=provider,
+                                metadata={"query": ai_query[:500]}
+                            )
+                        )
+                    except Exception as e:
+                        logger.debug(f"Failed to store bot response in vector DB: {e}")
             
             # Send response if not already sent (admin actions send their own)
             if response and response.strip():

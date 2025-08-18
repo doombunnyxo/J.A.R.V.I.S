@@ -392,7 +392,7 @@ class RaiderIOCommands(commands.Cog):
         !rio_cutoff                  # US region (default)
         !rio_cutoff eu               # EU region cutoffs  
         !rio_cutoff 2                # Uses your character #2's region
-        !rio_cutoff eu season-tww-1  # Specific region and season
+        !rio_cutoff eu season-tww-3  # Specific region and season
         """
         command_key = f"rio_cutoff_{ctx.author.id}"
         if command_key in self._executing_commands:
@@ -535,8 +535,8 @@ class RaiderIOCommands(commands.Cog):
         Usage:
         !rio_season                     # View current season
         !rio_season current             # Set to current season
-        !rio_season season-tww-2        # Set to specific season
-        !rio_season season-tww-1        # Set to previous season
+        !rio_season season-tww-3        # Set to current season
+        !rio_season season-tww-2        # Set to previous season
         !rio_season reset               # Reset to 'current'
         """
         command_key = f"rio_season_{ctx.author.id}"
@@ -572,7 +572,7 @@ class RaiderIOCommands(commands.Cog):
                 
                 embed.add_field(
                     name="💡 Usage",
-                    value="`!rio_season season-tww-2` - Set season\n"
+                    value="`!rio_season season-tww-3` - Set season\n"
                           "`!rio_season current` - Use current season\n"
                           "`!rio_season reset` - Reset to current",
                     inline=False
@@ -701,7 +701,7 @@ class RaiderIOCommands(commands.Cog):
                 "`!rio_cutoff` - Rating thresholds (US region)\n"
                 "`!rio_cutoff 2` - Uses your character #2's region\n"
                 "`!rio_cutoff eu` - EU region cutoffs\n"
-                "`!rio_cutoff us season-tww-1` - Specific season"
+                "`!rio_cutoff us season-tww-3` - Specific season"
             ),
             inline=False
         )
@@ -710,7 +710,7 @@ class RaiderIOCommands(commands.Cog):
             name="⚙️ Season Management",
             value=(
                 "`!rio_season` - View current season setting\n"
-                "`!rio_season season-tww-2` - Set specific season\n"
+                "`!rio_season season-tww-3` - Set specific season\n"
                 "`!rio_season current` - Use current season\n"
                 "`!rio_season reset` - Reset to current"
             ),

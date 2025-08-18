@@ -76,6 +76,39 @@ class SearchPipeline:
             
             total_time = time.time() - start_time
             
+            # Store search results in vector database
+            try:
+                from ..vectordb.context_enhancer import vector_enhancer
+                if vector_enhancer and vector_enhancer.initialized:
+                    # Extract user_id and channel_id from channel object if available
+                    user_id = None
+                    channel_id = None
+                    if channel:
+                        channel_id = channel.id
+                        # Try to get user_id from the last message in the channel
+                        try:
+                            async for msg in channel.history(limit=1):
+                                if msg.author:
+                                    user_id = msg.author.id
+                                    break
+                        except:
+                            pass
+                    
+                    # Store the search result
+                    import asyncio
+                    asyncio.create_task(
+                        vector_enhancer.vector_db.add_search_result(
+                            query=query,
+                            result=f"Optimized: {optimized_query}\n\nResponse: {response}",
+                            source="google_search",
+                            user_id=user_id,
+                            channel_id=channel_id
+                        )
+                    )
+            except Exception as e:
+                # Silently fail - vector DB is optional
+                pass
+            
             # Step 4: Update blacklist immediately after getting response
             if hasattr(self, '_tracking_data') and self._tracking_data:
                 await self._update_blacklist_sync(self._tracking_data)

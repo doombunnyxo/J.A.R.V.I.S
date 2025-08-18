@@ -58,6 +58,12 @@ GOOGLE_API_KEY             # For web search
 GOOGLE_SEARCH_ENGINE_ID    # Google Custom Search Engine ID
 ```
 
+### Optional Vector Database Configuration
+```
+OLLAMA_BASE_URL            # Ollama server URL (default: http://localhost:11434)
+OLLAMA_EMBEDDING_MODEL     # Embedding model name (default: nomic-embed-text)
+```
+
 ### AI Configuration Defaults
 ```python
 # OpenAI is the primary and only AI provider

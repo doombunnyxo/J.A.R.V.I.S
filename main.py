@@ -43,6 +43,15 @@ async def setup_bot():
         await data_manager.load_all_data()
         logger.info("Data loaded successfully")
         
+        # Initialize vector database (optional - will degrade gracefully if fails)
+        logger.info("Initializing vector database...")
+        from src.vectordb.context_enhancer import vector_enhancer
+        vectordb_initialized = await vector_enhancer.initialize()
+        if vectordb_initialized:
+            logger.info("Vector database initialized successfully")
+        else:
+            logger.warning("Vector database initialization failed - running without semantic search")
+        
         # Initialize WoW managers to load their data files
         logger.info("Loading WoW manager data...")
         from src.wow.character_manager import character_manager
@@ -91,6 +100,7 @@ async def setup_bot():
             'src.commands.raiderio',
             'src.commands.wow_characters',
             'src.commands.cleaning',
+            'src.commands.vectordb',
             'src.search.google',
             'src.events.handlers'
         ]

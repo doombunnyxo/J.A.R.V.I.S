@@ -42,6 +42,13 @@ class Config:
     CHANNEL_CONTEXT_LIMIT: int = 50
     CHANNEL_CONTEXT_DISPLAY: int = 35
     
+    # World of Warcraft Configuration
+    WOW_CURRENT_SEASON: str = "season-tww-3"  # Current WoW season for RaiderIO
+    
+    # Vector Database Configuration
+    OLLAMA_BASE_URL: str = "http://localhost:11434"  # Default Ollama URL
+    OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"  # Nomic embedding model
+    
     # OpenAI configuration
     @property
     def use_openai_as_default(self) -> bool:

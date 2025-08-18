@@ -52,8 +52,8 @@ class HelpCommands(commands.Cog):
             value="`!rio` - Character lookup (uses main character)\n" +
                   "`!rio_runs` - Recent Mythic+ runs\n" +
                   "`!rio_details <number>` - Detailed run information\n" +
-                  "`!rio_cutoff` - Season rating thresholds\n" +
-                  "`!rio_season` - Manage season settings\n" +
+                  "`!rio_list` - List all stored runs\n" +
+                  "`!rio_affixes` - Current Mythic+ affixes\n" +
                   "`!add_char <name> <realm>` - Add WoW character",
             inline=False
         )
@@ -298,7 +298,8 @@ class HelpCommands(commands.Cog):
                 name="🏃 Mythic+ Runs",
                 value="`!rio_runs` - Recent runs (main character)\n" +
                       "`!rio_runs 2` - Recent runs (character #2)\n" +
-                      "`!rio_runs <name> <realm>` - Manual lookup\n\n" +
+                      "`!rio_runs <name> <realm>` - Manual lookup\n" +
+                      "`!rio_list [limit]` - List all stored runs (default: 20)\n\n" +
                       "**Shows:** Numbered list of recent runs with completion times and dates",
                 inline=False
             )
@@ -326,7 +327,7 @@ class HelpCommands(commands.Cog):
                 value="`!rio_cutoff` - Rating thresholds (US, current season)\n" +
                       "`!rio_cutoff 2` - Cutoffs for character #2's region\n" +
                       "`!rio_cutoff eu` - EU region cutoffs\n" +
-                      "`!rio_cutoff us season-tww-1` - Specific season\n\n" +
+                      "`!rio_cutoff us season-tww-3` - Specific season\n\n" +
                       "**Shows:** Rating thresholds for top percentiles (99th, 95th, 90th, etc.)",
                 inline=False
             )
@@ -334,7 +335,7 @@ class HelpCommands(commands.Cog):
             embed.add_field(
                 name="⚙️ Season Management",
                 value="`!rio_season` - View/set season for run details\n" +
-                      "`!rio_season season-tww-2` - Set specific season\n" +
+                      "`!rio_season season-tww-3` - Set specific season\n" +
                       "`!rio_season current` - Use current season\n" +
                       "`!rio_season reset` - Reset to current\n\n" +
                       "**Affects:** !rio_details command (cutoffs always use current unless specified)",
@@ -347,13 +348,26 @@ class HelpCommands(commands.Cog):
                 inline=False
             )
             
+            if user_is_admin:
+                embed.add_field(
+                    name="🛠️ Admin WoW Commands",
+                    value="`!debug_chars` - Debug character data structure\n" +
+                          "`!reload_chars` - Reload character data from file\n" +
+                          "`!char_errors` - Show character loading errors\n" +
+                          "`!force_save_chars` - Force save character data\n" +
+                          "`!rio_prefetch` - Pre-fetch runs for all characters\n" +
+                          "`!rio_reset_runs` - Reset runs database (new season)",
+                    inline=False
+                )
+            
             embed.add_field(
                 name="💡 Workflow Tips",
                 value="1. Add your characters with `!add_char`\n" +
                       "2. Set your main with `!set_main`\n" +
                       "3. Use `!rio_runs` to see numbered recent runs\n" +
                       "4. Use `!rio_details <number>` for detailed analysis\n" +
-                      "5. All commands work without stored characters too!",
+                      "5. Use `!rio_list` to see all stored runs from all characters\n" +
+                      "6. All commands work without stored characters too!",
                 inline=False
             )
         
