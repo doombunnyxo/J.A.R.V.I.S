@@ -28,6 +28,69 @@ class AdminCommands(commands.Cog):
         
         await ctx.send(response)
     
+    @commands.command(name='chromadb_status')
+    async def check_chromadb_status(self, ctx):
+        """Check ChromaDB population status (admin only)"""
+        if not is_admin(ctx.author.id):
+            await ctx.send("❌ **Access denied.** Admin only.")
+            return
+            
+        try:
+            from ..vectordb.chroma_client import ChromaDBClient
+            
+            # Try to get the vector enhancer from context manager
+            from ..ai.context_manager import ContextManager
+            context_manager = ContextManager()
+            
+            if not context_manager.vector_enhancer or not context_manager.vector_enhancer.initialized:
+                await ctx.send("❌ **ChromaDB not initialized or unavailable**")
+                return
+            
+            # Get collection counts
+            collections_info = []
+            total_items = 0
+            
+            collections = ['conversations', 'channel_context', 'search_results', 'bot_responses', 'thread_context']
+            
+            for collection_name in collections:
+                try:
+                    collection = context_manager.vector_enhancer.vector_db.collections.get(collection_name)
+                    if collection:
+                        count = collection.count()
+                        total_items += count
+                        collections_info.append(f"📁 **{collection_name}**: {count} items")
+                    else:
+                        collections_info.append(f"❌ **{collection_name}**: Not found")
+                except Exception as e:
+                    collections_info.append(f"❌ **{collection_name}**: Error - {str(e)}")
+            
+            # Build response
+            response = "**ChromaDB Status Report:**\n\n"
+            response += "\n".join(collections_info)
+            response += f"\n\n📈 **Total items**: {total_items}"
+            
+            # Check embedding function
+            try:
+                embedding_fn = context_manager.vector_enhancer.vector_db._get_embedding_function()
+                if hasattr(embedding_fn, 'model_name'):
+                    response += f"\n🤖 **Embedding model**: {embedding_fn.model_name}"
+                else:
+                    response += "\n🔄 **Embedding**: Fallback function"
+            except:
+                response += "\n❌ **Embedding**: Could not check"
+            
+            if total_items > 0:
+                response += "\n\n✅ **ChromaDB is populated and working!**"
+            else:
+                response += "\n\n⚠️ **ChromaDB is empty - no data stored yet**"
+                
+            await ctx.send(response)
+            
+        except ImportError:
+            await ctx.send("❌ **ChromaDB module not available**")
+        except Exception as e:
+            await ctx.send(f"❌ **Error checking ChromaDB**: {str(e)}")
+    
     @commands.command(name='remember')
     async def add_permanent_context(self, ctx, *, context_text):
         """Add permanent context that will always be included in AI conversations"""
