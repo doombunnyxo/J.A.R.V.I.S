@@ -404,8 +404,9 @@ Return only relevant permanent context items, one per line, in the exact same fo
         """Build complete context using vector database and raw permanent context"""
         user_key = data_manager.get_user_key(message.author) if message else None
         
-        # Use vector database for fast context retrieval (no embedding during request)
-        if self.vector_enhancer and self.vector_enhancer.initialized:
+        # TEMPORARILY DISABLE vector context to test if this is causing timeouts
+        # TODO: Re-enable after testing
+        if False and self.vector_enhancer and self.vector_enhancer.initialized:
             try:
                 # Get semantically relevant context from existing vector DB data
                 semantic_context = await self._get_fast_semantic_context(
@@ -490,26 +491,30 @@ Return only relevant permanent context items, one per line, in the exact same fo
         try:
             context_parts = []
             
-            # Get relevant conversations (fast - uses existing embeddings)
+            # Get relevant conversations (fast - uses existing embeddings) - REDUCED limits
             conv_results = await self.vector_enhancer.get_semantic_conversation_context(
                 query=query,
                 user_id=user_id,
                 channel_id=channel_id,
-                limit=3
+                limit=2  # Reduced from 3
             )
             if conv_results:
                 context_parts.append("[Relevant Previous Conversations]")
-                context_parts.extend(conv_results[:3])  # Limit to prevent token bloat
+                # Truncate long messages to prevent bloat
+                truncated_results = [result[:200] + "..." if len(result) > 200 else result for result in conv_results[:2]]
+                context_parts.extend(truncated_results)
             
-            # Get relevant channel messages (fast - uses existing embeddings)
+            # Get relevant channel messages (fast - uses existing embeddings) - REDUCED limits  
             channel_results = await self.vector_enhancer.get_semantic_channel_context(
                 query=query,
                 channel_id=channel_id,
-                limit=5
+                limit=3  # Reduced from 5
             )
             if channel_results:
                 context_parts.append("[Relevant Channel Discussion]")
-                context_parts.extend(channel_results[:5])  # Limit to prevent token bloat
+                # Truncate long messages to prevent bloat
+                truncated_results = [result[:150] + "..." if len(result) > 150 else result for result in channel_results[:3]]
+                context_parts.extend(truncated_results)
             
             return "\n\n".join(context_parts) if context_parts else ""
             

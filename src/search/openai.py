@@ -41,6 +41,12 @@ class OpenAIAPI:
             "temperature": temperature
         }
         
+        # Log request size for debugging
+        from ..utils.logging import get_logger
+        logger = get_logger(__name__)
+        total_chars = sum(len(str(msg.get('content', ''))) for msg in messages)
+        logger.debug(f"OpenAI request: {total_chars} chars, max_tokens: {max_tokens}, model: {self.model}")
+        
         # Try with increasing timeouts
         timeouts = [30, 60, 90]  # 30s, 60s, 90s
         
@@ -67,6 +73,11 @@ class OpenAIAPI:
                 if attempt < len(timeouts):
                     logger.warning(f"OpenAI API timeout after {timeout_seconds}s, retrying with longer timeout (attempt {attempt}/{len(timeouts)})")
                     await asyncio.sleep(2)  # Brief delay before retry
+                    
+                    # If this is the second attempt, try reducing token limit
+                    if attempt == 2 and max_tokens > 500:
+                        max_tokens = min(500, max_tokens // 2)
+                        logger.info(f"Reducing max_tokens to {max_tokens} for retry")
                 else:
                     logger.error(f"OpenAI API failed after {len(timeouts)} timeout attempts")
                     raise Exception(f"OpenAI API timeout after {timeout_seconds} seconds")
