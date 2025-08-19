@@ -74,24 +74,27 @@ CHANNEL_CONTEXT_LIMIT = 50         # Messages stored per channel
 CHANNEL_CONTEXT_DISPLAY = 35       # Messages shown to AI
 ```
 
-### Intelligent Query Routing
-The bot uses **LLM-based classification** to determine whether to search the web or chat directly:
+### Vector-First Query Routing
+The bot uses **vector database first** approach for intelligent routing:
 
-**SEARCH Mode** (triggers web search):
-- Factual questions: "What is the weather today?"
-- Current information: "Latest news about..."
-- How-to guides: "How to install Python?"
-- Comparisons: "iPhone vs Android"
-- Prices/data: "Cost of bitcoin"
+**Step 1: Check Vector Database**
+- Searches past conversations and cached search results
+- If sufficient relevant context found → **Vector-Only Response**
+- If some context found → **Vector + Web Search**
+- If no relevant context → Continue to Step 2
 
-**CHAT Mode** (direct AI conversation):
-- Greetings: "How are you?"
-- Opinions: "That's interesting"
-- Personal chat: "You're funny"
-- Reactions: "Thanks!", "LOL"
+**Step 2: Fallback Routing**
+- **Direct Chat**: Only for obvious conversational patterns ("Hi", "That's cool")
+- **Web Search**: Default for knowledge queries when no vector context exists
+
+**Response Modes**:
+- **Vector-Only**: Answer using only stored conversations/searches (≥2 relevant results)
+- **Vector + Search**: Combine stored context with fresh web search (1 relevant result)
+- **Direct Chat**: AI conversation with full vector context + recent history
+- **Web Search**: Fresh web search for new information
 
 **Force Override**:
-- `ai: <query>` - Force direct chat (no search)
+- `ai: <query>` - Force direct chat WITH vector context and conversation history
 - `full: <query>` - Force web search with detailed analysis
 
 ### Discord Intents Required

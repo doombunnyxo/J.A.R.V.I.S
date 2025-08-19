@@ -103,75 +103,74 @@ PERSONAL_KEYWORDS = [
 ]
 
 
-async def should_use_openai_for_search(query: str) -> bool:
+async def should_use_vector_first_then_search(query: str, user_id: int, channel_id: int) -> tuple[bool, str]:
     """
-    Determine if query should be routed to OpenAI for search using LLM classification
+    Check vector database first, then decide if web search is needed
     
     Args:
         query: User's query string
+        user_id: Discord user ID
+        channel_id: Discord channel ID
         
     Returns:
-        bool: True if query appears to need web search, False for direct chat
+        tuple: (needs_web_search, route_type)
+        - route_type: "vector-sufficient", "vector-with-search", "direct-chat", "web-search"
     """
     try:
-        from ..ai.openai_client import openai_client
-        
+        from ..vectordb.context_enhancer import vector_enhancer
         from ..utils.logging import get_logger
         logger = get_logger(__name__)
-        logger.info(f"DEBUG: Query intent classification for: '{query[:50]}...'")
         
-        # Quick patterns for obvious cases to avoid API calls
+        logger.info(f"DEBUG: Vector-first routing for: '{query[:50]}...'")
+        
+        # Quick chat patterns - skip vector search entirely
         obvious_chat = [r'^(hi|hello|hey|thanks|lol|yes|no|ok|maybe)$', 
-                       r'^(how are you|good morning|good night)']
+                       r'^(how are you|good morning|good night)',
+                       r'^(that\'s|thats)\s+(cool|awesome|great|nice|funny)',
+                       r'^(you\'re|youre)\s+(right|wrong|funny|cool)']
+        
         for pattern in obvious_chat:
             if re.match(pattern, query.lower().strip()):
-                logger.info("DEBUG: Obvious conversational - no search")
-                return False
+                logger.info("DEBUG: Obvious chat - skipping vector search")
+                return False, "direct-chat"
         
-        obvious_search = [r'(search for|google|current|latest|today|2024|2025)',
-                         r'(price of|cost of|weather|news)']
-        for pattern in obvious_search:
-            if re.search(pattern, query.lower()):
-                logger.info("DEBUG: Obvious search query")
-                return True
+        # Check vector database for relevant information
+        if vector_enhancer and vector_enhancer.initialized:
+            logger.info("DEBUG: Searching vector database...")
+            
+            # Search conversations
+            conv_results = await vector_enhancer.get_semantic_conversation_context(
+                query=query,
+                user_id=user_id,
+                channel_id=channel_id,
+                limit=5
+            )
+            
+            # Search cached results 
+            search_results = await vector_enhancer.get_semantic_search_context(
+                query=query,
+                limit=3
+            )
+            
+            total_results = len(conv_results) + len(search_results)
+            logger.info(f"DEBUG: Vector search found {len(conv_results)} conversations, {len(search_results)} cached searches")
+            
+            # If we have good vector results, try vector-only first
+            if total_results >= 2:
+                logger.info("DEBUG: Sufficient vector data found - trying vector-only response")
+                return False, "vector-sufficient"
+            elif total_results >= 1:
+                logger.info("DEBUG: Some vector data found - will supplement with web search")
+                return True, "vector-with-search"
         
-        # Use LLM for classification
-        classification_prompt = f"""Classify this user message as either "SEARCH" or "CHAT":
-
-SEARCH = User wants current information, facts, web search, research, comparisons, "how to" guides, specific data, news, prices, etc.
-CHAT = User wants conversation, opinions, general discussion, greetings, reactions, personal interaction with the AI.
-
-Examples:
-- "what is the weather today" → SEARCH
-- "how are you doing" → CHAT  
-- "what's the price of bitcoin" → SEARCH
-- "that's really interesting" → CHAT
-- "tell me about quantum computing" → SEARCH
-- "you're funny" → CHAT
-- "what happened in the news today" → SEARCH
-- "i think that makes sense" → CHAT
-
-User message: "{query}"
-
-Respond with only "SEARCH" or "CHAT"."""
-
-        response = await openai_client.create_completion(
-            messages=[{"role": "user", "content": classification_prompt}],
-            model="gpt-4o-mini",
-            temperature=0.1,
-            max_tokens=10
-        )
-        
-        intent = response.strip().upper()
-        needs_search = intent == "SEARCH"
-        
-        logger.info(f"DEBUG: LLM classified as '{intent}' -> search={needs_search}")
-        return needs_search
+        # No good vector results - default to web search for knowledge queries
+        logger.info("DEBUG: No relevant vector data found - defaulting to web search")
+        return True, "web-search"
         
     except Exception as e:
-        logger.info(f"DEBUG: LLM classification failed: {e}")
-        # Fallback to simple heuristics
-        return _fallback_search_classification(query)
+        logger.info(f"DEBUG: Vector-first routing failed: {e}")
+        # Fallback to simple web search
+        return True, "web-search"
 
 
 def _fallback_search_classification(query: str) -> bool:

@@ -155,6 +155,9 @@ class AIHandler:
                 await self._handle_rate_limit(message)
                 return
             
+            # Store message for routing access
+            self._current_message = message
+            
             # Determine routing and get cleaned query
             provider, cleaned_query = await self._determine_provider_and_query(ai_query, force_provider)
             
@@ -163,13 +166,15 @@ class AIHandler:
                 response = await self._handle_with_openai(message, cleaned_query)
             elif provider == "direct-ai":
                 response = await self._handle_direct_ai(message, cleaned_query)
+            elif provider == "vector-only":
+                response = await self._handle_vector_only(message, cleaned_query)
             elif provider == "full-search":
                 # Full search uses GPT-4o directly (no two-stage summarization)
                 response = await self._handle_full_search(message, cleaned_query)
             elif provider == "crafting":
                 response = await self._handle_with_crafting(message, cleaned_query)
-            else:  # Default to OpenAI
-                response = await self._handle_with_openai(message, cleaned_query)
+            else:  # Default to direct AI
+                response = await self._handle_direct_ai(message, cleaned_query)
             
             # Store conversation context (background task - don't block response)
             if response and not response.startswith("Error"):
@@ -205,20 +210,32 @@ class AIHandler:
         if extracted_provider:
             return extracted_provider, cleaned_query
         
-        # Check if query should use OpenAI for search (async)
+        # Use vector-first routing approach
         try:
-            should_use_search = await should_use_openai_for_search(query)
+            from .routing import should_use_vector_first_then_search
             
-            if should_use_search:
-                logger.info(f"DEBUG: Routing to SEARCH mode for: '{query[:30]}...'")
+            needs_web_search, route_type = await should_use_vector_first_then_search(
+                query, 
+                self._current_message.author.id,
+                self._current_message.channel.id
+            )
+            
+            logger.info(f"DEBUG: Vector-first routing result: {route_type}, needs_web_search: {needs_web_search}")
+            
+            if route_type == "direct-chat":
+                return "direct-ai", query
+            elif route_type == "vector-sufficient":
+                return "vector-only", query  # New mode: answer from vector DB only
+            elif route_type == "vector-with-search":
+                return "openai", query  # Use search but include vector context
+            elif route_type == "web-search":
                 return "openai", query
             else:
-                logger.info(f"DEBUG: Routing to CHAT mode for: '{query[:30]}...'")  
-                return "direct-ai", query
+                return "direct-ai", query  # Fallback
+                
         except Exception as e:
-            logger.info(f"DEBUG: Routing failed, defaulting to OpenAI: {e}")
-            # Fallback to OpenAI on any error
-            return "openai", query
+            logger.info(f"DEBUG: Vector routing failed, defaulting to direct AI: {e}")
+            return "direct-ai", query
     
     async def _handle_with_openai(self, message, query: str) -> str:
         """Handle query using OpenAI - either admin actions or search"""
@@ -281,38 +298,97 @@ class AIHandler:
             return f"❌ Error with full search: {str(e)}"
 
     async def _handle_direct_ai(self, message, query: str) -> str:
-        """Handle direct AI chat without search routing"""
+        """Handle direct AI chat with vector context and conversation history"""
         try:
             logger.info(f"DEBUG: _handle_direct_ai called with query: '{query[:50]}...'")
             
             if not config.has_openai_api():
                 return "❌ OpenAI API not configured. Please contact an administrator."
             
-            # Build unfiltered context for casual conversation
-            logger.info(f"DEBUG: Building context for direct AI...")
-            context = await self.context_manager.build_unfiltered_context(
-                message.author.id, message.channel.id,
+            # Build full context including vector search and conversation history
+            logger.info(f"DEBUG: Building enhanced context for direct AI...")
+            context = await self.context_manager.build_full_context(
+                query, message.author.id, message.channel.id,
                 message.author.display_name, message
             )
-            logger.info(f"DEBUG: Context built, length: {len(context)}")
+            logger.info(f"DEBUG: Enhanced context built, length: {len(context)}")
             
-            messages = self._build_direct_ai_messages(context, query)
+            # Build messages with instructions for conversational AI with context awareness
+            messages = [
+                {
+                    "role": "system",
+                    "content": """You are J.A.R.V.I.S, an AI assistant. You have access to conversation history and previous discussions. Use this context to provide informed, conversational responses.
+
+Be natural and engaging while leveraging the provided context when relevant. If the context contains information related to the user's message, incorporate it naturally into your response."""
+                },
+                {
+                    "role": "user",
+                    "content": f"Context from previous conversations:\n{context}\n\nUser message: {query}"
+                }
+            ]
             
             response = await openai_client.create_completion(
                 messages=messages,
                 model="gpt-4o-mini",
                 max_tokens=1000,
-                temperature=0.8  # Higher temperature for more creative, fun conversation
+                temperature=0.7  # Balanced temperature for natural conversation with context awareness
             )
             
             # Estimate total prompt tokens
             total_estimated_tokens = self._estimate_tokens(context, query)
             
-            return f"**OpenAI GPT-4o Mini AI Response** (~{total_estimated_tokens} tokens):\n\n{response}"
+            return f"**Direct AI Response** (~{total_estimated_tokens} tokens):\n\n{response}"
             
         except Exception as e:
             logger.error(f"Direct AI failed: {e}")
             return f"❌ Error with direct AI: {str(e)}"
+    
+    async def _handle_vector_only(self, message, query: str) -> str:
+        """Handle query using only vector database context (no web search)"""
+        try:
+            logger.info(f"DEBUG: _handle_vector_only called with query: '{query[:50]}...'")
+            
+            if not config.has_openai_api():
+                return "❌ OpenAI API not configured. Please contact an administrator."
+            
+            # Build context with heavy emphasis on vector search results
+            context = await self.context_manager.build_full_context(
+                query, message.author.id, message.channel.id,
+                message.author.display_name, message
+            )
+            logger.info(f"DEBUG: Vector-only context built, length: {len(context)}")
+            
+            # Create messages with instructions to use only provided context
+            messages = [
+                {
+                    "role": "system", 
+                    "content": """You are J.A.R.V.I.S, an AI assistant. Answer the user's question using ONLY the provided context from previous conversations and stored information. 
+
+If you don't have enough information in the provided context to give a complete answer, say so and suggest what additional information might be needed.
+
+Do NOT make up information or use general knowledge beyond what's in the context."""
+                },
+                {
+                    "role": "user", 
+                    "content": f"Context:\n{context}\n\nQuestion: {query}"
+                }
+            ]
+            
+            response = await openai_client.create_completion(
+                messages=messages,
+                model="gpt-4o-mini",
+                max_tokens=800,
+                temperature=0.3  # Lower temperature for more precise, context-focused responses
+            )
+            
+            # Estimate total prompt tokens
+            total_estimated_tokens = self._estimate_tokens(context, query)
+            
+            return f"**Vector Database Response** (~{total_estimated_tokens} tokens):\n\n{response}"
+            
+        except Exception as e:
+            logger.error(f"Vector-only response failed: {e}")
+            return f"❌ Error with vector database response: {str(e)}"
 
     async def _handle_with_crafting(self, message, query: str) -> str:
         """Handle query with crafting system using the dedicated crafting module"""
