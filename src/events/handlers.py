@@ -100,7 +100,7 @@ class EventHandlers(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
         """Handle incoming messages"""
-        print(f"DEBUG: on_message received: '{message.content[:50]}...' from {message.author}")
+        logger.info(f"DEBUG: on_message received: '{message.content[:50]}...' from {message.author}")
         
         # Capture ALL messages for context (both user and bot messages)
         if message.content.strip() and self.ai_handler and hasattr(self.ai_handler, 'context_manager'):

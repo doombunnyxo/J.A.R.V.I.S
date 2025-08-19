@@ -116,21 +116,23 @@ async def should_use_openai_for_search(query: str) -> bool:
     try:
         from ..ai.openai_client import openai_client
         
-        print(f"DEBUG: Query intent classification for: '{query[:50]}...'")
+        from ..utils.logging import get_logger
+        logger = get_logger(__name__)
+        logger.info(f"DEBUG: Query intent classification for: '{query[:50]}...'")
         
         # Quick patterns for obvious cases to avoid API calls
         obvious_chat = [r'^(hi|hello|hey|thanks|lol|yes|no|ok|maybe)$', 
                        r'^(how are you|good morning|good night)']
         for pattern in obvious_chat:
             if re.match(pattern, query.lower().strip()):
-                print("DEBUG: Obvious conversational - no search")
+                logger.info("DEBUG: Obvious conversational - no search")
                 return False
         
         obvious_search = [r'(search for|google|current|latest|today|2024|2025)',
                          r'(price of|cost of|weather|news)']
         for pattern in obvious_search:
             if re.search(pattern, query.lower()):
-                print("DEBUG: Obvious search query")
+                logger.info("DEBUG: Obvious search query")
                 return True
         
         # Use LLM for classification
@@ -163,11 +165,11 @@ Respond with only "SEARCH" or "CHAT"."""
         intent = response.strip().upper()
         needs_search = intent == "SEARCH"
         
-        print(f"DEBUG: LLM classified as '{intent}' -> search={needs_search}")
+        logger.info(f"DEBUG: LLM classified as '{intent}' -> search={needs_search}")
         return needs_search
         
     except Exception as e:
-        print(f"DEBUG: LLM classification failed: {e}")
+        logger.info(f"DEBUG: LLM classification failed: {e}")
         # Fallback to simple heuristics
         return _fallback_search_classification(query)
 
@@ -208,7 +210,6 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
         tuple: (provider, cleaned_query) - provider is 'openai', 'crafting', 'full-search', 'direct-ai', or None
     """
     query_lower = query.lower().strip()
-    print(f"DEBUG: extract_forced_provider checking query: '{query_lower}'")
     
     # Check for force patterns
     force_patterns = [
@@ -225,7 +226,6 @@ def extract_forced_provider(query: str) -> tuple[str, str]:
         match = re.match(pattern, query_lower)
         if match:
             cleaned_query = match.group(1).strip()
-            print(f"DEBUG: Pattern '{pattern}' matched provider '{provider}' with query '{cleaned_query}'")
             return provider, cleaned_query
     
     return None, query

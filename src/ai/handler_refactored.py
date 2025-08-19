@@ -138,7 +138,7 @@ class AIHandler:
             force_provider: Optional forced provider ("openai", "crafting", "full-search", or "direct-ai")
         """
         try:
-            print(f"DEBUG: handle_ai_command called with query: '{ai_query[:50]}...'")
+            logger.info(f"DEBUG: handle_ai_command called with query: '{ai_query[:50]}...'")
             
             # Prevent duplicate processing
             if message.id in self.processed_messages:
@@ -210,13 +210,13 @@ class AIHandler:
             should_use_search = await should_use_openai_for_search(query)
             
             if should_use_search:
-                print(f"DEBUG: Routing to SEARCH mode for: '{query[:30]}...'")
+                logger.info(f"DEBUG: Routing to SEARCH mode for: '{query[:30]}...'")
                 return "openai", query
             else:
-                print(f"DEBUG: Routing to CHAT mode for: '{query[:30]}...'")  
+                logger.info(f"DEBUG: Routing to CHAT mode for: '{query[:30]}...'")  
                 return "direct-ai", query
         except Exception as e:
-            print(f"DEBUG: Routing failed, defaulting to OpenAI: {e}")
+            logger.info(f"DEBUG: Routing failed, defaulting to OpenAI: {e}")
             # Fallback to OpenAI on any error
             return "openai", query
     
@@ -283,18 +283,18 @@ class AIHandler:
     async def _handle_direct_ai(self, message, query: str) -> str:
         """Handle direct AI chat without search routing"""
         try:
-            print(f"DEBUG: _handle_direct_ai called with query: '{query[:50]}...'")
+            logger.info(f"DEBUG: _handle_direct_ai called with query: '{query[:50]}...'")
             
             if not config.has_openai_api():
                 return "❌ OpenAI API not configured. Please contact an administrator."
             
             # Build unfiltered context for casual conversation
-            print(f"DEBUG: Building context for direct AI...")
+            logger.info(f"DEBUG: Building context for direct AI...")
             context = await self.context_manager.build_unfiltered_context(
                 message.author.id, message.channel.id,
                 message.author.display_name, message
             )
-            print(f"DEBUG: Context built, length: {len(context)}")
+            logger.info(f"DEBUG: Context built, length: {len(context)}")
             
             messages = self._build_direct_ai_messages(context, query)
             
