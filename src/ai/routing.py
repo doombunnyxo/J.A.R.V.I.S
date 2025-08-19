@@ -153,7 +153,7 @@ User message: "{query}"
 
 Respond with only "SEARCH" or "CHAT"."""
 
-        response = await openai_client.chat_completion(
+        response = await openai_client.create_completion(
             messages=[{"role": "user", "content": classification_prompt}],
             model="gpt-4o-mini",
             temperature=0.1,
