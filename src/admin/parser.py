@@ -74,20 +74,21 @@ class AdminIntentParser:
             'delete_channel': ['delete channel'],
         }
         
-        # Check each action type
+        # Check each action type with word boundary matching to avoid false positives
         for action_type, keywords in action_patterns.items():
             for keyword in keywords:
-                if keyword in content:
+                # Use regex word boundaries to avoid substring matches like "mute" in "commute"
+                pattern = r'\b' + re.escape(keyword) + r'\b'
+                if re.search(pattern, content):
                     # Additional validation for some ambiguous cases
-                    if action_type == 'ban_user' and 'unban' in content:
+                    if action_type == 'ban_user' and re.search(r'\bunban\b', content):
                         continue  # This is actually an unban
                     # Allow bulk_delete if there's a number, even without "message" keyword
                     if action_type == 'bulk_delete':
-                        has_message_word = any(msg_word in content for msg_word in ['message', 'messages', 'msg', 'msgs'])
+                        has_message_word = any(re.search(r'\b' + re.escape(msg_word) + r'\b', content) for msg_word in ['message', 'messages', 'msg', 'msgs'])
                         has_number = any(char.isdigit() for char in content)
                         if not (has_message_word or has_number):
                             continue  # Delete without message context or number might not be bulk delete
-                    
                     
                     return action_type
         
