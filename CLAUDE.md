@@ -267,6 +267,18 @@ HISTORY_FILE = 'data/conversation_history.json'
 - **Google Search**: Requires both `GOOGLE_API_KEY` and `GOOGLE_SEARCH_ENGINE_ID`
 - **Web Extraction**: May fail on some sites, blacklist system handles this
 
+## Deployment Notes
+
+### VM Hosting
+- **Bot is hosted on a VM** - Not running locally
+- **ChromaDB issues**: Need to debug on the VM directly, not local machine
+- **Logs**: Check VM logs for actual runtime errors
+
+### Windows Development Environment
+- **DO NOT use `2>nul` or `>nul`** - Not valid in Windows PowerShell/Command Prompt
+- **Use PowerShell commands** for Windows operations
+- **File paths**: Use Windows-style paths (backslashes or forward slashes both work)
+
 ## Development Notes
 
 ### Recent Architecture Changes

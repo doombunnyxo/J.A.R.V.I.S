@@ -88,13 +88,13 @@ def check_bot_imports():
         print("   Install with: pip install chromadb==1.0.20")
 
 if __name__ == "__main__":
-    print("🤖 ChromaDB Debug Check")
+    print("ChromaDB Debug Check")
     print("=" * 40)
     
     check_chromadb_files()
     check_bot_imports()
     
-    print("\n💡 How to check if it's working:")
+    print("\nHow to check if it's working:")
     print("1. Run the bot and use @bot commands")
     print("2. Check bot logs for 'Vector database' messages")
     print("3. Look for 'store.*vector' in logs")

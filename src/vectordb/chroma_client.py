@@ -41,30 +41,41 @@ class ChromaVectorDB:
         Get the embedding function, preferring Ollama Nomic embeddings
         Falls back to sentence transformer if Ollama is not available
         """
+        logger.info("Initializing embedding function...")
+        
         try:
             from .ollama_embeddings import OllamaEmbeddingFunction
+            logger.info("OllamaEmbeddingFunction module imported")
             
             # Try to initialize Ollama embedding function
             ollama_url = getattr(config, 'OLLAMA_BASE_URL', 'http://localhost:11434')
             ollama_model = getattr(config, 'OLLAMA_EMBEDDING_MODEL', 'nomic-embed-text')
+            logger.info(f"Attempting Ollama connection at {ollama_url} with model {ollama_model}")
             
             embedding_fn = OllamaEmbeddingFunction(url=ollama_url, model_name=ollama_model)
-            logger.info(f"Using Ollama embeddings with model: {ollama_model}")
+            logger.info(f"✅ Successfully using Ollama embeddings with model: {ollama_model}")
             return embedding_fn
             
+        except ImportError as e:
+            logger.warning(f"OllamaEmbeddingFunction import failed: {e}")
         except Exception as e:
             logger.warning(f"Failed to initialize Ollama embeddings: {e}")
-            logger.info("Falling back to sentence transformer embeddings")
             
-            try:
-                # Fallback to sentence transformer
-                return embedding_functions.SentenceTransformerEmbeddingFunction(
-                    model_name="all-MiniLM-L6-v2"
-                )
-            except Exception as fallback_error:
-                logger.error(f"Failed to initialize any embedding function: {fallback_error}")
-                # Return a basic embedding function as last resort
-                return embedding_functions.DefaultEmbeddingFunction()
+        logger.info("Attempting fallback to sentence transformer embeddings...")
+        
+        try:
+            # Fallback to sentence transformer
+            embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+                model_name="all-MiniLM-L6-v2"
+            )
+            logger.info("✅ Successfully using sentence transformer embeddings (all-MiniLM-L6-v2)")
+            return embedding_fn
+        except Exception as fallback_error:
+            logger.error(f"Failed to initialize sentence transformer: {fallback_error}")
+            
+        logger.warning("Using default embedding function as last resort")
+        # Return a basic embedding function as last resort
+        return embedding_functions.DefaultEmbeddingFunction()
         
     def initialize(self) -> bool:
         """
@@ -72,10 +83,25 @@ class ChromaVectorDB:
         Returns True if successful, False otherwise
         """
         try:
+            logger.info(f"Starting ChromaDB initialization...")
+            logger.info(f"Persist directory: {self.persist_directory}")
+            
             # Ensure directory exists
             os.makedirs(self.persist_directory, exist_ok=True)
+            logger.info(f"Directory created/verified: {self.persist_directory}")
+            
+            # Check if chromadb is importable
+            try:
+                import chromadb
+                logger.info(f"ChromaDB module found, version: {chromadb.__version__ if hasattr(chromadb, '__version__') else 'unknown'}")
+            except ImportError as import_err:
+                logger.error(f"ChromaDB module not installed: {import_err}")
+                logger.error("Install with: pip install chromadb")
+                self._initialized = False
+                return False
             
             # Initialize Chroma client with persistence
+            logger.info("Creating PersistentClient...")
             self.client = chromadb.PersistentClient(
                 path=self.persist_directory,
                 settings=Settings(
@@ -83,67 +109,57 @@ class ChromaVectorDB:
                     allow_reset=True
                 )
             )
+            logger.info("PersistentClient created successfully")
             
             # Create or get collections
+            logger.info("Setting up collections...")
             self._setup_collections()
             
             self._initialized = True
-            logger.info(f"Chroma database initialized at {self.persist_directory}")
+            logger.info(f"✅ Chroma database initialized successfully at {self.persist_directory}")
             return True
             
         except ImportError as e:
-            logger.warning(f"ChromaDB dependencies not available: {e}")
-            logger.info("Bot will run without vector database features - install build tools and retry")
+            logger.error(f"ChromaDB import error: {e}")
+            logger.error("ChromaDB dependencies not available - may need to install build tools")
+            logger.error("Try: pip install chromadb --no-build-isolation")
             self._initialized = False
             return False
         except Exception as e:
-            logger.error(f"Failed to initialize Chroma database: {e}")
-            logger.info("Bot will run without vector database features")
+            logger.error(f"ChromaDB initialization failed with error: {e}", exc_info=True)
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.info("Bot will continue without vector database features")
             self._initialized = False
             return False
     
     def _setup_collections(self):
         """Setup required collections for the bot"""
         try:
-            # Conversation memory collection
-            self.collections['conversations'] = self.client.get_or_create_collection(
-                name="conversations",
-                embedding_function=self.embedding_function,
-                metadata={"description": "User conversation history and context"}
-            )
+            collection_names = [
+                ("conversations", "User conversation history and context"),
+                ("channel_context", "Channel and thread message history"),
+                ("search_results", "Web search results and AI responses"),
+                ("bot_responses", "All bot responses for learning and context"),
+                ("thread_context", "Thread-specific conversations")
+            ]
             
-            # Channel context collection (includes threads)
-            self.collections['channel_context'] = self.client.get_or_create_collection(
-                name="channel_context",
-                embedding_function=self.embedding_function,
-                metadata={"description": "Channel and thread message history"}
-            )
+            for name, description in collection_names:
+                logger.info(f"Creating/loading collection: {name}")
+                try:
+                    self.collections[name] = self.client.get_or_create_collection(
+                        name=name,
+                        embedding_function=self.embedding_function,
+                        metadata={"description": description}
+                    )
+                    logger.info(f"  ✅ Collection '{name}' ready")
+                except Exception as coll_err:
+                    logger.error(f"  ❌ Failed to create collection '{name}': {coll_err}")
+                    raise
             
-            # Search results collection
-            self.collections['search_results'] = self.client.get_or_create_collection(
-                name="search_results",
-                embedding_function=self.embedding_function,
-                metadata={"description": "Web search results and AI responses"}
-            )
-            
-            # Bot responses collection
-            self.collections['bot_responses'] = self.client.get_or_create_collection(
-                name="bot_responses",
-                embedding_function=self.embedding_function,
-                metadata={"description": "All bot responses for learning and context"}
-            )
-            
-            # Thread context collection
-            self.collections['thread_context'] = self.client.get_or_create_collection(
-                name="thread_context",
-                embedding_function=self.embedding_function,
-                metadata={"description": "Thread-specific conversations"}
-            )
-            
-            logger.info(f"Created/loaded {len(self.collections)} Chroma collections")
+            logger.info(f"✅ Successfully created/loaded {len(self.collections)} Chroma collections")
             
         except Exception as e:
-            logger.error(f"Failed to setup collections: {e}")
+            logger.error(f"Failed to setup collections: {e}", exc_info=True)
             raise
     
     def add_conversation(self, user_id: int, channel_id: int, message: str, response: str, 
