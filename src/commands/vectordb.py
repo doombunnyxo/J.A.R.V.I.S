@@ -3,7 +3,6 @@ Vector database management commands
 """
 
 import discord
-from discord import app_commands
 from discord.ext import commands
 from ..utils.logging import get_logger
 from ..vectordb.context_enhancer import vector_enhancer
@@ -18,10 +17,9 @@ class VectorDBCommands(commands.Cog):
         self.bot = bot
         self.vector_enhancer = vector_enhancer
     
-    @app_commands.command(name="vectordb_status", description="Check vector database status and statistics")
-    async def vectordb_status(self, interaction: discord.Interaction):
+    @commands.command(name="vectordb_status", aliases=["vdb_status", "vdb"])
+    async def vectordb_status(self, ctx):
         """Check the status of the vector database"""
-        await interaction.response.defer()
         
         try:
             if not self.vector_enhancer.initialized:
@@ -35,7 +33,7 @@ class VectorDBCommands(commands.Cog):
                     value="Semantic search and enhanced context features are disabled",
                     inline=False
                 )
-                await interaction.followup.send(embed=embed)
+                await ctx.send(embed=embed)
                 return
             
             # Get statistics
@@ -80,35 +78,24 @@ class VectorDBCommands(commands.Cog):
                 inline=False
             )
             
-            await interaction.followup.send(embed=embed)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error checking vector database status: {e}")
-            await interaction.followup.send(
-                "Failed to check vector database status",
-                ephemeral=True
-            )
+            await ctx.send("Failed to check vector database status")
     
-    @app_commands.command(name="vectordb_cleanup", description="Clean up old vector database entries (Admin only)")
-    async def vectordb_cleanup(self, interaction: discord.Interaction, days: int = 30):
-        """Clean up old vector database entries"""
+    @commands.command(name="vectordb_cleanup", aliases=["vdb_cleanup"])
+    async def vectordb_cleanup(self, ctx, days: int = 30):
+        """Clean up old vector database entries (Admin only)"""
         # Check if user is admin
         from ..config import config
-        if interaction.user.id != config.AUTHORIZED_USER_ID:
-            await interaction.response.send_message(
-                "❌ You don't have permission to use this command",
-                ephemeral=True
-            )
+        if ctx.author.id != config.AUTHORIZED_USER_ID:
+            await ctx.send("❌ You don't have permission to use this command")
             return
-        
-        await interaction.response.defer()
         
         try:
             if not self.vector_enhancer.initialized:
-                await interaction.followup.send(
-                    "Vector database is not initialized",
-                    ephemeral=True
-                )
+                await ctx.send("Vector database is not initialized")
                 return
             
             # Get stats before cleanup
@@ -140,44 +127,34 @@ class VectorDBCommands(commands.Cog):
                                 inline=True
                             )
                 
-                await interaction.followup.send(embed=embed)
+                await ctx.send(embed=embed)
             else:
-                await interaction.followup.send(
-                    "Failed to perform cleanup",
-                    ephemeral=True
-                )
+                await ctx.send("Failed to perform cleanup")
                 
         except Exception as e:
             logger.error(f"Error during vector database cleanup: {e}")
-            await interaction.followup.send(
-                "Failed to clean up vector database",
-                ephemeral=True
-            )
+            await ctx.send("Failed to clean up vector database")
     
-    @app_commands.command(name="vectordb_search", description="Test semantic search in vector database")
-    async def vectordb_search(self, interaction: discord.Interaction, query: str):
+    @commands.command(name="vectordb_search", aliases=["vdb_search"])
+    async def vectordb_search(self, ctx, *, query: str):
         """Test semantic search functionality"""
-        await interaction.response.defer()
         
         try:
             if not self.vector_enhancer.initialized:
-                await interaction.followup.send(
-                    "Vector database is not initialized",
-                    ephemeral=True
-                )
+                await ctx.send("Vector database is not initialized")
                 return
             
             # Search conversations
             conv_results = await self.vector_enhancer.get_semantic_conversation_context(
                 query=query,
-                user_id=interaction.user.id,
+                user_id=ctx.author.id,
                 limit=3
             )
             
             # Search channel context
             channel_results = await self.vector_enhancer.get_semantic_channel_context(
                 query=query,
-                channel_id=interaction.channel_id,
+                channel_id=ctx.channel.id,
                 limit=3
             )
             
@@ -215,14 +192,11 @@ class VectorDBCommands(commands.Cog):
                     inline=False
                 )
             
-            await interaction.followup.send(embed=embed)
+            await ctx.send(embed=embed)
             
         except Exception as e:
             logger.error(f"Error during vector database search: {e}")
-            await interaction.followup.send(
-                "Failed to perform semantic search",
-                ephemeral=True
-            )
+            await ctx.send("Failed to perform semantic search")
 
 
 async def setup(bot):

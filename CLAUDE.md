@@ -171,7 +171,7 @@ class OpenAISearchProvider:
 
 ## Command System
 
-### Commands Available (use ! prefix, not /)
+### Commands Available (all use ! prefix)
 ```python
 # Basic Commands (basic.py)
 !hello                        # Greeting
@@ -188,6 +188,7 @@ class OpenAISearchProvider:
 # Admin Commands (admin.py)
 !admin_panel                 # Administrative interface
 !stats                       # Bot statistics
+!chromadb_status             # Check ChromaDB status
 !remember <text>             # Add permanent context  
 !memories                    # List permanent context
 !forget <index>              # Remove permanent context
@@ -198,9 +199,9 @@ class OpenAISearchProvider:
 !clear_all_search_contexts   # Admin: clear all contexts
 
 # Vector Database Commands (vectordb.py)
-!vectordb_stats              # Show vector database statistics
-!vectordb_cleanup <days>     # Clean up old data
-!vectordb_search <query>     # Search vector database
+!vectordb_status             # Show vector database statistics (aliases: !vdb_status, !vdb)
+!vectordb_cleanup <days>     # Clean up old data, Admin only (alias: !vdb_cleanup)
+!vectordb_search <query>     # Search vector database (alias: !vdb_search)
 
 # Help System (help.py)
 !help [category]             # Comprehensive help
