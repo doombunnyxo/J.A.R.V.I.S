@@ -203,7 +203,7 @@ class AIHandler:
             return force_provider, query
         
         # Use routing logic to determine provider
-        from .routing import should_use_openai_for_search, extract_forced_provider
+        from .routing import extract_forced_provider
         
         # Check for forced provider first
         extracted_provider, cleaned_query = extract_forced_provider(query)
