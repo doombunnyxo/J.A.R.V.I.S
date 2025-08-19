@@ -190,6 +190,7 @@ class ChromaVectorDB:
             True if successful, False otherwise
         """
         if not self._initialized:
+            logger.warning("Vector DB not initialized, cannot add conversation")
             return False
             
         try:
@@ -210,12 +211,19 @@ class ChromaVectorDB:
             if metadata:
                 meta.update(metadata)
             
+            logger.info(f"Adding conversation to vector DB: user={user_id}, channel={channel_id}")
+            logger.debug(f"Document preview: {document[:100]}...")
+            
             # Add to collection
             self.collections['conversations'].add(
                 documents=[document],
                 ids=[exchange_id],
                 metadatas=[meta]
             )
+            
+            # Verify it was added
+            count = self.collections['conversations'].count()
+            logger.info(f"✅ Conversation added successfully. Collection now has {count} items")
             
             return True
             
@@ -283,9 +291,15 @@ class ChromaVectorDB:
             List of relevant conversation documents with metadata
         """
         if not self._initialized:
+            logger.warning("Vector DB not initialized, returning empty results")
             return []
             
         try:
+            # Get collection count for debugging
+            count = self.collections['conversations'].count()
+            logger.info(f"Searching conversations (collection has {count} items)")
+            logger.info(f"Query: '{query[:50]}...', user_id: {user_id}, channel_id: {channel_id}")
+            
             # Build where clause for filtering (ChromaDB 1.0+ format)
             where_clause = None
             if user_id and channel_id:
@@ -298,12 +312,16 @@ class ChromaVectorDB:
             elif channel_id:
                 where_clause = {"channel_id": {"$eq": str(channel_id)}}
             
+            logger.info(f"Where clause: {where_clause}")
+            
             # Perform semantic search
             results = self.collections['conversations'].query(
                 query_texts=[query],
                 n_results=limit,
                 where=where_clause
             )
+            
+            logger.info(f"Raw query results: {len(results.get('documents', [[]])[0])} documents found")
             
             # Format results
             formatted_results = []

@@ -171,7 +171,7 @@ class OpenAISearchProvider:
 
 ## Command System
 
-### Slash Commands Available
+### Commands Available (use ! prefix, not /)
 ```python
 # Basic Commands (basic.py)
 !hello                        # Greeting
@@ -196,6 +196,11 @@ class OpenAISearchProvider:
 !clear_search_context        # Clear context
 !search_context_info         # Context status
 !clear_all_search_contexts   # Admin: clear all contexts
+
+# Vector Database Commands (vectordb.py)
+!vectordb_stats              # Show vector database statistics
+!vectordb_cleanup <days>     # Clean up old data
+!vectordb_search <query>     # Search vector database
 
 # Help System (help.py)
 !help [category]             # Comprehensive help
