@@ -248,6 +248,22 @@ class VectorContextEnhancer:
             
         return self.vector_db.cache_search_result(query, result, source)
     
+    def get_cached_search_result(self, query: str, max_age_hours: int = 168) -> Optional[str]:
+        """
+        Get cached search result if available
+        
+        Args:
+            query: The search query
+            max_age_hours: Maximum age in hours (default: 1 week)
+            
+        Returns:
+            Cached result if found, None otherwise
+        """
+        if not self.initialized:
+            return None
+        
+        return self.vector_db.get_cached_search(query, max_age_hours)
+    
     async def cleanup_old_data(self, days: int = 30) -> bool:
         """
         Clean up old vector database entries

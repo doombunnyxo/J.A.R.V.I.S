@@ -136,9 +136,9 @@ async def should_use_vector_first_then_search(query: str, user_id: int, channel_
         
         # Check vector database for relevant information
         if vector_enhancer and vector_enhancer.initialized:
-            logger.info("DEBUG: Searching vector database...")
+            logger.info("DEBUG: Searching ALL vector database contexts...")
             
-            # Search conversations
+            # Search conversations (user-specific)
             conv_results = await vector_enhancer.get_semantic_conversation_context(
                 query=query,
                 user_id=user_id,
@@ -146,14 +146,19 @@ async def should_use_vector_first_then_search(query: str, user_id: int, channel_
                 limit=5
             )
             
-            # Search cached results 
-            search_results = await vector_enhancer.get_semantic_search_context(
+            # Search channel context (broader context from this channel)
+            channel_results = await vector_enhancer.get_semantic_channel_context(
                 query=query,
+                channel_id=channel_id,
                 limit=3
             )
             
-            total_results = len(conv_results) + len(search_results)
-            logger.info(f"DEBUG: Vector search found {len(conv_results)} conversations, {len(search_results)} cached searches")
+            # Search cached search results
+            cached_search = vector_enhancer.get_cached_search_result(query, max_age_hours=168)  # 1 week
+            search_results = [cached_search] if cached_search else []
+            
+            total_results = len(conv_results) + len(channel_results) + len(search_results)
+            logger.info(f"DEBUG: Vector search found {len(conv_results)} conversations, {len(channel_results)} channel messages, {len(search_results)} cached searches")
             
             # If we have good vector results, try vector-only first
             if total_results >= 2:
