@@ -40,19 +40,25 @@ class RaiderIOClient:
             async with session.get(url, params=params) as response:
                 if response.status == 200:
                     return await response.json()
-                elif response.status == 400:
-                    logger.warning(f"RaiderIO API bad request: {response.status}")
-                    return {"error": "Invalid parameters"}
-                elif response.status == 404:
-                    logger.warning(f"RaiderIO API not found: {response.status}")
-                    return {"error": "Character not found"}
                 else:
-                    logger.error(f"RaiderIO API error: {response.status}")
-                    return {"error": f"API error: {response.status}"}
+                    error_msg = self._get_error_message(response.status)
+                    logger.warning(f"RaiderIO API error {response.status}: {error_msg}")
+                    return {"error": error_msg}
                     
         except Exception as e:
             logger.error(f"RaiderIO API request failed: {e}")
             return {"error": f"Request failed: {str(e)}"}
+    
+    def _get_error_message(self, status_code: int) -> str:
+        """Get appropriate error message for HTTP status code"""
+        error_messages = {
+            400: "Invalid parameters",
+            404: "Character not found",
+            429: "Rate limit exceeded",
+            500: "RaiderIO server error",
+            503: "RaiderIO service unavailable"
+        }
+        return error_messages.get(status_code, f"API error: {status_code}")
     
     async def get_character_profile(
         self, 
@@ -239,91 +245,49 @@ class RaiderIOClient:
         logger.debug(f"Making season-cutoffs request with params: {params}")
         return await self._make_request("mythic-plus/season-cutoffs", params)
     
-    def format_character_summary(self, data: Dict[str, Any]) -> str:
-        """Format character data into a readable summary"""
-        if "error" in data:
-            return f"❌ **Error**: {data['error']}"
+    def extract_run_id(self, run_data: Dict[str, Any]) -> Optional[int]:
+        """Extract RaiderIO run ID from run data"""
+        # Try direct ID field first
+        if 'id' in run_data and run_data['id']:
+            try:
+                return int(run_data['id'])
+            except (ValueError, TypeError):
+                logger.warning(f"Failed to convert 'id' field to int: {run_data['id']}")
         
-        try:
-            name = data.get("name", "Unknown")
-            realm = data.get("realm", "Unknown")
-            region = data.get("region", "Unknown").upper()
-            race = data.get("race", "Unknown")
-            character_class = data.get("class", "Unknown")
-            spec = data.get("active_spec_name", "Unknown")
-            level = data.get("level", "Unknown")
-            
-            # Mythic+ scores
-            mp_scores = data.get("mythic_plus_scores_by_season", [])
-            current_score = "N/A"
-            if mp_scores:
-                current_season = mp_scores[0]
-                current_score = current_season.get("scores", {}).get("all", 0)
-            
-            # Recent runs
-            recent_runs = data.get("mythic_plus_recent_runs", [])
-            recent_run_summary = "No recent runs"
-            if recent_runs:
-                highest_recent = max(recent_runs, key=lambda x: x.get("mythic_level", 0))
-                recent_run_summary = f"+{highest_recent.get('mythic_level', 0)} {highest_recent.get('dungeon', 'Unknown')}"
-            
-            # Raid progression
-            raid_prog = data.get("raid_progression", {})
-            raid_summary = "No raid progress"
-            if raid_prog:
-                current_raid = list(raid_prog.keys())[-1] if raid_prog else None
-                if current_raid:
-                    prog = raid_prog[current_raid]
-                    normal_kills = prog.get("normal_bosses_killed", 0)
-                    heroic_kills = prog.get("heroic_bosses_killed", 0)
-                    mythic_kills = prog.get("mythic_bosses_killed", 0)
-                    total = prog.get("total_bosses", 0)
-                    
-                    if mythic_kills > 0:
-                        raid_summary = f"{current_raid}: {mythic_kills}/{total}M"
-                    elif heroic_kills > 0:
-                        raid_summary = f"{current_raid}: {heroic_kills}/{total}H"
-                    elif normal_kills > 0:
-                        raid_summary = f"{current_raid}: {normal_kills}/{total}N"
-            
-            summary = f"""**{name}** - {realm} ({region})
-            
-**Character**: {level} {race} {character_class} ({spec})
-**Mythic+ Score**: {current_score}
-**Recent High**: {recent_run_summary}
-**Raid Progress**: {raid_summary}"""
-            
-            return summary
-            
-        except Exception as e:
-            logger.error(f"Error formatting character summary: {e}")
-            return f"❌ **Error**: Failed to format character data"
+        # Try extracting from URL
+        if 'url' in run_data and run_data['url']:
+            try:
+                url_parts = str(run_data['url']).split('/')
+                if url_parts and url_parts[-1].isdigit():
+                    return int(url_parts[-1])
+            except (ValueError, TypeError):
+                logger.warning(f"Failed to extract ID from URL: {run_data['url']}")
+        
+        # Try other potential fields
+        for field in ['run_id', 'keystone_run_id', 'mythic_plus_run_id']:
+            if field in run_data and run_data[field]:
+                try:
+                    return int(run_data[field])
+                except (ValueError, TypeError):
+                    continue
+        
+        return None
     
-    def format_mythic_plus_runs(self, data: Dict[str, Any], limit: int = 5) -> str:
-        """Format Mythic+ runs into a readable list"""
-        if "error" in data:
-            return f"❌ **Error**: {data['error']}"
+    def format_time_duration(self, time_ms: int) -> str:
+        """Format time in milliseconds to readable duration"""
+        if time_ms <= 0:
+            return "Unknown"
         
-        try:
-            runs = data.get("runs", [])
-            if not runs:
-                return "No Mythic+ runs found"
-            
-            formatted_runs = []
-            for run in runs[:limit]:
-                dungeon = run.get("dungeon", "Unknown")
-                level = run.get("mythic_level", 0)
-                score = run.get("score", 0)
-                completed = "✅" if run.get("num_chests", 0) >= 1 else "❌"
-                time = run.get("clear_time_ms", 0) // 1000 // 60  # Convert to minutes
-                
-                formatted_runs.append(f"{completed} **+{level} {dungeon}** - {score:.1f} score ({time}m)")
-            
-            return "\n".join(formatted_runs)
-            
-        except Exception as e:
-            logger.error(f"Error formatting mythic+ runs: {e}")
-            return f"❌ **Error**: Failed to format runs data"
+        minutes = time_ms // 60000
+        seconds = (time_ms % 60000) // 1000
+        return f"{minutes}:{seconds:02d}"
+    
+    def get_completion_status(self, run_data: Dict[str, Any]) -> str:
+        """Get run completion status emoji"""
+        # Check if run was completed (even if depleted) vs abandoned
+        if run_data.get("score", 0) > 0 or run_data.get("clear_time_ms", 0) > 0:
+            return "✅" if run_data.get("num_chests", 0) >= 1 else "⏱️"  # Timed vs Depleted
+        return "❌"  # Abandoned/Failed
 
 
 # Global client instance

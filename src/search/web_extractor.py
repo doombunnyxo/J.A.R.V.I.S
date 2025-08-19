@@ -9,6 +9,9 @@ from typing import List, Dict, Optional
 from urllib.parse import urljoin, urlparse
 import re
 import json
+from ..utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 try:
     from bs4 import BeautifulSoup
@@ -100,7 +103,7 @@ class WebContentExtractor:
                         task.cancel()
                 
             
-            print(f"DEBUG: Web extraction completed with {len(extracted_pages)} successful results")
+            logger.debug(f"Web extraction completed with {len(extracted_pages)} successful results")
             
             
             # Return results immediately - let caller handle blacklist updates later
@@ -162,7 +165,7 @@ class WebContentExtractor:
                 
         except Exception as e:
             error_msg = f"Error extracting {url}: {e}"
-            print(f"DEBUG: {error_msg}")
+            logger.debug(error_msg)
             
             # Record failure for potential auto-blocking
             from .domain_filter import get_domain_filter

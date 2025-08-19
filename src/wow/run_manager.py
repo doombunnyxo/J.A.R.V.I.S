@@ -235,45 +235,8 @@ class RunManager:
     
     def _extract_raiderio_id(self, run_data: Dict[str, Any]) -> Optional[int]:
         """Extract RaiderIO run ID from run data"""
-        # Log available fields for debugging
-        if logger.level <= 10:  # DEBUG level
-            available_fields = list(run_data.keys())
-            logger.debug(f"Run data fields: {available_fields}")
-            if 'dungeon' in run_data and 'mythic_level' in run_data:
-                logger.debug(f"Processing run: {run_data.get('dungeon')} +{run_data.get('mythic_level')}")
-        
-        # Try direct ID field first
-        if 'id' in run_data and run_data['id']:
-            try:
-                run_id = int(run_data['id'])
-                logger.debug(f"Found ID in 'id' field: {run_id}")
-                return run_id
-            except (ValueError, TypeError):
-                logger.warning(f"Failed to convert 'id' field to int: {run_data['id']}")
-        
-        # Try extracting from URL
-        if 'url' in run_data and run_data['url']:
-            try:
-                url_parts = str(run_data['url']).split('/')
-                if url_parts and url_parts[-1].isdigit():
-                    run_id = int(url_parts[-1])
-                    logger.debug(f"Extracted ID from URL: {run_id} from {run_data['url']}")
-                    return run_id
-            except (ValueError, TypeError):
-                logger.warning(f"Failed to extract ID from URL: {run_data['url']}")
-        
-        # Try other potential fields
-        for field in ['run_id', 'keystone_run_id', 'mythic_plus_run_id']:
-            if field in run_data and run_data[field]:
-                try:
-                    run_id = int(run_data[field])
-                    logger.debug(f"Found ID in '{field}' field: {run_id}")
-                    return run_id
-                except (ValueError, TypeError):
-                    logger.warning(f"Failed to convert '{field}' field to int: {run_data[field]}")
-        
-        logger.error(f"Could not extract RaiderIO ID from run: {run_data.get('dungeon', 'Unknown')} +{run_data.get('mythic_level', 0)}")
-        return None
+        from .raiderio_client import raiderio_client
+        return raiderio_client.extract_run_id(run_data)
     
     def _find_existing_run(self, raiderio_id: int) -> Optional[int]:
         """Find existing run by RaiderIO ID, return sequential ID if found"""

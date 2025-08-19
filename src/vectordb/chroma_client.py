@@ -463,6 +463,63 @@ class ChromaVectorDB:
             logger.error(f"Failed to add thread message: {e}")
             return False
     
+    async def add_website_content(self, url: str, title: str, content: str, query: str,
+                                 user_id: Optional[int] = None, channel_id: Optional[int] = None) -> bool:
+        """
+        Store individual website content for better search granularity
+        
+        Args:
+            url: Website URL
+            title: Page title
+            content: Extracted content from the webpage
+            query: Original search query that led to this website
+            user_id: Optional user who made the query
+            channel_id: Optional channel where query was made
+            
+        Returns:
+            True if successful
+        """
+        if not self._initialized:
+            logger.warning("Vector DB not initialized, cannot store website content")
+            return False
+            
+        try:
+            # Use URL as primary identifier
+            result_id = hashlib.md5(f"{url}_{datetime.now().timestamp()}".encode()).hexdigest()
+            
+            # Store the website content with context
+            document = f"Title: {title}\nURL: {url}\nOriginal Query: {query}\n\nContent: {content}"
+            
+            meta = {
+                "url": url,
+                "title": title[:200],  # Truncate for metadata
+                "query": query[:500],
+                "source": "website_content",
+                "timestamp": datetime.now().isoformat(),
+                "content_preview": content[:500],
+                "content_length": len(content)
+            }
+            
+            # Add user/channel info if available
+            if user_id:
+                meta["user_id"] = str(user_id)
+            if channel_id:
+                meta["channel_id"] = str(channel_id)
+            
+            # Store in search results collection for consistency
+            self.search_collection.add(
+                ids=[result_id],
+                documents=[document],
+                metadatas=[meta]
+            )
+            
+            logger.info(f"Stored website content: {title[:50]}... ({len(content)} chars)")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to store website content for {url}: {e}")
+            return False
+
     def add_search_result(self, query: str, result: str, source: str, 
                          user_id: Optional[int] = None, channel_id: Optional[int] = None) -> bool:
         """

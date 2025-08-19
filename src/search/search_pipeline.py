@@ -7,6 +7,9 @@ import asyncio
 from typing import Optional, Protocol, runtime_checkable
 from ..config import config
 from .google import perform_google_search
+from ..utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 @runtime_checkable
 class SearchProvider(Protocol):
@@ -27,6 +30,7 @@ class SearchPipeline:
         self.provider = provider
         self.enable_full_extraction = enable_full_extraction
         self.debug_channel = debug_channel
+        self._extracted_pages = {}  # Store extracted pages for vector storage
     
     async def search_and_respond(self, query: str, context: str = "", channel=None) -> str:
         """
@@ -77,7 +81,7 @@ class SearchPipeline:
             total_time = time.time() - start_time
             
             # Store search results in vector database (background task - don't block response)
-            asyncio.create_task(self._store_search_result_async(query, optimized_query, response, channel))
+            asyncio.create_task(self._store_search_results_async(query, optimized_query, response, self._extracted_pages, channel))
             
             # Step 4: Update blacklist immediately after getting response
             if hasattr(self, '_tracking_data') and self._tracking_data:
@@ -240,6 +244,7 @@ Decision:"""
                     # Build enhanced search results with full content
                     search_results = f"Web search results for '{query}':\n\n"
                     extracted_by_url = {page['url']: page for page in extracted_pages}
+                    self._extracted_pages = extracted_by_url  # Store for vector database storage
                     
                 except Exception as e:
                     error_msg = f"Full page extraction failed: {str(e)}"
@@ -282,7 +287,7 @@ Decision:"""
                     
                     # Check if adding this result would exceed limit
                     if estimated_tokens + result_tokens > token_limit:
-                        print(f"DEBUG: Stopping at {index-1} results to stay under token limit. Current: {estimated_tokens}, Would add: {result_tokens}")
+                        logger.debug(f"Stopping at {index-1} results to stay under token limit. Current: {estimated_tokens}, Would add: {result_tokens}")
                         search_results += f"\n(Limited to {index-1} results to stay within token limits)\n"
                         break
                     
@@ -290,8 +295,9 @@ Decision:"""
                     search_results += result_content
                     estimated_tokens += result_tokens
             else:
-                # Snippet-only mode
+                # Snippet-only mode - no extracted pages to store
                 search_results = f"Web search results for '{query}':\n\n"
+                self._extracted_pages = {}  # Clear any previous data
                 
                 for basic_result in basic_results:
                     title = basic_result['title']
@@ -308,38 +314,63 @@ Decision:"""
         except Exception as e:
             return f"Search failed: {str(e)}"
     
-    async def _store_search_result_async(self, query: str, optimized_query: str, response: str, channel):
-        """Store search results in vector database asynchronously (background task)"""
+    async def _store_search_results_async(self, query: str, optimized_query: str, response: str, extracted_pages: dict, channel):
+        """Store individual website content and final AI summary in vector database asynchronously"""
         try:
             from ..vectordb.context_enhancer import vector_enhancer
-            if vector_enhancer and vector_enhancer.initialized:
-                # Extract user_id and channel_id from channel object if available
-                user_id = None
-                channel_id = None
-                if channel:
-                    channel_id = channel.id
-                    # Try to get user_id from the last message in the channel
-                    try:
-                        async for msg in channel.history(limit=1):
-                            if msg.author:
-                                user_id = msg.author.id
-                                break
-                    except:
-                        pass
+            if not vector_enhancer or not vector_enhancer.initialized:
+                return
                 
-                # Store the search result (AI's analyzed response, not raw web content)
-                # This stores the AI's summary/answer, which is more useful than raw HTML
-                result_to_store = f"Query: {query}\nOptimized: {optimized_query}\n\nAI Summary: {response[:2000]}"
-                
-                await vector_enhancer.vector_db.add_search_result(
-                    query=query,
-                    result=result_to_store,
-                    source="google_search",
-                    user_id=user_id,
-                    channel_id=channel_id
-                )
+            # Extract user_id and channel_id from channel object if available
+            user_id = None
+            channel_id = None
+            if channel:
+                channel_id = channel.id
+                # Try to get user_id from the last message in the channel
+                try:
+                    async for msg in channel.history(limit=1):
+                        if msg.author:
+                            user_id = msg.author.id
+                            break
+                except:
+                    pass
+            
+            # Store individual website content for better granularity
+            websites_stored = 0
+            for url, page_data in extracted_pages.items():
+                try:
+                    success = await vector_enhancer.vector_db.add_website_content(
+                        url=url,
+                        title=page_data.get('title', 'Unknown Title'),
+                        content=page_data.get('content', ''),
+                        query=query,
+                        user_id=user_id,
+                        channel_id=channel_id
+                    )
+                    if success:
+                        websites_stored += 1
+                except Exception as e:
+                    from ..utils.logging import get_logger
+                    logger = get_logger(__name__)
+                    logger.debug(f"Failed to store individual website content for {url}: {e}")
+            
+            # Also store the AI's final summary for quick retrieval
+            result_to_store = f"Query: {query}\nOptimized: {optimized_query}\n\nAI Summary: {response[:2000]}"
+            
+            await vector_enhancer.vector_db.add_search_result(
+                query=query,
+                result=result_to_store,
+                source="ai_summary",
+                user_id=user_id,
+                channel_id=channel_id
+            )
+            
+            from ..utils.logging import get_logger
+            logger = get_logger(__name__)
+            logger.info(f"Stored {websites_stored} individual websites + AI summary for query: {query[:50]}")
+            
         except Exception as e:
             # Silently fail - vector DB is optional for search functionality
             from ..utils.logging import get_logger
             logger = get_logger(__name__)
-            logger.debug(f"Failed to store search result in vector DB: {e}")
+            logger.debug(f"Failed to store search results in vector DB: {e}")
