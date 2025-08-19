@@ -204,13 +204,19 @@ class AIHandler:
             return extracted_provider, cleaned_query
         
         # Check if query should use OpenAI for search (async)
-        should_use_search = await should_use_openai_for_search(query)
-        
-        if should_use_search:
+        try:
+            should_use_search = await should_use_openai_for_search(query)
+            
+            if should_use_search:
+                print(f"DEBUG: Routing to SEARCH mode for: '{query[:30]}...'")
+                return "openai", query
+            else:
+                print(f"DEBUG: Routing to CHAT mode for: '{query[:30]}...'")  
+                return "direct-ai", query
+        except Exception as e:
+            print(f"DEBUG: Routing failed, defaulting to OpenAI: {e}")
+            # Fallback to OpenAI on any error
             return "openai", query
-        else:
-            # Return "direct-ai" for chat-only (no web search)
-            return "direct-ai", query
     
     async def _handle_with_openai(self, message, query: str) -> str:
         """Handle query using OpenAI - either admin actions or search"""
@@ -275,14 +281,18 @@ class AIHandler:
     async def _handle_direct_ai(self, message, query: str) -> str:
         """Handle direct AI chat without search routing"""
         try:
+            print(f"DEBUG: _handle_direct_ai called with query: '{query[:50]}...'")
+            
             if not config.has_openai_api():
                 return "❌ OpenAI API not configured. Please contact an administrator."
             
             # Build unfiltered context for casual conversation
+            print(f"DEBUG: Building context for direct AI...")
             context = await self.context_manager.build_unfiltered_context(
                 message.author.id, message.channel.id,
                 message.author.display_name, message
             )
+            print(f"DEBUG: Context built, length: {len(context)}")
             
             messages = self._build_direct_ai_messages(context, query)
             
