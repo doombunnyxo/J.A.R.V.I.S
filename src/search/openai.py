@@ -374,14 +374,26 @@ Instructions:
         logger = get_logger(__name__)
         logger.warning(f"Query Components - Query: {len(user_query)} chars, Context: {len(context_section)} chars, Search results: {len(search_results)} chars")
         
-        # Limit context size to prevent timeouts
-        if len(context_section) > 2000:
-            context_section = context_section[:2000] + "\n[Context truncated for performance]"
+        # Limit context size to fit within 4000 token total limit
+        # Reserve most space for search results, less for context
+        if len(context_section) > 2000:  # ~500 tokens
+            context_section = context_section[:2000] + "\n[Context truncated]"
             logger.warning(f"Context truncated to: {len(context_section)} chars")
         
-        # Limit search results size  
-        if len(search_results) > 4000:
-            search_results = search_results[:4000] + "\n[Search results truncated for performance]"
+        # Limit search results size to fit within 4000 token limit
+        # System prompt: ~400 chars (~100 tokens)
+        # User query: ~200 chars (~50 tokens)  
+        # Context: ~2000 chars (~500 tokens)
+        # Search results: ~12000 chars (~3000 tokens)
+        # Total: ~3650 tokens (under 4000 limit)
+        max_search_chars = 12000  # ~3000 tokens for search results
+        if len(search_results) > max_search_chars:
+            # Try to truncate at a natural boundary (end of a result)
+            truncate_point = search_results[:max_search_chars].rfind('\n\n')
+            if truncate_point > max_search_chars * 0.8:  # Found a good break point
+                search_results = search_results[:truncate_point] + "\n\n[Additional search results truncated]"
+            else:
+                search_results = search_results[:max_search_chars] + "\n[Search results truncated]"
             logger.warning(f"Search results truncated to: {len(search_results)} chars")
         
         user_message = f"""User Query:
@@ -394,6 +406,27 @@ Website Content:
 {search_results}
 
 Discord-formatted Answer:"""
+        
+        # Final safety check - ensure total size is under limit
+        total_size = len(system_message) + len(user_message)
+        estimated_tokens = total_size // 4
+        if estimated_tokens > 4000:
+            logger.error(f"Total input still too large: {estimated_tokens} estimated tokens")
+            # Further truncate search results if needed
+            excess_chars = (estimated_tokens - 3800) * 4  # Leave buffer
+            if excess_chars > 0 and len(search_results) > excess_chars + 1000:
+                search_results = search_results[:len(search_results) - excess_chars] + "\n[Further truncated to fit token limit]"
+                user_message = f"""User Query:
+{user_query}
+
+Previous Context:
+{context_section}
+
+Website Content:
+{search_results}
+
+Discord-formatted Answer:"""
+                logger.warning(f"Additional truncation applied, final search results: {len(search_results)} chars")
         
         messages = [
             {"role": "system", "content": system_message},
