@@ -621,7 +621,8 @@ Do NOT make up information or use general knowledge beyond what's in the context
         admin_response = await self.admin_processor.process_admin_command(message, query)
         
         # Admin processor returns None if no valid admin action found
-        if admin_response:
+        # Returns empty string ("") if admin action was handled successfully
+        if admin_response is not None:
             return admin_response
         else:
             # Admin keywords detected but no valid action - handle as AI response
