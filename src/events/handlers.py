@@ -129,8 +129,9 @@ class EventHandlers(commands.Cog):
         # Check if this is a command (starts with the bot's command prefix)
         is_command = message.content.startswith('!')
         
-        # Don't process AI if this is a command - Discord.py will handle it automatically
+        # Process commands through Discord.py's command handler
         if is_command:
+            await self.bot.process_commands(message)
             return
         
         if is_reply_to_bot or is_direct_mention or is_in_thread:
