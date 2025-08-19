@@ -138,6 +138,8 @@ class AIHandler:
             force_provider: Optional forced provider ("openai", "crafting", "full-search", or "direct-ai")
         """
         try:
+            print(f"DEBUG: handle_ai_command called with query: '{ai_query[:50]}...'")
+            
             # Prevent duplicate processing
             if message.id in self.processed_messages:
                 logger.debug(f"Message {message.id} already processed")
