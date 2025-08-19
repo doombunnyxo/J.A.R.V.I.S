@@ -74,6 +74,26 @@ CHANNEL_CONTEXT_LIMIT = 50         # Messages stored per channel
 CHANNEL_CONTEXT_DISPLAY = 35       # Messages shown to AI
 ```
 
+### Intelligent Query Routing
+The bot uses **LLM-based classification** to determine whether to search the web or chat directly:
+
+**SEARCH Mode** (triggers web search):
+- Factual questions: "What is the weather today?"
+- Current information: "Latest news about..."
+- How-to guides: "How to install Python?"
+- Comparisons: "iPhone vs Android"
+- Prices/data: "Cost of bitcoin"
+
+**CHAT Mode** (direct AI conversation):
+- Greetings: "How are you?"
+- Opinions: "That's interesting"
+- Personal chat: "You're funny"
+- Reactions: "Thanks!", "LOL"
+
+**Force Override**:
+- `ai: <query>` - Force direct chat (no search)
+- `full: <query>` - Force web search with detailed analysis
+
 ### Discord Intents Required
 ```python
 intents = discord.Intents.default()

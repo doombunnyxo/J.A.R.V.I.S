@@ -327,10 +327,13 @@ Decision:"""
                     except:
                         pass
                 
-                # Store the search result
+                # Store the search result (AI's analyzed response, not raw web content)
+                # This stores the AI's summary/answer, which is more useful than raw HTML
+                result_to_store = f"Query: {query}\nOptimized: {optimized_query}\n\nAI Summary: {response[:2000]}"
+                
                 await vector_enhancer.vector_db.add_search_result(
                     query=query,
-                    result=f"Optimized: {optimized_query}\n\nResponse: {response}",
+                    result=result_to_store,
                     source="google_search",
                     user_id=user_id,
                     channel_id=channel_id

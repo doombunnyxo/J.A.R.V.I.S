@@ -154,7 +154,7 @@ class AIHandler:
                 return
             
             # Determine routing and get cleaned query
-            provider, cleaned_query = self._determine_provider_and_query(ai_query, force_provider)
+            provider, cleaned_query = await self._determine_provider_and_query(ai_query, force_provider)
             
             # Route to appropriate handler
             if provider == "openai":
@@ -189,7 +189,7 @@ class AIHandler:
             error_msg = f"❌ An error occurred processing your request: {str(e)}"
             await message.channel.send(error_msg)
     
-    def _determine_provider_and_query(self, query: str, force_provider: str) -> tuple[str, str]:
+    async def _determine_provider_and_query(self, query: str, force_provider: str) -> tuple[str, str]:
         """Determine which provider to use and clean the query"""
         # If provider is forced, return as-is
         if force_provider:
@@ -203,14 +203,14 @@ class AIHandler:
         if extracted_provider:
             return extracted_provider, cleaned_query
         
-        # Check if query should use OpenAI for search
-        should_use_openai = should_use_openai_for_search(query)
+        # Check if query should use OpenAI for search (async)
+        should_use_search = await should_use_openai_for_search(query)
         
-        if should_use_openai:
+        if should_use_search:
             return "openai", query
-        
-        # Default to OpenAI
-        return "openai", query
+        else:
+            # Return "direct-ai" for chat-only (no web search)
+            return "direct-ai", query
     
     async def _handle_with_openai(self, message, query: str) -> str:
         """Handle query using OpenAI - either admin actions or search"""

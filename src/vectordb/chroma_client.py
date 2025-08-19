@@ -479,6 +479,7 @@ class ChromaVectorDB:
             True if successful
         """
         if not self._initialized:
+            logger.warning("Vector DB not initialized, cannot store search result")
             return False
             
         try:
@@ -497,11 +498,17 @@ class ChromaVectorDB:
             if channel_id:
                 meta["channel_id"] = str(channel_id)
             
+            logger.info(f"Storing search result: query='{query[:50]}...', source={source}")
+            
             self.collections['search_results'].upsert(
                 documents=[document],
                 ids=[result_id],
                 metadatas=[meta]
             )
+            
+            # Verify it was added
+            count = self.collections['search_results'].count()
+            logger.info(f"✅ Search result stored. Collection now has {count} cached searches")
             
             return True
             

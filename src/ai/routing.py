@@ -103,18 +103,98 @@ PERSONAL_KEYWORDS = [
 ]
 
 
-def should_use_openai_for_search(query: str) -> bool:
+async def should_use_openai_for_search(query: str) -> bool:
     """
-    Determine if query should be routed to OpenAI for search
+    Determine if query should be routed to OpenAI for search using LLM classification
     
     Args:
         query: User's query string
         
     Returns:
-        bool: Always True (OpenAI only system)
+        bool: True if query appears to need web search, False for direct chat
     """
-    # Everything goes to OpenAI now
-    return True
+    try:
+        from ..ai.openai_client import openai_client
+        
+        print(f"DEBUG: Query intent classification for: '{query[:50]}...'")
+        
+        # Quick patterns for obvious cases to avoid API calls
+        obvious_chat = [r'^(hi|hello|hey|thanks|lol|yes|no|ok|maybe)$', 
+                       r'^(how are you|good morning|good night)']
+        for pattern in obvious_chat:
+            if re.match(pattern, query.lower().strip()):
+                print("DEBUG: Obvious conversational - no search")
+                return False
+        
+        obvious_search = [r'(search for|google|current|latest|today|2024|2025)',
+                         r'(price of|cost of|weather|news)']
+        for pattern in obvious_search:
+            if re.search(pattern, query.lower()):
+                print("DEBUG: Obvious search query")
+                return True
+        
+        # Use LLM for classification
+        classification_prompt = f"""Classify this user message as either "SEARCH" or "CHAT":
+
+SEARCH = User wants current information, facts, web search, research, comparisons, "how to" guides, specific data, news, prices, etc.
+CHAT = User wants conversation, opinions, general discussion, greetings, reactions, personal interaction with the AI.
+
+Examples:
+- "what is the weather today" → SEARCH
+- "how are you doing" → CHAT  
+- "what's the price of bitcoin" → SEARCH
+- "that's really interesting" → CHAT
+- "tell me about quantum computing" → SEARCH
+- "you're funny" → CHAT
+- "what happened in the news today" → SEARCH
+- "i think that makes sense" → CHAT
+
+User message: "{query}"
+
+Respond with only "SEARCH" or "CHAT"."""
+
+        response = await openai_client.chat_completion(
+            messages=[{"role": "user", "content": classification_prompt}],
+            model="gpt-4o-mini",
+            temperature=0.1,
+            max_tokens=10
+        )
+        
+        intent = response.strip().upper()
+        needs_search = intent == "SEARCH"
+        
+        print(f"DEBUG: LLM classified as '{intent}' -> search={needs_search}")
+        return needs_search
+        
+    except Exception as e:
+        print(f"DEBUG: LLM classification failed: {e}")
+        # Fallback to simple heuristics
+        return _fallback_search_classification(query)
+
+
+def _fallback_search_classification(query: str) -> bool:
+    """Simple fallback classification when LLM is unavailable"""
+    query_lower = query.lower().strip()
+    
+    # Obvious conversational
+    if re.match(r'^(hi|hello|hey|thanks|lol|yes|no|ok|maybe|wow)$', query_lower):
+        return False
+    
+    # Obvious search patterns
+    search_indicators = ['what is', 'how to', 'current', 'latest', 'price', 'weather', 'news', 'search']
+    if any(indicator in query_lower for indicator in search_indicators):
+        return True
+    
+    # Default: short queries are chat, longer with question words are search
+    words = query.split()
+    question_words = ['what', 'how', 'when', 'where', 'who', 'why', 'which']
+    
+    if len(words) <= 3:
+        return False
+    elif any(word in query_lower for word in question_words):
+        return True
+    else:
+        return False
 
 
 def extract_forced_provider(query: str) -> tuple[str, str]:

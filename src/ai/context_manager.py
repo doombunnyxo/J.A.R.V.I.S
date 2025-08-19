@@ -507,17 +507,38 @@ Return only relevant permanent context items, one per line, in the exact same fo
         try:
             context_parts = []
             
-            # Get relevant conversations (fast - uses existing embeddings) - REDUCED limits
+            # ALWAYS get the most recent conversation for continuity
+            # This ensures follow-up questions have context
+            most_recent = self.vector_enhancer.vector_db.collections.get('conversations')
+            if most_recent:
+                try:
+                    # Get the last 2 conversations from this user/channel
+                    recent_items = most_recent.get(
+                        where={"$and": [
+                            {"user_id": {"$eq": str(user_id)}},
+                            {"channel_id": {"$eq": str(channel_id)}}
+                        ]},
+                        limit=2
+                    )
+                    if recent_items and recent_items.get('documents'):
+                        context_parts.append("[Your Previous Conversation]")
+                        for doc in recent_items['documents'][:2]:
+                            # Keep full context for recent messages
+                            context_parts.append(doc[:800] if len(doc) > 800 else doc)
+                except Exception as e:
+                    logger.debug(f"Failed to get most recent conversation: {e}")
+            
+            # Then add semantically relevant conversations
             conv_results = await self.vector_enhancer.get_semantic_conversation_context(
                 query=query,
                 user_id=user_id,
                 channel_id=channel_id,
-                limit=2  # Reduced from 3
+                limit=2  # Reduced since we have recent ones above
             )
             if conv_results:
-                context_parts.append("[Relevant Previous Conversations]")
-                # Truncate long messages to prevent bloat
-                truncated_results = [result[:200] + "..." if len(result) > 200 else result for result in conv_results[:2]]
+                context_parts.append("[Related Previous Conversations]")
+                # Keep more context for conversation continuity (500 chars preserves Q&A pairs)
+                truncated_results = [result[:500] + "..." if len(result) > 500 else result for result in conv_results[:2]]
                 context_parts.extend(truncated_results)
             
             # Get relevant channel messages (fast - uses existing embeddings) - REDUCED limits  
