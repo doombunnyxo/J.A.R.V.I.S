@@ -254,21 +254,33 @@ class AIHandler:
     async def _handle_search_with_openai(self, message, query: str) -> str:
         """Handle search queries using two-stage parallel summarization with GPT-4o mini"""
         try:
+            import time
             from ..search.search_pipeline import SearchPipeline
             from ..search.openai_adapter import OpenAISearchProvider
             
-            # Build context for search
+            # Build context for search FIRST (includes vector DB)
+            context_start = time.time()
             context = await self.context_manager.build_full_context(
                 query, message.author.id, message.channel.id,
                 message.author.display_name, message
             )
+            context_time = time.time() - context_start
+            logger.info(f"Context building for search took {context_time:.3f}s")
             
             # Use GPT-4o mini with full page extraction for two-stage summarization
+            search_start = time.time()
             openai_provider = OpenAISearchProvider(model="gpt-4o-mini")
             pipeline = SearchPipeline(openai_provider, enable_full_extraction=True)
             
             # Execute search pipeline - this will trigger two-stage summarization
-            return await pipeline.search_and_respond(query, context, message.channel)
+            result = await pipeline.search_and_respond(query, context, message.channel)
+            search_time = time.time() - search_start
+            logger.info(f"Search pipeline execution took {search_time:.3f}s")
+            
+            total_time = context_time + search_time
+            logger.info(f"Total search handling time: {total_time:.3f}s")
+            
+            return result
             
         except Exception as e:
             logger.error(f"Search pipeline failed: {e}")
@@ -300,6 +312,7 @@ class AIHandler:
     async def _handle_direct_ai(self, message, query: str) -> str:
         """Handle direct AI chat with vector context and conversation history"""
         try:
+<<<<<<< HEAD
             logger.info(f"DEBUG: _handle_direct_ai called with query: '{query[:50]}...'")
             
             if not config.has_openai_api():
@@ -312,6 +325,20 @@ class AIHandler:
                 message.author.display_name, message
             )
             logger.info(f"DEBUG: Enhanced context built, length: {len(context)}")
+=======
+            import time
+            if not config.has_openai_api():
+                return "❌ OpenAI API not configured. Please contact an administrator."
+            
+            # Build unfiltered context for casual conversation
+            context_start = time.time()
+            context = await self.context_manager.build_unfiltered_context(
+                message.author.id, message.channel.id,
+                message.author.display_name, message
+            )
+            context_time = time.time() - context_start
+            logger.info(f"Context building for direct AI took {context_time:.3f}s")
+>>>>>>> 9f77718 (Fixing timeouts)
             
             # Build messages with instructions for conversational AI with context awareness
             messages = [
@@ -327,17 +354,28 @@ Be natural and engaging while leveraging the provided context when relevant. If 
                 }
             ]
             
+            # Call OpenAI AFTER context is fully built
+            openai_start = time.time()
             response = await openai_client.create_completion(
                 messages=messages,
                 model="gpt-4o-mini",
                 max_tokens=1000,
                 temperature=0.7  # Balanced temperature for natural conversation with context awareness
             )
+            openai_time = time.time() - openai_start
+            logger.info(f"OpenAI API call took {openai_time:.3f}s")
             
             # Estimate total prompt tokens
             total_estimated_tokens = self._estimate_tokens(context, query)
             
+<<<<<<< HEAD
             return f"**Direct AI Response** (~{total_estimated_tokens} tokens):\n\n{response}"
+=======
+            total_time = context_time + openai_time
+            logger.info(f"Total direct AI handling time: {total_time:.3f}s")
+            
+            return f"**OpenAI GPT-4o Mini AI Response** (~{total_estimated_tokens} tokens):\n\n{response}"
+>>>>>>> 9f77718 (Fixing timeouts)
             
         except Exception as e:
             logger.error(f"Direct AI failed: {e}")

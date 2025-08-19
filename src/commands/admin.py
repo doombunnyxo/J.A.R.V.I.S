@@ -36,17 +36,6 @@ class AdminCommands(commands.Cog):
             return
             
         try:
-            # Debug: Check Python path and chromadb availability
-            import sys
-            await ctx.send(f"**Debug Info:**\nPython path: {sys.executable}\nPython version: {sys.version}")
-            
-            try:
-                import chromadb
-                await ctx.send(f"✅ ChromaDB module found: v{chromadb.__version__}")
-            except ImportError as e:
-                await ctx.send(f"❌ ChromaDB import failed: {e}")
-                return
-                
             from ..vectordb.chroma_client import ChromaDBClient
             
             # Try to get the vector enhancer from context manager
@@ -57,43 +46,38 @@ class AdminCommands(commands.Cog):
                 await ctx.send("❌ **ChromaDB not initialized or unavailable**")
                 return
             
-            # Get collection counts
-            collections_info = []
-            total_items = 0
-            
-            collections = ['conversations', 'channel_context', 'search_results', 'bot_responses', 'thread_context']
-            
-            for collection_name in collections:
-                try:
-                    collection = context_manager.vector_enhancer.vector_db.collections.get(collection_name)
-                    if collection:
-                        count = collection.count()
-                        total_items += count
-                        collections_info.append(f"📁 **{collection_name}**: {count} items")
-                    else:
-                        collections_info.append(f"❌ **{collection_name}**: Not found")
-                except Exception as e:
-                    collections_info.append(f"❌ **{collection_name}**: Error - {str(e)}")
-            
-            # Build response
+            # Simplified status check
             response = "**ChromaDB Status Report:**\n\n"
-            response += "\n".join(collections_info)
-            response += f"\n\n📈 **Total items**: {total_items}"
             
-            # Check embedding function
-            try:
-                embedding_fn = context_manager.vector_enhancer.vector_db._get_embedding_function()
-                if hasattr(embedding_fn, 'model_name'):
-                    response += f"\n🤖 **Embedding model**: {embedding_fn.model_name}"
+            # Check if vector enhancer exists and collections
+            if hasattr(context_manager.vector_enhancer, 'vector_db'):
+                client = context_manager.vector_enhancer.vector_db
+                response += f"✅ **ChromaDB Client**: Connected\n"
+                response += f"📁 **Collections**: {len(client.collections)}\n"
+                
+                # Try to get simple counts
+                try:
+                    conv_collection = client.collections.get('conversations')
+                    conv_count = conv_collection.count() if conv_collection else 0
+                    response += f"💬 **Conversations**: {conv_count} items\n"
+                except:
+                    response += f"💬 **Conversations**: Error checking\n"
+                
+                try:
+                    channel_collection = client.collections.get('channel_context') 
+                    channel_count = channel_collection.count() if channel_collection else 0
+                    response += f"📺 **Channel Context**: {channel_count} items\n"
+                except:
+                    response += f"📺 **Channel Context**: Error checking\n"
+                    
+                # Check if any data exists
+                total_estimate = conv_count if 'conv_count' in locals() else 0
+                if total_estimate > 0:
+                    response += "\n✅ **ChromaDB has data!**"
                 else:
-                    response += "\n🔄 **Embedding**: Fallback function"
-            except:
-                response += "\n❌ **Embedding**: Could not check"
-            
-            if total_items > 0:
-                response += "\n\n✅ **ChromaDB is populated and working!**"
+                    response += "\n⚠️ **ChromaDB appears empty**"
             else:
-                response += "\n\n⚠️ **ChromaDB is empty - no data stored yet**"
+                response += "❌ **ChromaDB not connected**"
                 
             await ctx.send(response)
             
