@@ -507,7 +507,7 @@ class ChromaVectorDB:
                 meta["channel_id"] = str(channel_id)
             
             # Store in search results collection for consistency
-            self.search_collection.add(
+            self.collections['search_results'].add(
                 ids=[result_id],
                 documents=[document],
                 metadatas=[meta]
