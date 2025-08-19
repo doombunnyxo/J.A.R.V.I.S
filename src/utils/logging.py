@@ -65,7 +65,30 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         Logger instance
     """
-    return logging.getLogger(name)
+    logger = logging.getLogger(name)
+    
+    # If logger has no handlers, configure it with defaults
+    if not logger.handlers:
+        logger.setLevel(logging.INFO)
+        
+        # Use the same format as the main logger
+        format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        formatter = logging.Formatter(format_string)
+        
+        # Add console handler
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+        
+        # Add file handler to the main log file
+        log_file = "logs/discord_bot.log"
+        log_path = Path(log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_path)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    
+    return logger
 
 # Create default logger for the bot
 bot_logger = setup_logger(

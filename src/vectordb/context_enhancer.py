@@ -5,9 +5,19 @@ Integrates with existing ContextManager to provide semantic search capabilities
 
 from typing import List, Dict, Optional, Tuple
 from ..utils.logging import get_logger
-from .chroma_client import vector_db
 
 logger = get_logger(__name__)
+logger.info("=== VectorDB context_enhancer module loading ===")
+
+try:
+    from .chroma_client import vector_db
+    logger.info("ChromaDB client imported successfully")
+except ImportError as e:
+    logger.error(f"Failed to import ChromaDB client: {e}")
+    vector_db = None
+except Exception as e:
+    logger.error(f"Unexpected error importing ChromaDB client: {e}")
+    vector_db = None
 
 
 class VectorContextEnhancer:

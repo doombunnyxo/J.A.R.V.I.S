@@ -9,13 +9,23 @@ import json
 import hashlib
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta
-import chromadb
-from chromadb.config import Settings
-from chromadb.utils import embedding_functions
 from ..utils.logging import get_logger
 from ..config import config
 
 logger = get_logger(__name__)
+logger.info("=== ChromaDB module loading ===")
+
+try:
+    import chromadb
+    from chromadb.config import Settings
+    from chromadb.utils import embedding_functions
+    logger.info(f"ChromaDB import successful, version: {chromadb.__version__ if hasattr(chromadb, '__version__') else 'unknown'}")
+except ImportError as e:
+    logger.error(f"ChromaDB import failed: {e}")
+    logger.error("Install with: pip install chromadb")
+    chromadb = None
+    Settings = None
+    embedding_functions = None
 
 
 class ChromaVectorDB:
@@ -33,8 +43,13 @@ class ChromaVectorDB:
         self.collections = {}
         self._initialized = False
         
-        # Try to use Ollama embeddings first, fallback to sentence transformer
-        self.embedding_function = self._get_embedding_function()
+        # Check if chromadb is available
+        if chromadb is None:
+            logger.warning("ChromaDB not available - vector database will not be initialized")
+            self.embedding_function = None
+        else:
+            # Try to use Ollama embeddings first, fallback to sentence transformer
+            self.embedding_function = self._get_embedding_function()
     
     def _get_embedding_function(self):
         """
@@ -86,19 +101,16 @@ class ChromaVectorDB:
             logger.info(f"Starting ChromaDB initialization...")
             logger.info(f"Persist directory: {self.persist_directory}")
             
-            # Ensure directory exists
-            os.makedirs(self.persist_directory, exist_ok=True)
-            logger.info(f"Directory created/verified: {self.persist_directory}")
-            
-            # Check if chromadb is importable
-            try:
-                import chromadb
-                logger.info(f"ChromaDB module found, version: {chromadb.__version__ if hasattr(chromadb, '__version__') else 'unknown'}")
-            except ImportError as import_err:
-                logger.error(f"ChromaDB module not installed: {import_err}")
+            # Check if chromadb was imported successfully at module level
+            if chromadb is None:
+                logger.error("ChromaDB module not available (import failed at module level)")
                 logger.error("Install with: pip install chromadb")
                 self._initialized = False
                 return False
+            
+            # Ensure directory exists
+            os.makedirs(self.persist_directory, exist_ok=True)
+            logger.info(f"Directory created/verified: {self.persist_directory}")
             
             # Initialize Chroma client with persistence
             logger.info("Creating PersistentClient...")
